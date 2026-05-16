@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.visorcraft.Grexa</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <name>Grexa</name>
+  <summary>Fast Linux file content search with tabs, replace, and AI assistance</summary>
+  <developer id="io.visorcraft">
+    <name>VisorCraft LLC</name>
+  </developer>
+
+  <description>
+    <p>
+      Grexa is a fast, precise grep-style search workbench for Linux developers.
+      It feels at home on KDE Plasma, integrates with the Breeze icon set, and
+      respects the system color scheme by default.
+    </p>
+    <p>Highlights:</p>
+    <ul>
+      <li>Tabbed searches with per-tab state and isolated history</li>
+      <li>Text and regex search with culture-aware comparison</li>
+      <li>Content and Files result modes with sortable columns</li>
+      <li>Streaming results with cancellation and progress events</li>
+      <li>Safe atomic replace with capture-group support and same-filesystem temp files</li>
+      <li>Context preview with configurable before/after line counts</li>
+      <li>Docker and Podman container search with direct grep and archive mirror fallback</li>
+      <li>Optional AI Search chat with OpenAI-compatible endpoints</li>
+      <li>CLI mode with text / JSON / CSV output and shell completion</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">io.visorcraft.Grexa.desktop</launchable>
+
+  <url type="homepage">https://github.com/visorcraft/grexa</url>
+  <url type="bugtracker">https://github.com/visorcraft/grexa/issues</url>
+  <url type="vcs-browser">https://github.com/visorcraft/grexa</url>
+
+  <provides>
+    <binary>grexa</binary>
+    <binary>grexa-cli</binary>
+  </provides>
+
+  <categories>
+    <category>Utility</category>
+    <category>Development</category>
+    <category>TextTools</category>
+    <category>FileTools</category>
+  </categories>
+
+  <keywords>
+    <keyword>grep</keyword>
+    <keyword>search</keyword>
+    <keyword>find</keyword>
+    <keyword>regex</keyword>
+    <keyword>files</keyword>
+    <keyword>text</keyword>
+  </keywords>
+
+  <content_rating type="oars-1.1" />
+
+  <branding>
+    <color type="primary" scheme_preference="light">#3daee9</color>
+    <color type="primary" scheme_preference="dark">#1d2952</color>
+  </branding>
+
+  <recommends>
+    <display_length compare="ge">768</display_length>
+    <internet>offline-only</internet>
+  </recommends>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>touch</control>
+  </supports>
+
+  <releases>
+    <release version="0.1.0" date="2026-05-16">
+      <description>
+        <p>Initial alpha. Core Rust search engine, CLI, AI HTTP client, and container detection.</p>
+      </description>
+    </release>
+  </releases>
+</component>

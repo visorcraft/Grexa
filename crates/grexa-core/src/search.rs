@@ -117,6 +117,14 @@ pub fn search_with(
     mut progress: Option<ProgressSink<'_>>,
 ) -> Result<SearchSummary, SearchError> {
     let started = Instant::now();
+    tracing::debug!(
+        path = %options.path.display(),
+        term = %options.search_term,
+        regex = options.regex,
+        case_sensitive = options.case_sensitive,
+        respect_gitignore = options.respect_gitignore,
+        "search started"
+    );
 
     if !options.path.exists() {
         return Err(SearchError::PathNotFound(options.path.clone()));
@@ -282,8 +290,18 @@ pub fn search_with(
         }
     }
 
-    let matches = results.iter().map(|result| result.match_count).sum();
+    let matches = results.iter().map(|result| result.match_count).sum::<usize>();
     let file_results = aggregate_file_results(&results, &file_encodings);
+    let elapsed_ms = started.elapsed().as_millis();
+    tracing::info!(
+        files_scanned,
+        files_matched = matched_files.len(),
+        matches,
+        skipped_files,
+        elapsed_ms,
+        cancelled,
+        "search completed"
+    );
 
     Ok(SearchSummary {
         results,
@@ -292,7 +310,7 @@ pub fn search_with(
         files_matched: matched_files.len(),
         matches,
         skipped_files,
-        elapsed_ms: started.elapsed().as_millis(),
+        elapsed_ms,
         cancelled,
     })
 }

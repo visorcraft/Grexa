@@ -4,8 +4,11 @@ use std::path::PathBuf;
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 use grexa_core::{
-    CancelToken, OutputFormat, SearchOptions, SearchResult, SizeLimitType, SizeUnit, search_with,
+    AppPaths, CancelToken, OutputFormat, SearchOptions, SearchResult, SizeLimitType, SizeUnit,
+    search_with,
 };
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::prelude::*;
 
 #[derive(Debug, Parser)]
 #[command(name = "grexa-cli")]
@@ -137,15 +140,67 @@ enum CliSizeLimitType {
 }
 
 fn main() {
+    let _log_guard = init_tracing();
     let cli = Cli::parse();
 
     match dispatch(cli) {
         Ok(code) => std::process::exit(code),
         Err(err) => {
+            tracing::error!(error = %err, "grexa-cli error");
             eprintln!("Error: {err}");
             std::process::exit(2);
         }
     }
+}
+
+/// Install the global tracing subscriber. Logs always go to stderr at WARN
+/// (override with `GREXA_LOG=...`). A rolling JSON appender mirrors every
+/// event to `$XDG_STATE_HOME/grexa/grexa.log` when the state directory is
+/// writable; otherwise only stderr logging stays on. The returned guard
+/// must live until `main` exits or the background writer flushes early.
+fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
+    let env_filter = EnvFilter::try_from_env("GREXA_LOG").unwrap_or_else(|_| EnvFilter::new("warn"));
+
+    let stderr_layer = tracing_subscriber::fmt::layer()
+        .with_target(false)
+        .with_writer(std::io::stderr);
+
+    let paths = AppPaths::from_env();
+    let log_path = paths.state_dir.join("grexa.log");
+    let (file_layer, guard) = match std::fs::create_dir_all(&paths.state_dir) {
+        Ok(()) => match std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+        {
+            Ok(file) => {
+                let (writer, guard) = tracing_appender::non_blocking(file);
+                let layer = tracing_subscriber::fmt::layer()
+                    .with_writer(writer)
+                    .with_target(true)
+                    .with_ansi(false)
+                    .with_level(true);
+                (Some(layer), Some(guard))
+            }
+            Err(err) => {
+                eprintln!("grexa-cli: log file unavailable ({err}); stderr only");
+                (None, None)
+            }
+        },
+        Err(err) => {
+            eprintln!("grexa-cli: state dir unavailable ({err}); stderr only");
+            (None, None)
+        }
+    };
+
+    let registry = tracing_subscriber::registry().with(env_filter).with(stderr_layer);
+    if let Some(layer) = file_layer {
+        registry.with(layer).init();
+    } else {
+        registry.init();
+    }
+
+    guard
 }
 
 fn dispatch(cli: Cli) -> anyhow::Result<i32> {

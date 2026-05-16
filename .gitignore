@@ -2,3 +2,16 @@
 **/*.rs.bk
 *.log
 
+# rustfmt backups
+**/*.orig
+
+# Build artifacts that may sneak in
+*.pdb
+*.exe
+*.dSYM/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+.zed/

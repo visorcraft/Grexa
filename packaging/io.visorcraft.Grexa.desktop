@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=Grexa
+GenericName=File Content Search
+Comment=Fast Linux file content search with tabs, replace, and AI assistance
+Comment[de]=Schnelle Linux-Dateisuche mit Tabs, Ersetzen und KI-Unterstützung
+Comment[es]=Búsqueda rápida de contenido en archivos para Linux con pestañas, reemplazo y asistencia de IA
+Comment[fr]=Recherche rapide de contenu de fichiers Linux avec onglets, remplacement et assistance IA
+Comment[ja]=タブ、置換、AIアシスタント機能を備えた高速Linuxファイル内容検索
+Keywords=grep;search;find;regex;files;text;
+Exec=grexa %f
+Icon=io.visorcraft.Grexa
+Terminal=false
+StartupWMClass=grexa
+Categories=Utility;Development;TextTools;FileTools;
+MimeType=inode/directory;text/plain;

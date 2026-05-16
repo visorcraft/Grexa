@@ -147,10 +147,10 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [x] Audit Grex `Controls/AboutView.xaml` and `Controls/AboutView.xaml.cs` for About page content and localization behavior.
 - [x] Audit Grex `Services/AiSearchService.cs` and document endpoint normalization, model discovery, response parsing, and error extraction.
 - [x] Audit Grex `Services/SettingsService.cs`, `RecentPathsService.cs`, `RecentSearchesService.cs`, and `SearchProfilesService.cs` and define Grexa's XDG data/config equivalents. (`docs/grex-storage-services-audit.md`)
-- [ ] Audit Grex `Services/RecentSearchesService.cs`, `Services/ExportService.cs`, `Services/ContextMenuService.cs`, `Services/NotificationService.cs`, `Services/LocalizationService.cs`, and `Services/LocalizedToolTipRegistry.cs`.
-- [ ] Audit Grex `EncodingDetectionService.cs` and list required encodings and confidence behavior.
-- [ ] Audit Grex `GitIgnoreService.cs` tests and codify edge cases for root-relative patterns, directory-only patterns, negations, `**`, brackets, and case behavior.
-- [ ] Audit Grex culture-aware comparison behavior and codify string comparison, Unicode normalization, diacritic, and culture cases in fixtures.
+- [x] Audit Grex `Services/RecentSearchesService.cs`, `Services/ExportService.cs`, `Services/ContextMenuService.cs`, `Services/NotificationService.cs`, `Services/LocalizationService.cs`, and `Services/LocalizedToolTipRegistry.cs`. (`docs/grex-storage-services-audit.md` covers RecentSearchesService; `docs/grex-supporting-services-audit.md` covers the rest)
+- [x] Audit Grex `EncodingDetectionService.cs` and list required encodings and confidence behavior. (`docs/grex-encoding-detection-audit.md`)
+- [x] Audit Grex `GitIgnoreService.cs` tests and codify edge cases for root-relative patterns, directory-only patterns, negations, `**`, brackets, and case behavior. (`docs/grex-gitignore-audit.md`)
+- [x] Audit Grex culture-aware comparison behavior and codify string comparison, Unicode normalization, diacritic, and culture cases in fixtures. (`docs/grex-culture-comparison-audit.md`)
 - [ ] Audit Grex status text behavior, including filtered result summaries and elapsed-time pluralization.
 - [ ] Audit Grex model classes and ensure every field is mapped, renamed, removed as non-applicable, or replaced by a Linux-specific field.
 - [ ] Audit Grex `Strings/*/Resources.resw` and build a migration matrix for kept, removed, renamed, and new Linux strings.

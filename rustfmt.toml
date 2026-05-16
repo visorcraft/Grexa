@@ -1,0 +1,9 @@
+# Workspace-wide rustfmt config. Keep this in sync with what `cargo fmt --all`
+# enforces in CI.
+edition = "2024"
+max_width = 100
+fn_call_width = 80
+imports_granularity = "Module"
+group_imports = "StdExternalCrate"
+newline_style = "Unix"
+use_field_init_shorthand = true
