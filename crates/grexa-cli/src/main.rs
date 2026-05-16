@@ -5,7 +5,7 @@ use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 use grexa_core::{
     AppPaths, CancelToken, OutputFormat, SearchOptions, SearchResult, SizeLimitType, SizeUnit,
-    search_with,
+    StringComparisonMode, UnicodeNormalizationMode, search_with,
 };
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
@@ -115,6 +115,68 @@ struct SearchArgs {
     /// Suppress output; exit code indicates match.
     #[arg(short = 'q', long = "quiet")]
     quiet: bool,
+
+    /// String comparison mode for plain-text search.
+    #[arg(long = "comparison", default_value = "ordinal")]
+    comparison: CliComparisonMode,
+
+    /// Unicode normalization to apply before comparison.
+    #[arg(long = "normalization", default_value = "none")]
+    normalization: CliNormalizationMode,
+
+    /// Strip diacritics before comparison (e.g. `café` matches `cafe`).
+    #[arg(long = "ignore-diacritics")]
+    ignore_diacritics: bool,
+
+    /// Selected culture override (BCP-47 / ICU locale tag) for
+    /// `--comparison current-culture`. Ignored for other modes.
+    #[arg(long = "culture")]
+    culture: Option<String>,
+
+    /// Seed candidates from the Linux file index (Baloo) when available.
+    /// `--no-index` forces the walker even when Baloo would respond.
+    #[arg(long = "use-index", conflicts_with = "no_index")]
+    use_index: bool,
+
+    /// Disable Baloo seeding even when the runtime would otherwise enable
+    /// it via the user-defaults setting.
+    #[arg(long = "no-index")]
+    no_index: bool,
+
+    /// Run the search inside a container instead of on the local
+    /// filesystem. Requires `--container` to identify the target; the
+    /// positional `path` argument is then interpreted as a container
+    /// path. Mutually exclusive with the standard local-search flags
+    /// that don't apply to a container target.
+    #[arg(long = "container")]
+    container: Option<String>,
+
+    /// Container runtime to use when `--container` is set.
+    #[arg(long = "runtime", default_value = "auto", requires = "container")]
+    runtime: CliRuntimeKind,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum CliRuntimeKind {
+    Auto,
+    Docker,
+    Podman,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum CliComparisonMode {
+    Ordinal,
+    CurrentCulture,
+    InvariantCulture,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum CliNormalizationMode {
+    None,
+    FormC,
+    FormD,
+    FormKc,
+    FormKd,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -227,6 +289,9 @@ fn dispatch(cli: Cli) -> anyhow::Result<i32> {
 }
 
 fn run_search(args: SearchArgs) -> anyhow::Result<i32> {
+    if args.container.is_some() {
+        return run_container_search(args);
+    }
     let mut options = SearchOptions::new(&args.path, &args.term);
     options.regex = args.regex;
     options.case_sensitive = args.case_sensitive;
@@ -243,6 +308,18 @@ fn run_search(args: SearchArgs) -> anyhow::Result<i32> {
         .map(|value| convert_to_kb(value, args.size_unit));
     options.size_unit = args.size_unit.into();
     options.size_limit_type = args.size_type.into();
+    options.string_comparison_mode = args.comparison.into();
+    options.unicode_normalization_mode = args.normalization.into();
+    options.diacritic_sensitive = !args.ignore_diacritics;
+    options.culture = args.culture.clone();
+    // `--use-index` enables Baloo seeding, `--no-index` forces it off; default
+    // is unchanged from the user's stored setting (false by default).
+    if args.use_index {
+        options.use_file_index = true;
+    }
+    if args.no_index {
+        options.use_file_index = false;
+    }
 
     let cancel = CancelToken::new();
     let handler_token = cancel.clone();
@@ -285,6 +362,75 @@ fn run_search(args: SearchArgs) -> anyhow::Result<i32> {
     }
 
     Ok(if summary.results.is_empty() { 1 } else { 0 })
+}
+
+fn run_container_search(args: SearchArgs) -> anyhow::Result<i32> {
+    use grexa_containers::{
+        ContainerInfo, ContainerRuntime, ContainerRuntimeKind, ContainerSearchOptions, LiveProbe,
+        RuntimeOperations, SystemCommandRunner, detect_runtimes, search_container,
+    };
+
+    let probe = LiveProbe;
+    let runtimes = detect_runtimes(&probe);
+    let runtime = match args.runtime {
+        CliRuntimeKind::Auto => runtimes
+            .into_iter()
+            .find(ContainerRuntime::is_available)
+            .ok_or_else(|| anyhow::anyhow!("no Docker or Podman runtime detected"))?,
+        CliRuntimeKind::Docker => runtimes
+            .into_iter()
+            .find(|r| r.kind == ContainerRuntimeKind::Docker)
+            .ok_or_else(|| anyhow::anyhow!("Docker runtime not detected"))?,
+        CliRuntimeKind::Podman => runtimes
+            .into_iter()
+            .find(|r| r.kind == ContainerRuntimeKind::Podman)
+            .ok_or_else(|| anyhow::anyhow!("Podman runtime not detected"))?,
+    };
+
+    let cli = grexa_containers::CliRuntime::new(runtime, SystemCommandRunner);
+    let container = ContainerInfo {
+        runtime: cli.kind(),
+        id: args.container.clone().expect("container set"),
+        name: args.container.clone().unwrap_or_default(),
+        image: String::new(),
+        status: String::new(),
+        state: String::new(),
+    };
+
+    let opts = ContainerSearchOptions {
+        container_path: args.path.to_string_lossy().to_string(),
+        pattern: args.term.clone(),
+        case_sensitive: args.case_sensitive,
+        regex: args.regex,
+    };
+    let summary = search_container(&cli, &container, &opts)?;
+    if summary.used_mirror {
+        eprintln!("grexa-cli: used mirror fallback (no grep in container)");
+    }
+    if args.count {
+        println!("{}", summary.hits.len());
+        return Ok(if summary.hits.is_empty() { 1 } else { 0 });
+    }
+    if args.files_only {
+        let mut paths: Vec<_> = summary
+            .hits
+            .iter()
+            .map(|hit| hit.container_path.clone())
+            .collect();
+        paths.sort();
+        paths.dedup();
+        for path in paths {
+            println!("{path}");
+        }
+        return Ok(if summary.hits.is_empty() { 1 } else { 0 });
+    }
+    for hit in &summary.hits {
+        println!(
+            "{}:{}:{}",
+            hit.container_path, hit.line_number, hit.line_content
+        );
+    }
+    Ok(if summary.hits.is_empty() { 1 } else { 0 })
 }
 
 fn print_text(results: &[SearchResult]) {
@@ -362,6 +508,28 @@ impl From<CliSizeLimitType> for SizeLimitType {
             CliSizeLimitType::Equal => Self::EqualTo,
             CliSizeLimitType::Greater => Self::GreaterThan,
             CliSizeLimitType::None => Self::NoLimit,
+        }
+    }
+}
+
+impl From<CliComparisonMode> for StringComparisonMode {
+    fn from(value: CliComparisonMode) -> Self {
+        match value {
+            CliComparisonMode::Ordinal => Self::Ordinal,
+            CliComparisonMode::CurrentCulture => Self::CurrentCulture,
+            CliComparisonMode::InvariantCulture => Self::InvariantCulture,
+        }
+    }
+}
+
+impl From<CliNormalizationMode> for UnicodeNormalizationMode {
+    fn from(value: CliNormalizationMode) -> Self {
+        match value {
+            CliNormalizationMode::None => Self::None,
+            CliNormalizationMode::FormC => Self::FormC,
+            CliNormalizationMode::FormD => Self::FormD,
+            CliNormalizationMode::FormKc => Self::FormKC,
+            CliNormalizationMode::FormKd => Self::FormKD,
         }
     }
 }

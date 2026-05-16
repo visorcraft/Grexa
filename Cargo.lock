@@ -547,6 +547,7 @@ dependencies = [
  "clap_complete",
  "clap_mangen",
  "ctrlc",
+ "grexa-containers",
  "grexa-core",
  "predicates",
  "serde_json",

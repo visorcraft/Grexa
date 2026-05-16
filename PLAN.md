@@ -400,10 +400,10 @@ The first draft was reviewed as if it were an implementation design document. Th
 
 - [x] Implement `grexa-cli <path> <term> [options]`.
 - [ ] Preserve Grex CLI options: `--regex`, `--case-sensitive`, `--gitignore`, `--include-hidden`, `--include-binary`, `--include-system`, `--no-subfolders`, `--include-symlinks`, `--match-files`, `--exclude-dirs`, `--size-limit`, `--size-unit`, `--size-type`, `--format`, `--count`, `--files-only`, and `--quiet`.
-- [ ] Decide whether to expose Grex's advanced CLI option model fields for string comparison, Unicode normalization, diacritic-insensitive search, and culture; document the decision and test whichever behavior is chosen.
-- [ ] Add Linux-specific CLI options for Baloo seeding only if useful: `--use-index` and `--no-index`.
-- [ ] Add container CLI options: `--runtime docker|podman|auto`, `--container <name-or-id>`, and `--container-path <path>` if this can be done without making the CLI confusing.
-- [ ] Decide which familiar `grep`/`rg` aliases to support, such as `-n`, `--hidden`, `--no-ignore`, `-g`, and explicit line-number controls, while avoiding conflicts with Grex's existing option meanings.
+- [x] Decide whether to expose Grex's advanced CLI option model fields for string comparison, Unicode normalization, diacritic-insensitive search, and culture; document the decision and test whichever behavior is chosen. (Exposed as `--comparison`, `--normalization`, `--ignore-diacritics`, `--culture` in `crates/grexa-cli/src/main.rs`; integration tests cover diacritic + invariant-culture paths)
+- [x] Add Linux-specific CLI options for Baloo seeding only if useful: `--use-index` and `--no-index`. (Mutually exclusive via `conflicts_with`; default tracks the user setting)
+- [x] Add container CLI options: `--runtime docker|podman|auto`, `--container <name-or-id>`, and `--container-path <path>` if this can be done without making the CLI confusing. (Container mode reuses the positional `path` as the container-internal path when `--container` is set; `--runtime` defaults to `auto`)
+- [x] Decide which familiar `grep`/`rg` aliases to support, such as `-n`, `--hidden`, `--no-ignore`, `-g`, and explicit line-number controls, while avoiding conflicts with Grex's existing option meanings. (Visible aliases: `--hidden` for `--include-hidden`, `--no-ignore` for `--include-system`. Output already prints `path:line:col:content` so `-n` isn't needed)
 - [x] Preserve exit codes: 0 matches found, 1 no matches, 2 error.
 - [x] Preserve grep-compatible text output.
 - [x] Preserve pretty JSON and escaped CSV output.

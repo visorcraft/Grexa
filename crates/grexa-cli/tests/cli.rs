@@ -168,6 +168,54 @@ fn utf16_le_files_are_searchable() {
 }
 
 #[test]
+fn ignore_diacritics_finds_match_when_haystack_has_accent() {
+    let dir = tempdir().unwrap();
+    write(&dir.path().join("a.txt"), "café\n");
+
+    cmd()
+        .args([
+            dir.path().to_str().unwrap(),
+            "cafe",
+            "--ignore-diacritics",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("café"));
+}
+
+#[test]
+fn comparison_invariant_culture_succeeds_against_basic_input() {
+    let dir = tempdir().unwrap();
+    write(&dir.path().join("a.txt"), "hello world\n");
+
+    cmd()
+        .args([
+            dir.path().to_str().unwrap(),
+            "hello",
+            "--comparison",
+            "invariant-culture",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+fn use_index_and_no_index_are_mutually_exclusive() {
+    let dir = tempdir().unwrap();
+    write(&dir.path().join("a.txt"), "TODO\n");
+
+    cmd()
+        .args([
+            dir.path().to_str().unwrap(),
+            "TODO",
+            "--use-index",
+            "--no-index",
+        ])
+        .assert()
+        .failure();
+}
+
+#[test]
 fn completions_subcommand_emits_bash_script() {
     cmd()
         .args(["completions", "bash"])
