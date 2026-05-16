@@ -145,7 +145,7 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [x] Audit Grex `Controls/RegexBuilderView.xaml` and `Controls/RegexBuilderView.xaml.cs` and document Regex Builder behavior.
 - [x] Audit Grex `Controls/ContextPreviewDialog.xaml` and `Services/ContextPreviewService.cs` and document preview behavior.
 - [x] Audit Grex `Controls/AboutView.xaml` and `Controls/AboutView.xaml.cs` for About page content and localization behavior.
-- [ ] Audit Grex `Services/AiSearchService.cs` and document endpoint normalization, model discovery, response parsing, and error extraction.
+- [x] Audit Grex `Services/AiSearchService.cs` and document endpoint normalization, model discovery, response parsing, and error extraction.
 - [ ] Audit Grex `Services/SettingsService.cs`, `RecentPathsService.cs`, `RecentSearchesService.cs`, and `SearchProfilesService.cs` and define Grexa's XDG data/config equivalents.
 - [ ] Audit Grex `Services/RecentSearchesService.cs`, `Services/ExportService.cs`, `Services/ContextMenuService.cs`, `Services/NotificationService.cs`, `Services/LocalizationService.cs`, and `Services/LocalizedToolTipRegistry.cs`.
 - [ ] Audit Grex `EncodingDetectionService.cs` and list required encodings and confidence behavior.
