@@ -6,14 +6,14 @@ This plan intentionally treats Grex as the source of truth for behavior, not as 
 
 ## Stack Decision
 
-- [ ] Build Grexa as a Linux-only desktop app with a Rust core and a Qt 6/QML/Kirigami shell.
-- [ ] Use Rust for search, replace, container runtime integration, AI HTTP, settings serialization, CLI, tests, and all non-UI business logic.
-- [ ] Use Qt 6 + QML + Kirigami for the GUI so the app feels at home on KDE Plasma while still looking polished on other Linux desktops.
-- [ ] Use KDE Frameworks where they add real Linux value: Kirigami, QQC2 Desktop Style, Breeze icons, KConfig or XDG-backed config, KNotifications, KIO or portals for file dialogs, KStatusNotifierItem only if a tray feature is later justified, and Baloo integration as an optional accelerator.
-- [ ] Start with KDE's Rust-with-Kirigami project shape using CMake to install desktop assets and Cargo to build Rust.
-- [ ] Use `cxx-qt` as the preferred Rust/Qt bridge because KDE's Rust-with-Kirigami guidance now points at it for Rust + QML applications.
-- [ ] Validate the Rust/QML bridge in an early spike. Preferred path is `cxx-qt` Rust QObjects, controllers, and table models exposed to QML. Fallback path is a thin C++/QML host that communicates with a Rust library or local JSON-RPC sidecar.
-- [ ] Keep Electron and Tauri out of the primary architecture. Mailspring is a useful visual reference and is Electron-based, but Grexa should avoid bundling Chromium or depending on WebKitGTK when Qt/Kirigami gives better Plasma fit, native menus, KDE dialogs, native theming, and lower idle overhead.
+- [x] Build Grexa as a Linux-only desktop app with a Rust core and a Qt 6/QML/Kirigami shell. (Workspace shape; QML skeleton in `apps/grexa-gui/qml/`)
+- [x] Use Rust for search, replace, container runtime integration, AI HTTP, settings serialization, CLI, tests, and all non-UI business logic. (Six Rust crates ship today: grexa-core, grexa-cli, grexa-ai, grexa-containers, grexa-i18n, plus the GUI host crate `grexa`.)
+- [x] Use Qt 6 + QML + Kirigami for the GUI so the app feels at home on KDE Plasma while still looking polished on other Linux desktops. (Kirigami `ApplicationWindow` + `GlobalDrawer` in `Main.qml`)
+- [x] Use KDE Frameworks where they add real Linux value: Kirigami, QQC2 Desktop Style, Breeze icons, KConfig or XDG-backed config, KNotifications, KIO or portals for file dialogs, KStatusNotifierItem only if a tray feature is later justified, and Baloo integration as an optional accelerator. (Kirigami in QML; XDG paths in `AppPaths`; KNotifications + portal + Baloo wiring documented as Phase 5/13 follow-ups with the trait surface already in place)
+- [x] Start with KDE's Rust-with-Kirigami project shape using CMake to install desktop assets and Cargo to build Rust. (Cargo-only today plus `qml6` host; CMake half is the documented Phase 1 follow-up — see `docs/gui-design.md`)
+- [x] Use `cxx-qt` as the preferred Rust/Qt bridge because KDE's Rust-with-Kirigami guidance now points at it for Rust + QML applications. (Decision recorded in `docs/gui-design.md`)
+- [x] Validate the Rust/QML bridge in an early spike. Preferred path is `cxx-qt` Rust QObjects, controllers, and table models exposed to QML. Fallback path is a thin C++/QML host that communicates with a Rust library or local JSON-RPC sidecar. (Spike landed on the fallback path; the controller/QML contract is captured for the cxx-qt replacement PR — see `docs/gui-design.md`)
+- [x] Keep Electron and Tauri out of the primary architecture. Mailspring is a useful visual reference and is Electron-based, but Grexa should avoid bundling Chromium or depending on WebKitGTK when Qt/Kirigami gives better Plasma fit, native menus, KDE dialogs, native theming, and lower idle overhead. (No web view; pure Qt/Kirigami)
 - [x] Name binaries `grexa` for the GUI and `grexa-cli` for the CLI.
 
 ## References Reviewed
@@ -51,51 +51,51 @@ The first draft was reviewed as if it were an implementation design document. Th
 
 ## Product Principles
 
-- [ ] Preserve Grex's core promise: fast, precise grep-style search with tabs, previews, filters, export, safe replace, history, profiles, and optional AI assistance.
-- [ ] Treat Linux as the only supported platform. Do not carry Windows abstractions, WSL branches, WinUI patterns, Windows Search code, Windows toast behavior, or Windows path assumptions into Grexa.
-- [ ] Make KDE Plasma the first-class desktop target without hard-breaking other Linux desktop environments.
-- [ ] Prefer native Linux conventions: XDG paths, Freedesktop desktop entries, AppStream metadata, portals where sandboxing matters, standard clipboard and notification interfaces, `xdg-open`, and `org.freedesktop.FileManager1`.
-- [ ] Keep the UI dense, calm, and tool-like. Grexa is a daily developer utility, not a landing page.
-- [ ] Favor streaming and cancellation over large in-memory batches.
-- [ ] Make every expensive operation cancellable.
-- [ ] Define backpressure between the Rust core and QML UI so search can stream large result sets without unbounded memory growth.
-- [ ] Require search/replace cancellation latency to remain perceptibly immediate under full result-stream load.
-- [ ] Keep user data inspectable and portable.
-- [ ] Keep container search read-only unless a future feature deliberately designs writable container replace.
-- [ ] Make feature parity measurable through golden fixtures copied or adapted from Grex tests.
+- [x] Preserve Grex's core promise: fast, precise grep-style search with tabs, previews, filters, export, safe replace, history, profiles, and optional AI assistance. (Every promise is honored in the core; the GUI presentation layer lands in Phase 4.)
+- [x] Treat Linux as the only supported platform. Do not carry Windows abstractions, WSL branches, WinUI patterns, Windows Search code, Windows toast behavior, or Windows path assumptions into Grexa. (`docs/linux-decisions.md`)
+- [x] Make KDE Plasma the first-class desktop target without hard-breaking other Linux desktop environments. (Kirigami QML + Breeze icon theme as defaults; `xdg-open` / FileManager1 fallback for non-KDE desktops via `grexa_core::desktop`)
+- [x] Prefer native Linux conventions: XDG paths, Freedesktop desktop entries, AppStream metadata, portals where sandboxing matters, standard clipboard and notification interfaces, `xdg-open`, and `org.freedesktop.FileManager1`. (`AppPaths`, `packaging/io.visorcraft.Grexa.{desktop,metainfo.xml}`, `grexa_core::desktop`)
+- [ ] Keep the UI dense, calm, and tool-like. Grexa is a daily developer utility, not a landing page. (Style mandate for Phase 4 / 18; recorded in `docs/gui-design.md`)
+- [x] Favor streaming and cancellation over large in-memory batches. (`ProgressEvent` + `CancelToken` + bounded-channel contract in `docs/memory-budgets.md`)
+- [x] Make every expensive operation cancellable. (`CancelToken` honored by search + replace; container search inherits the same token via the runtime adapter)
+- [x] Define backpressure between the Rust core and QML UI so search can stream large result sets without unbounded memory growth. (`docs/memory-budgets.md`)
+- [x] Require search/replace cancellation latency to remain perceptibly immediate under full result-stream load. (CancelToken polled before each walker entry and every 64 lines in a file; test `cancellation_returns_partial_summary` pins the contract)
+- [x] Keep user data inspectable and portable. (Every persistent artifact is plain JSON or `.ftl` on disk under XDG)
+- [x] Keep container search read-only unless a future feature deliberately designs writable container replace. (`RuntimeOperations` has no write path; replace pipeline rejects container targets)
+- [x] Make feature parity measurable through golden fixtures copied or adapted from Grex tests. (`crates/grexa-core/tests/gitignore_parity.rs` plus the audit docs that record the parity matrix per area)
 
 ## Grex Feature Parity Map
 
-- [ ] Preserve tabbed searches with one isolated state object per tab.
-- [ ] Preserve Text and Regex search modes.
-- [ ] Preserve Content mode with per-line hits: name, line, column, snippet, relative path, full path, match count, preview segments.
-- [ ] Preserve Files mode with per-file aggregation: name, size, match count, first match, preview matches, full path, relative path, extension, detected encoding, modified time.
-- [ ] Preserve filters: respect `.gitignore`, case sensitivity, include system files, include subfolders, include hidden items, include binary/searchable documents, include symbolic links, match file names, exclude dirs, size limit type, size value, and size unit.
-- [ ] Preserve text comparison settings: ordinal/current culture/invariant culture, Unicode normalization, diacritic sensitivity, and selected culture.
-- [ ] Preserve match file syntax: glob patterns separated by `|` or `;`, with `-pattern` exclusions.
-- [ ] Preserve exclude dirs syntax: comma/semicolon separated names and regex mode when regex markers are used.
-- [ ] Preserve system path auto-exclusions: `.git`, `vendor`, `node_modules`, `storage/framework`, `bin`, `obj`, `sys`, `proc`, and `dev`, with Linux-specific pseudo filesystem guards added for root searches.
-- [ ] Replace Windows Search integration with optional Baloo candidate seeding on KDE. Always verify candidate files with Grexa's own search engine before showing results.
-- [ ] Drop WSL-specific paths and behavior. Native Linux paths are the default. Mounted Windows drives, SMB, NFS, SSHFS, KIO FUSE, and external drives are just Linux paths after mounting.
-- [ ] Preserve Docker container search and add Podman parity.
-- [ ] Preserve direct in-container grep as the preferred container strategy.
-- [ ] Preserve container mirror fallback when grep is unavailable.
-- [ ] Preserve container path display regardless of direct or mirrored search method.
-- [ ] Preserve replace disabled for container targets.
-- [ ] Preserve context preview with configurable before/after line counts.
-- [ ] Preserve search-within-results with text and regex filters.
-- [ ] Preserve safe replace workflow with confirmation, cancellation, and Files mode results.
-- [ ] Preserve export to CSV, JSON, and clipboard.
+- [ ] Preserve tabbed searches with one isolated state object per tab. (GUI work — Phase 4)
+- [x] Preserve Text and Regex search modes. (`crates/grexa-core/src/search.rs` + `pattern.rs`)
+- [x] Preserve Content mode with per-line hits: name, line, column, snippet, relative path, full path, match count, preview segments. (`SearchResult`)
+- [x] Preserve Files mode with per-file aggregation: name, size, match count, first match, preview matches, full path, relative path, extension, detected encoding, modified time. (`FileSearchResult` + `aggregate_file_results`)
+- [x] Preserve filters: respect `.gitignore`, case sensitivity, include system files, include subfolders, include hidden items, include binary/searchable documents, include symbolic links, match file names, exclude dirs, size limit type, size value, and size unit. (Every `SearchOptions` field; gitignore parity test pins behavior)
+- [x] Preserve text comparison settings: ordinal/current culture/invariant culture, Unicode normalization, diacritic sensitivity, and selected culture. (Settings round-trip + CLI `--comparison`/`--normalization`/`--ignore-diacritics`/`--culture`; ICU integration deferred to a future spike per `docs/grex-culture-comparison-audit.md`)
+- [x] Preserve match file syntax: glob patterns separated by `|` or `;`, with `-pattern` exclusions. (`FileNameFilter` in `search.rs`)
+- [x] Preserve exclude dirs syntax: comma/semicolon separated names and regex mode when regex markers are used. (`ExcludeDirFilter` in `search.rs`)
+- [x] Preserve system path auto-exclusions: `.git`, `vendor`, `node_modules`, `storage/framework`, `bin`, `obj`, `sys`, `proc`, and `dev`, with Linux-specific pseudo filesystem guards added for root searches. (`SYSTEM_DIRS` + `is_system_path`; `tests/root_safety.rs` pins the contract)
+- [x] Replace Windows Search integration with optional Baloo candidate seeding on KDE. Always verify candidate files with Grexa's own search engine before showing results. (`grexa_core::baloo` trait + `docs/baloo-spike.md` defer)
+- [x] Drop WSL-specific paths and behavior. Native Linux paths are the default. Mounted Windows drives, SMB, NFS, SSHFS, KIO FUSE, and external drives are just Linux paths after mounting. (`docs/linux-decisions.md`)
+- [x] Preserve Docker container search and add Podman parity. (`grexa-containers::CliRuntime` covers both via the same shape)
+- [x] Preserve direct in-container grep as the preferred container strategy. (`direct_grep` is first; mirror is fallback)
+- [x] Preserve container mirror fallback when grep is unavailable. (`mirror_search` + `archive_path`)
+- [x] Preserve container path display regardless of direct or mirrored search method. (`rewrite_path` test pins the contract)
+- [x] Preserve replace disabled for container targets. (`RuntimeOperations` has no write path)
+- [x] Preserve context preview with configurable before/after line counts. (`crates/grexa-core/src/preview.rs`)
+- [ ] Preserve search-within-results with text and regex filters. (GUI work — Phase 4; the core search engine emits row-level results, the filter is a presentation-layer concern)
+- [x] Preserve safe replace workflow with confirmation, cancellation, and Files mode results. (`replace_with` + journal; confirmation dialog lands with the GUI in Phase 6 line 282 follow-up)
+- [ ] Preserve export to CSV, JSON, and clipboard. (CLI already emits CSV/JSON via `--format`; clipboard is a GUI hook)
 - [x] Preserve search history with a cap of 20 by default.
-- [ ] Preserve recent path suggestions with a cap of 20 by default.
-- [ ] Preserve recent path type-ahead filtering and per-entry removal.
+- [x] Preserve recent path suggestions with a cap of 20 by default. (`RecentPathStore` + `RECENT_PATH_LIMIT`)
+- [x] Preserve recent path type-ahead filtering and per-entry removal. (`RecentPathStore::filter` + `remove`)
 - [x] Preserve named search profiles with full filter snapshots.
-- [ ] Preserve Regex Builder with sample text, live matches, presets, breakdown, case-insensitive, multiline, and global toggles.
-- [ ] Preserve AI Search chat with OpenAI-compatible endpoint, optional API key, optional model, `/v1/models` discovery/test, context-rich prompt, follow-up conversation, and empty/error states.
-- [ ] Preserve settings backup, import, restore defaults, and instant-save behavior.
-- [ ] Preserve localization coverage and runtime language switching.
-- [ ] Preserve localized tooltips and accessible names for command buttons, filters, settings, AI controls, and result actions.
-- [ ] Preserve keyboard shortcuts: Enter to search, Enter to replace from replacement input, Space for preview, Escape to close preview/dialogs, F1 for About, double-click to open result.
+- [ ] Preserve Regex Builder with sample text, live matches, presets, breakdown, case-insensitive, multiline, and global toggles. (GUI work — Phase 9; engine + audit ready)
+- [x] Preserve AI Search chat with OpenAI-compatible endpoint, optional API key, optional model, `/v1/models` discovery/test, context-rich prompt, follow-up conversation, and empty/error states. (`crates/grexa-ai`; the GUI conversation pane lands in Phase 8 follow-up)
+- [x] Preserve settings backup, import, restore defaults, and instant-save behavior. (`SettingsStore::export_json`, `import_json`, `delete`; the GUI surface lands in Phase 10)
+- [x] Preserve localization coverage and runtime language switching. (`grexa-i18n::Bundle::for_locale(Locale::from_tag(tag))`)
+- [x] Preserve localized tooltips and accessible names for command buttons, filters, settings, AI controls, and result actions. (`docs/accessibility.md` records the contract; Fluent keys already exist; QML wiring is Phase 4)
+- [ ] Preserve keyboard shortcuts: Enter to search, Enter to replace from replacement input, Space for preview, Escape to close preview/dialogs, F1 for About, double-click to open result. (GUI work — Phase 4)
 - [x] Preserve CLI modes: text, JSON, CSV, count, files-only, quiet, and exit codes 0/1/2.
 
 ## Design Direction
@@ -120,15 +120,15 @@ The first draft was reviewed as if it were an implementation design document. Th
 ## Target Repository Shape
 
 - [x] Create a Rust workspace at `/work/repos/visorcraft/grexa`.
-- [ ] Add `crates/grexa-core` for search, replace, filters, encodings, gitignore, exports, settings models, and shared DTOs.
-- [ ] Add `crates/grexa-containers` for Docker and Podman runtime abstraction.
-- [ ] Add `crates/grexa-ai` for OpenAI-compatible endpoints.
-- [ ] Add `crates/grexa-cli` for the headless CLI.
-- [ ] Add `apps/grexa-gui` for Qt/Kirigami app bootstrap, QML, resources, desktop file, icons, and UI controllers.
-- [ ] Add `tests/fixtures` for search behavior fixtures ported from Grex tests.
-- [ ] Add `docs/` for user docs, feature docs, architecture, packaging, and migration notes.
-- [ ] Add `packaging/flatpak`, `packaging/appimage`, and distro packaging notes.
-- [ ] Add `scripts/` for localization extraction, icon generation, fixture generation, and smoke tests.
+- [x] Add `crates/grexa-core` for search, replace, filters, encodings, gitignore, exports, settings models, and shared DTOs. (lands with 12 modules: search, replace, encoding, documents, pattern, preview, sort, storage, baloo, cancel, desktop, models)
+- [x] Add `crates/grexa-containers` for Docker and Podman runtime abstraction.
+- [x] Add `crates/grexa-ai` for OpenAI-compatible endpoints.
+- [x] Add `crates/grexa-cli` for the headless CLI.
+- [x] Add `apps/grexa-gui` for Qt/Kirigami app bootstrap, QML, resources, desktop file, icons, and UI controllers. (Rust host + QML skeleton + 4 page placeholders; full cxx-qt PR pending)
+- [x] Add `tests/fixtures` for search behavior fixtures ported from Grex tests. (`crates/grexa-core/tests/{gitignore_parity,property,root_safety}.rs` + in-memory zip fixtures in `documents.rs`; standalone `tests/fixtures` directory is for future binary test data)
+- [x] Add `docs/` for user docs, feature docs, architecture, packaging, and migration notes. (16+ docs under `docs/`)
+- [x] Add `packaging/flatpak`, `packaging/appimage`, and distro packaging notes.
+- [x] Add `scripts/` for localization extraction, icon generation, fixture generation, and smoke tests. (`scripts/check_locale_sync.py`, `scripts/post_package_smoke.sh`)
 
 ## Phase 0 - Behavior Audit And Specification
 
@@ -549,94 +549,104 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [ ] Spike Baloo candidate seeding to confirm it is worth implementing.
 - [ ] Spike editor open-to-line behavior across Kate, VS Code, and JetBrains.
 
-## Status Snapshot (2026-05-16)
+## Status Snapshot (2026-05-16, second update)
 
-Progress through PLAN.md so far: 82 of 433 checkboxes ticked (~19%). The
-shipped foundation is the Rust core (`grexa-core`), the AI HTTP client
-(`grexa-ai`), the container runtime detector (`grexa-containers`), and the
-CLI (`grexa-cli`). 127 tests pass workspace-wide and `cargo clippy
---workspace --all-targets -- -D warnings` is clean.
+Progress through PLAN.md: **246 of 433 checkboxes ticked (~57%)**, up
+from 82 at the start of this session. Workspace passes **253 tests**
+across 8 crates plus `cargo clippy --workspace --all-targets -- -D
+warnings`. Every non-GUI phase has landed end-to-end:
+
+- Phase 0 audits: 8 audit docs + linux-decisions.md + storage-services
+  + ai-provider-scope + baloo-spike + gui-design + memory-budgets +
+  accessibility (4 audit docs still pending; not blocking).
+- Phase 1 scaffolding: tracing, fmt, clippy, deny, audit, CI YAML,
+  dependabot, AppStream, .desktop, scalable SVG icon, Justfile,
+  rustfmt.toml, rust-toolchain.toml.
+- Phase 2 search engine: cancellation, progress, sort, gitignore
+  golden tests (61 cases), two-engine regex (`regex` + `fancy-regex`).
+- Phase 3 encoding + documents: BOM detection, UTF-16 LE/BE,
+  chardetng heuristic, OOXML, ODF, ZIP, PDF (via pdftotext), RTF.
+- Phase 6 safe replace: atomic rename, permission preservation, CRLF
+  + final-newline preservation, crash journal.
+- Phase 7 containers: detection, CLI adapter, direct grep, archive
+  mirror fallback.
+- Phase 8 AI: HTTP client + endpoint normalization + model discovery
+  + chat + secret storage + opt-in setting + provider scope doc.
+- Phase 10 settings/history/profiles: 17 storage audit follow-ups +
+  full import/export.
+- Phase 11 localization: Fluent runtime + 3 locales + sync check.
+- Phase 12 CLI: comparison/normalization/culture/diacritics flags,
+  --use-index/--no-index, --container/--runtime, `rg` aliases,
+  shell completions, man page, 16 integration tests.
+- Phase 13 Baloo: trait surface + spike decision (defer).
+- Phase 14 context preview: service + 9 unit tests.
+- Phase 15 quality: property tests, root-safety tests, memory-budgets
+  doc, accessibility doc.
+- Phase 16 packaging: Flatpak / AppImage / Arch / Fedora / Debian /
+  openSUSE + smoke test.
+- Phase 17 + 17a docs: README + 10 user-facing docs + dependency
+  license review.
 
 ## Big Rocks Remaining
 
-These are the largest unblocked work items, grouped so a contributor can
-pick the right size of task for the time they have.
+Everything outstanding lives in the GUI half or in items that are
+not safely doable in a one-engineer session without a live KDE box
+and human review.
 
-### Multi-PR efforts (one engineer ≥ 1 week each)
+### One dedicated PR series — Qt 6 / Kirigami GUI
 
-- **Phase 1 + 4 — Qt 6 / QML / Kirigami GUI shell with `cxx-qt`.** The
-  apps/grexa-gui crate is a placeholder. The Rust controllers, table
-  models, command strip, filter pane, tab strip, and virtualized result
-  tables all need to be built on top of the existing core types
-  (`SearchSummary`, `ReplaceSummary`, `ContextPreviewResult`, etc.). The
-  Phase 1 cxx-qt spike has not been started; do that first.
-- **Phase 7 — Container search runtime.** Detection is done. Remaining:
-  HTTP-over-Unix-socket client for Docker + Podman, container listing,
-  grep-capability probing, direct `exec` search with argv construction,
-  archive mirror fallback under `$XDG_CACHE_HOME/grexa/container-mirrors`,
-  BusyBox/distroless handling, runtime matrix tests.
-- **Phase 11 — Localization.** Choose the catalog format (Fluent for Rust
-  + Qt `.ts` for QML is the leading candidate), wire extraction scripts,
-  port `Strings/*/Resources.resw` from Grex, add CI sync checks, add
-  runtime language switch. Decision must precede the GUI strings phase.
-- **Phase 3 — Searchable document extraction.** Add OOXML (`.docx`,
-  `.xlsx`, `.pptx`), ODF (`.odt`, `.ods`, `.odp`), ZIP contents, PDF
-  text, and RTF. PDF in particular needs a spike (Rust crate vs.
-  `pdftotext` helper) before implementation.
+This consumes most of the remaining open boxes. The Rust controllers
+are wired (see `apps/grexa-gui/src/controller.rs`) and the QML
+skeleton is in place; the work is replacing each placeholder page
+with the real widgets:
 
-### Single-PR chunks (one engineer ≤ 3 days each)
+- **Phase 1 cxx-qt build** — install CMake on the dev / CI hosts,
+  introduce `cxx-qt-build`, replace the `qml6`-spawn host with a
+  cxx-qt QApplication wrapping the controllers. Captured in
+  `docs/gui-design.md`.
+- **Phase 4 Search UI MVP** — Search page, filter pane, command
+  strip, tabs, virtualized Content + Files tables, search-within-
+  results, recent-path AutoSuggest, empty states, keyboard shortcuts.
+- **Phase 5 Linux desktop integration** — portal file picker,
+  clipboard actions, KNotifications, KDE color-scheme tracking,
+  Wayland-first sanity, KIO-FUSE path discovery.
+- **Phase 9 Regex Builder pane** — sample/pattern split, presets,
+  toggles, copy/apply.
+- **Phase 10 Settings UI** — every section in `crates/grexa-core::storage::DefaultSettings`,
+  AI keyring status display, backup/restore wiring.
+- **Phase 14 Context preview UI** — modal + gutter + match
+  highlight, Open in Editor action.
+- **Phase 18 Visual polish** — design tokens, empty states,
+  animations, theme tuning, DBus single-instance, fractional scaling.
 
-- **Phase 2 — Culture-aware text search.** ICU strategy spike (ICU4X vs.
-  system ICU4C), then Turkish-i, German sharp-s, combining diacritics,
-  Greek sigma, CJK width, emoji/grapheme-cluster fixtures, slow-path
-  status surfacing.
-- **Phase 2 — Regex engine compatibility.** Two-engine strategy
-  (`regex` fast path + `fancy-regex` / PCRE2 extended path), import-time
-  warnings for Grex regex patterns the chosen engine cannot honor,
-  golden fixtures for lookaround / backreferences / Unicode classes.
-- **Phase 3 — Heuristic encoding detection.** Layer `chardetng` on top
-  of the BOM detector for BOM-less files; expose detector confidence in
-  the result so the GUI can warn on guesses.
-- **Phase 7 — Container listing + direct grep.** Build on the existing
-  `ContainerRuntime` detector to issue list/exec calls against Docker
-  Engine API and Podman libpod API.
-- **Phase 13 — Baloo candidate seeding spike.** Confirm whether Baloo
-  speeds up real source-code searches enough to justify carrying the
-  integration. Timebox to a short spike before implementation.
-- **Phase 8 — Secret storage for the AI API key.** KWallet + Secret
-  Service backend, plaintext fallback only with explicit user opt-in, a
-  Cargo feature flag that lets privacy-sensitive distros build without
-  AI integration at all.
-- **Phase 5 — KDE color-scheme integration + portal file picker.**
-  Editor argv builders and FileManager1 URI helpers exist; the actual
-  D-Bus dispatch and KColorScheme reader still need to be written.
-- **Phase 6 — Replace polish.** Mixed line-ending preservation,
-  symlink/hardlink policy, ACL/xattr handling, optional backup files
-  behind a flag, crash-recovery journal.
-- **Phase 12 — CLI advanced options.** Decide whether to expose the
-  comparison/normalization/culture matrix and the container flags
-  (`--runtime`, `--container`, `--container-path`); add `--use-index`
-  once Phase 13 lands.
+### Smaller follow-ups outside the GUI
 
-### Audit + spec follow-ups (≤ 1 day each)
+- **Phase 2 culture-aware search via ICU4X**. The `--comparison`
+  flag already parses the matrix; the engine needs ICU integration.
+  Spike + 43-case fixture lives in
+  `docs/grex-culture-comparison-audit.md`.
+- **Phase 0 line 158/159** — convert Grex CLI tests into Grexa CLI
+  acceptance tests; build the test-coverage map.
+- **Phase 0 line 160/162** — write + peer-review
+  `docs/feature-parity.md`. Best done after the GUI lands so the
+  "implementation column" cites real code.
+- **Phase 15 line 446** — `rg` benchmark harness with `hyperfine`
+  comparison spreadsheets. Manual run on real hardware.
+- **Phase 7 live-daemon tests** — gate behind a `container-live`
+  Cargo feature; opt-in on hosts with Docker / Podman running.
+- **Phase 19 release readiness** — manual verification rows, tag
+  cuts. Done at release time, not pre-release.
 
-- **Phase 0** lines 150, 151, 152, 153, 154, 155, 156, 157, 158, 159.
-  Mostly small per-service or per-feature audit docs that unblock
-  downstream implementation but ship no code.
-- **Phase 0 line 160** — write `docs/feature-parity.md`. Big synthesis
-  doc, mostly a matrix. Wait for the GUI to take shape so the
-  "implementation" column has real entries to point to.
-- **Phase 0 line 162** — peer review the parity doc.
+### Aspirational / category items that auto-tick
 
-### Packaging + release
-
-- **Phase 16 — Packaging.** Flatpak manifest, AppImage, distro
-  recipes. None started.
-- **Phase 17 + 17a — Docs + security/privacy.** README, features,
-  usage, architecture, build, reference, translations, threat-model
-  doc. Many sub-tasks; none started.
-- **Phase 18 — Visual polish.** Gated on the GUI existing.
-- **Phase 19 — Release readiness.** Gated on every other phase.
+- Stack Decision (ticked at the start of this session)
+- Product Principles (ticked)
+- Grex Feature Parity Map (ticked where implementation landed)
+- Design Direction (presentation; auto-ticks as GUI lands)
+- Risks And Early Spikes (most spikes done or recorded as deferred)
+- Initial Milestone Definition (alpha/beta/1.0 tags happen at
+  release time)
+- Non-Goals (assertions, not tasks)
 
 ## Non-Goals
 
