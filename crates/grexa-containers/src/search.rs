@@ -16,7 +16,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use grexa_core::{AppPaths, SearchOptions, search};
+use grexa_core::{AppPaths, ContextPreviewResult, SearchOptions, context_preview, search};
 use serde::{Deserialize, Serialize};
 
 use crate::runtime::{RuntimeError, RuntimeOperations};
@@ -235,6 +235,29 @@ fn rewrite_path(full_path: &Path, local_root: &str, container_root: &str) -> Str
         let trimmed_container_root = container_root.trim_end_matches('/');
         format!("{trimmed_container_root}/{suffix}")
     }
+}
+
+/// Build a context preview for a file *inside* a container. Mirrors the
+/// in-container path to a temp directory via `archive_path`, runs the
+/// standard `grexa_core::context_preview`, and rewrites the result paths
+/// so the UI still shows the user the in-container path.
+///
+/// This is the function the Phase 14 preview UI calls when a result row
+/// originated from a container search.
+pub fn container_context_preview<R: RuntimeOperations>(
+    runtime: &R,
+    container: &ContainerInfo,
+    container_path: &str,
+    line_number: usize,
+    lines_before: u8,
+    lines_after: u8,
+) -> Result<ContextPreviewResult, RuntimeError> {
+    let dest = container_mirror_dir(&container.id, runtime.kind()).join("preview");
+    let local = runtime.archive_path(&container.id, container_path, &dest)?;
+    let mut preview = context_preview(&local, line_number, lines_before, lines_after)
+        .map_err(|err| RuntimeError::Unsupported(err.to_string()))?;
+    preview.full_path = PathBuf::from(container_path);
+    Ok(preview)
 }
 
 /// Prune mirrors older than `max_age_secs`. Called on startup and after each

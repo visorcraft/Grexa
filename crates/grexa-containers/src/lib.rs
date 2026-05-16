@@ -12,8 +12,8 @@ pub use runtime::{
 };
 
 pub use search::{
-    ContainerSearchHit, ContainerSearchOptions, ContainerSearchSummary, parse_grep_output,
-    prune_mirrors, search_container,
+    ContainerSearchHit, ContainerSearchOptions, ContainerSearchSummary,
+    container_context_preview, parse_grep_output, prune_mirrors, search_container,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

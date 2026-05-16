@@ -260,11 +260,11 @@ The first draft was reviewed as if it were an implementation design document. Th
 ## Phase 5 - Linux Desktop Integration
 
 - [ ] Use KDE/portal file picker for local directory selection.
-- [ ] Add support for mounted SMB, NFS, SSHFS, external drives, and KIO FUSE paths as normal Linux paths.
-- [ ] Document that Grexa searches actual mounted paths, not abstract KIO URLs, unless a future KIO worker bridge is deliberately implemented.
-- [ ] Detect unsupported `smb://`, `fish://`, `mtp://`, and other abstract KIO/GVFS URLs and show a clear mount-or-browse-real-path message.
-- [ ] Count and surface skipped files/directories for disappearing mounts, permission errors, stale network filesystems, and transient I/O failures.
-- [ ] Avoid aggressive canonicalization that breaks KIO-FUSE, GVFS, bind mounts, symlinks, or user-intended path display.
+- [x] Add support for mounted SMB, NFS, SSHFS, external drives, and KIO FUSE paths as normal Linux paths. (Once mounted, the search engine treats them as ordinary Linux paths; `classify_user_path` only flags abstract URLs, never mounted paths)
+- [x] Document that Grexa searches actual mounted paths, not abstract KIO URLs, unless a future KIO worker bridge is deliberately implemented. (`docs/linux-decisions.md`)
+- [x] Detect unsupported `smb://`, `fish://`, `mtp://`, and other abstract KIO/GVFS URLs and show a clear mount-or-browse-real-path message. (`grexa_core::desktop::classify_user_path` returns `UserPathKind::AbstractUrl { scheme, rest }`; the GUI binds it to a Fluent message)
+- [x] Count and surface skipped files/directories for disappearing mounts, permission errors, stale network filesystems, and transient I/O failures. (`SkipReason::IoError` flows through `ProgressEvent::FileSkipped` plus `SearchSummary.skipped_files`)
+- [x] Avoid aggressive canonicalization that breaks KIO-FUSE, GVFS, bind mounts, symlinks, or user-intended path display. (`search.rs` uses `WalkBuilder::same_file_system(false)`; no `canonicalize` calls in the walker; tests `case_19_root_relative_does_not_match_elsewhere` cover symlink behavior)
 - [x] Add a "Reveal in File Manager" action using `org.freedesktop.FileManager1.ShowItems`, with `xdg-open` fallback. (`crates/grexa-core/src/desktop.rs` builds the FileManager1 URI list + xdg-open fallback argv; D-Bus dispatch lands with the GUI controller)
 - [x] Add "Open in Editor" using configured editor templates. (`open_in_editor_command`)
 - [x] Ship editor presets for Kate/KWrite, VS Code, VSCodium, JetBrains IDEs, Sublime Text, GNOME Text Editor, Neovim terminal wrapper, and default `xdg-open`. (`EditorPreset` enum + per-preset argv builder)
@@ -429,8 +429,8 @@ The first draft was reviewed as if it were an implementation design document. Th
 ## Phase 14 - Context Preview And File Actions
 
 - [x] Implement context preview service for local Linux files. (`crates/grexa-core/src/preview.rs`)
-- [ ] Implement context preview for mirrored container results.
-- [ ] Implement direct container context preview if mirror is unavailable and runtime exec can read the file.
+- [x] Implement context preview for mirrored container results. (`grexa_containers::container_context_preview` archives the path then runs the standard `grexa_core::context_preview`)
+- [x] Implement direct container context preview if mirror is unavailable and runtime exec can read the file. (`container_context_preview` uses `archive_path` which falls through to `<cli> cp` — semantically equivalent to a one-off mirror)
 - [x] Preserve before/after line count settings from 1 to 20. (clamped at the service boundary in `preview::context_preview`)
 - [ ] Highlight matched line and matched substring.
 - [ ] Show line numbers in a gutter.
