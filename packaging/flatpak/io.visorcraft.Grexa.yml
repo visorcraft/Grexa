@@ -1,0 +1,73 @@
+# Flatpak manifest for Grexa.
+#
+# Build with:
+#   flatpak-builder --user --install --force-clean build-dir \
+#       packaging/flatpak/io.visorcraft.Grexa.yml
+#
+# Requires the KDE Frameworks 6 runtime + Rust SDK extension.
+
+app-id: io.visorcraft.Grexa
+runtime: org.kde.Platform
+runtime-version: '6.6'
+sdk: org.kde.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: grexa
+
+finish-args:
+  # Wayland + X11 fallback for the QML shell.
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # Filesystem access. The Flatpak limitations doc records why a sandboxed
+  # Grexa can't browse arbitrary system paths without per-search portal
+  # prompts.
+  - --filesystem=home
+  - --filesystem=/run/media
+  # Networking — only for AI Search; user is gated by `ai_search_enabled`.
+  - --share=network
+  # KWallet / GNOME Keyring via Secret Service.
+  - --talk-name=org.freedesktop.secrets
+  # FileManager1 D-Bus for "reveal in file manager".
+  - --talk-name=org.freedesktop.FileManager1
+  # KNotifications.
+  - --talk-name=org.freedesktop.Notifications
+  # KDE color scheme tracking.
+  - --talk-name=org.kde.kglobalaccel
+  # XDG state for logs.
+  - --persist=.config/grexa
+  - --persist=.local/share/grexa
+  - --persist=.local/state/grexa
+  - --persist=.cache/grexa
+
+# Docker / Podman sockets are intentionally NOT exposed. Container search
+# requires the non-Flatpak build per docs/linux-decisions.md.
+
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/grexa/cargo
+  build-args:
+    - --share=network # Cargo fetches at build time.
+
+modules:
+  - name: grexa
+    buildsystem: simple
+    build-commands:
+      - cargo --offline fetch --manifest-path Cargo.toml || cargo fetch
+      - cargo --offline build --release --workspace
+      - install -Dm755 target/release/grexa /app/bin/grexa
+      - install -Dm755 target/release/grexa-cli /app/bin/grexa-cli
+      - install -Dm644 packaging/io.visorcraft.Grexa.desktop /app/share/applications/io.visorcraft.Grexa.desktop
+      - install -Dm644 packaging/io.visorcraft.Grexa.metainfo.xml /app/share/metainfo/io.visorcraft.Grexa.metainfo.xml
+      - install -Dm644 packaging/icons/scalable/io.visorcraft.Grexa.svg /app/share/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg
+      - target/release/grexa-cli manpage > grexa-cli.1
+      - install -Dm644 grexa-cli.1 /app/share/man/man1/grexa-cli.1
+      - target/release/grexa-cli completions bash > grexa-cli.bash
+      - install -Dm644 grexa-cli.bash /app/share/bash-completion/completions/grexa-cli
+      - target/release/grexa-cli completions fish > grexa-cli.fish
+      - install -Dm644 grexa-cli.fish /app/share/fish/vendor_completions.d/grexa-cli.fish
+    sources:
+      - type: dir
+        path: ../..

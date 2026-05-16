@@ -1,0 +1,13 @@
+grexa (0.1.0-1) unstable; urgency=medium
+
+  * Initial alpha release.
+  * Rust core (search, replace, container adapter, AI HTTP, document
+    extraction, encoding detection, settings, history, profiles,
+    context preview).
+  * CLI: grexa-cli with all search flags, container mode, and shell
+    completion / man page generators.
+  * Localization framework with English, German, Japanese catalogs.
+  * GUI shell is in active development; this package ships the GUI
+    binary as a placeholder until Phase 4 lands.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Sat, 16 May 2026 12:00:00 +0000

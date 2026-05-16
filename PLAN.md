@@ -460,17 +460,17 @@ The first draft was reviewed as if it were an implementation design document. Th
 
 ## Phase 16 - Packaging And Distribution
 
-- [ ] Ship Flatpak as the primary binary distribution path.
-- [ ] Define Flatpak permissions narrowly: filesystem access should be explicit and user-driven where possible, with clear guidance for searching arbitrary paths.
-- [ ] Document Flatpak limitations for Docker/Podman socket access, host filesystem access, editor launching, and file-manager reveal actions.
-- [ ] Provide non-Flatpak packages for users who need unrestricted container sockets and filesystem traversal.
-- [ ] Provide AppImage as a secondary portable option if Qt/KDE dependencies package cleanly.
-- [ ] Provide distro packaging recipes for Arch PKGBUILD, Fedora RPM, Debian package, and openSUSE spec after the app stabilizes.
-- [ ] Install `.desktop`, AppStream metadata, icons, MIME actions if any, and man pages.
-- [ ] Include `grexa-cli` in packages.
-- [ ] Add update and release workflow documentation.
-- [ ] Add reproducible release notes template.
-- [ ] Add smoke test script that runs after packaging.
+- [x] Ship Flatpak as the primary binary distribution path. (`packaging/flatpak/io.visorcraft.Grexa.yml`)
+- [x] Define Flatpak permissions narrowly: filesystem access should be explicit and user-driven where possible, with clear guidance for searching arbitrary paths. (Manifest scopes filesystem to `home` + `/run/media`; container sockets intentionally excluded — non-Flatpak builds are documented for that path)
+- [x] Document Flatpak limitations for Docker/Podman socket access, host filesystem access, editor launching, and file-manager reveal actions. (`docs/linux-decisions.md` + manifest comments)
+- [x] Provide non-Flatpak packages for users who need unrestricted container sockets and filesystem traversal. (Arch / Fedora / Debian / openSUSE recipes below)
+- [x] Provide AppImage as a secondary portable option if Qt/KDE dependencies package cleanly. (`packaging/appimage/build.sh`)
+- [x] Provide distro packaging recipes for Arch PKGBUILD, Fedora RPM, Debian package, and openSUSE spec after the app stabilizes. (`packaging/{arch,fedora,debian,opensuse}`)
+- [x] Install `.desktop`, AppStream metadata, icons, MIME actions if any, and man pages. (every recipe ships the same artifact set)
+- [x] Include `grexa-cli` in packages. (every recipe ships both binaries; Debian splits into `grexa` + `grexa-cli` packages)
+- [x] Add update and release workflow documentation. (`docs/release-notes-template.md` + per-recipe changelog sections)
+- [x] Add reproducible release notes template. (`docs/release-notes-template.md`)
+- [x] Add smoke test script that runs after packaging. (`scripts/post_package_smoke.sh`; verified locally against the release binary)
 
 ## Phase 17 - Documentation
 

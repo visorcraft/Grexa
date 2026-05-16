@@ -1,0 +1,42 @@
+Source: grexa
+Section: utils
+Priority: optional
+Maintainer: VisorCraft LLC <maintainer@visorcraft.com>
+Build-Depends: debhelper-compat (= 13),
+               rustc (>= 1.95),
+               cargo,
+               pkg-config,
+               qt6-base-dev,
+               qt6-declarative-dev,
+               kirigami-2-dev,
+               libfontconfig1-dev
+Standards-Version: 4.6.2
+Homepage: https://github.com/visorcraft/grexa
+Vcs-Browser: https://github.com/visorcraft/grexa
+Vcs-Git: https://github.com/visorcraft/grexa.git
+Rules-Requires-Root: no
+
+Package: grexa
+Architecture: any
+Depends: ${misc:Depends},
+         ${shlibs:Depends},
+         qt6-base-abi,
+         qt6-declarative-abi,
+         kirigami-2-abi
+Recommends: poppler-utils,
+            podman | docker.io,
+            gnome-keyring | kwalletmanager
+Description: Fast Linux file content search with tabs, replace, and AI assistance
+ Grexa is a daily-driver developer utility. It performs grep / ripgrep-style
+ searches with a polished Qt 6 / Kirigami interface, atomic-rename safe
+ replace, OOXML/ODF/PDF document extraction, Docker + Podman container
+ search, optional AI assistance, and a fully scriptable CLI.
+
+Package: grexa-cli
+Architecture: any
+Depends: ${misc:Depends},
+         ${shlibs:Depends}
+Recommends: poppler-utils
+Description: Headless command-line companion to Grexa
+ Provides `grexa-cli`, the same search engine without the Qt GUI. Useful
+ for scripting, CI integrations, and use over SSH.
