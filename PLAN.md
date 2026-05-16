@@ -134,7 +134,7 @@ The first draft was reviewed as if it were an implementation design document. Th
 
 - [x] Inventory every Grex source, resource, script, doc, and test file into `docs/grex-audit-inventory.md` before implementation starts.
 - [x] Audit Grex `Services/SearchService.cs` and document exact search semantics before porting.
-- [ ] Audit Grex `Services/DockerSearchService.cs` and document direct grep, fallback mirror, path translation, filters, and cleanup.
+- [x] Audit Grex `Services/DockerSearchService.cs` and document direct grep, fallback mirror, path translation, filters, and cleanup.
 - [ ] Audit Grex `Services/WindowsSearchIntegration.cs` and document the Linux replacement as optional Baloo candidate seeding.
 - [ ] Audit Grex `Services/WindowsSubsystemLinuxService.cs` and document why WSL support is non-applicable for Grexa.
 - [ ] Audit Grex `ViewModels/TabViewModel.cs` and document tab state, search/replace lifecycle, status strings, cancellation, sorting, and result filtering.
