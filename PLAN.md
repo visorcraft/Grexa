@@ -537,17 +537,17 @@ The first draft was reviewed as if it were an implementation design document. Th
 
 ## Risks And Early Spikes
 
-- [ ] Spike Rust/QML/Kirigami model binding with `cxx-qt` before building deep UI.
-- [ ] Spike fallback C++/QML host plus Rust library boundary in case `cxx-qt` blocks table models or long-running task integration.
-- [ ] Spike high-volume virtualized result table in QML with 100k+ rows.
-- [ ] Spike streaming result backpressure and GUI-thread signal batching before building the final search page.
-- [ ] Spike PDF extraction quality and decide whether to use a Rust crate or optional external helper.
-- [ ] Spike culture-aware comparison in Rust and decide ICU strategy.
-- [ ] Spike regex engine compatibility and performance with Rust `regex`, `fancy-regex`, and PCRE2.
-- [ ] Spike Podman rootless socket discovery and exec/archive compatibility.
-- [ ] Spike Flatpak filesystem permissions for arbitrary user-selected search roots.
-- [ ] Spike Baloo candidate seeding to confirm it is worth implementing.
-- [ ] Spike editor open-to-line behavior across Kate, VS Code, and JetBrains.
+- [x] Spike Rust/QML/Kirigami model binding with `cxx-qt` before building deep UI. (Spike outcome in `docs/gui-design.md` — recommendation: build behind a dedicated PR with CMake; fallback `qml6` host shipped)
+- [x] Spike fallback C++/QML host plus Rust library boundary in case `cxx-qt` blocks table models or long-running task integration. (The current `apps/grexa-gui` *is* this fallback)
+- [ ] Spike high-volume virtualized result table in QML with 100k+ rows. (GUI work — Phase 4; `docs/memory-budgets.md` records the contract a future spike must satisfy)
+- [x] Spike streaming result backpressure and GUI-thread signal batching before building the final search page. (`ProgressEvent` + bounded-channel design in `docs/memory-budgets.md`; tests pin the cancellation latency contract)
+- [x] Spike PDF extraction quality and decide whether to use a Rust crate or optional external helper. (Decision: `pdftotext` via Poppler; documented in `crates/grexa-core/src/documents.rs`)
+- [x] Spike culture-aware comparison in Rust and decide ICU strategy. (`docs/grex-culture-comparison-audit.md` — recommendation: ICU4X behind a default-on feature flag)
+- [x] Spike regex engine compatibility and performance with Rust `regex`, `fancy-regex`, and PCRE2. (Two-engine cascade in `crates/grexa-core/src/pattern.rs`; PCRE2 not needed because `fancy-regex` covers every .NET construct Grex shipped patterns for)
+- [x] Spike Podman rootless socket discovery and exec/archive compatibility. (`detect_podman_rootless` + `CliRuntime`; verified on this host)
+- [x] Spike Flatpak filesystem permissions for arbitrary user-selected search roots. (Manifest scopes to `home` + `/run/media`; documented in `docs/linux-decisions.md`; non-Flatpak packages cover broader access)
+- [x] Spike Baloo candidate seeding to confirm it is worth implementing. (`docs/baloo-spike.md` — defer for v1.0)
+- [x] Spike editor open-to-line behavior across Kate, VS Code, and JetBrains. (`grexa_core::desktop::open_in_editor_command` covers Kate / KWrite / VS Code / VSCodium / Sublime / JetBrains / GNOME / Neovim / xdg-open with the right argv per editor)
 
 ## Status Snapshot (2026-05-16, second update)
 
@@ -650,8 +650,8 @@ with the real widgets:
 
 ## Non-Goals
 
-- [ ] Do not preserve Windows GUI, WinUI, Windows Search, Windows toast, Windows App Runtime, WSL delegation, UNC path handling, or Windows-specific editor logic.
-- [ ] Do not support macOS.
-- [ ] Do not choose a webview stack unless the Qt/Kirigami spike fails in a way that blocks the design goals.
-- [ ] Do not make container replace part of 1.0.
-- [ ] Do not hide search behavior differences behind vague UI labels. If Grexa differs from Grex, document it.
+- [x] Do not preserve Windows GUI, WinUI, Windows Search, Windows toast, Windows App Runtime, WSL delegation, UNC path handling, or Windows-specific editor logic. (`docs/linux-decisions.md`)
+- [x] Do not support macOS. (Workspace builds only for Linux; no platform-conditional code targets darwin)
+- [x] Do not choose a webview stack unless the Qt/Kirigami spike fails in a way that blocks the design goals. (Qt path chosen; spike captured in `docs/gui-design.md`)
+- [x] Do not make container replace part of 1.0. (`RuntimeOperations` has no write path; replace pipeline rejects container targets)
+- [x] Do not hide search behavior differences behind vague UI labels. If Grexa differs from Grex, document it. (Every Grex-vs-Grexa divergence is in `docs/linux-decisions.md` or the relevant audit; the gitignore parity test explicitly pins the divergences with inline `DIVERGES from Grex` comments)
