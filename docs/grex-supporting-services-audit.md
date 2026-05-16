@@ -167,34 +167,29 @@ WinRT `StorageFolder` plus a `MenuFlyout` with hard-coded items
 
 Private helpers wired into the menu items:
 
-- `OpenFile(string)` spawns `Process.Start` with `UseShellExecute = true` so
-  Windows uses the default verb.
-- `OpenFileWith(string)` shells out to
-  `rundll32.exe shell32.dll,OpenAs_RunDLL <path>` to invoke the
-  Windows "Open with" picker.
-- `CopyPath(string)` writes the path string to the WinRT clipboard.
-- `CopyFile(string)` uses `StorageFile.GetFileFromPathAsync` or
+- `OpenFile(string)` — `Process.Start` with `UseShellExecute = true`.
+- `OpenFileWith(string)` — shells out to
+  `rundll32.exe shell32.dll,OpenAs_RunDLL <path>`.
+- `CopyPath(string)` — writes the path string to the WinRT clipboard.
+- `CopyFile(string)` — uses `StorageFile.GetFileFromPathAsync` /
   `StorageFolder.GetFolderFromPathAsync` synchronously (via
   `.GetAwaiter().GetResult()`) and puts the storage item into the clipboard
   as a CF_HDROP-style payload.
-- `RenameFile(string)` launches `explorer.exe /select,"<path>"` — note this
-  does not actually trigger F2/rename, it only highlights the file.
-- `DeleteFile(string)` calls `File.Delete` or `Directory.Delete(_, true)`.
-  There is no Recycle Bin / trash redirection and no confirmation dialog.
-- `ShowProperties(string)` is identical to `RenameFile` — it shells to
-  `explorer.exe /select` and only highlights the file; the comment in the
-  code acknowledges that `shell32.dll,ShellExec_RunDLL` would be required to
-  show a real properties dialog.
-- `NormalizeWslPath(string)` accepts `\\wsl.localhost\<distro>\...`,
-  `\\wsl$\<distro>\...`, raw Linux paths starting with `/home/` or `/mnt/`,
-  and the same paths with backslashes. It throws `NotSupportedException` for
-  WSL1 paths containing `\AppData\Local\lxss\`.
-- `ConvertLinuxPathToWsl(string)` runs `wsl wslpath -w "<path>"`, captures
-  stdout, and falls back to
-  `\\wsl$\<WindowsSubsystemLinuxService.GetDefaultDistributionName()>\...`
-  (defaulting to `Ubuntu-24.04`) when the conversion command fails.
-- `static void Log(string)` appends timestamped lines to
-  `Path.Combine(Path.GetTempPath(), "Grex.log")`.
+- `RenameFile(string)` — launches `explorer.exe /select,"<path>"`. This
+  highlights the file; it does **not** trigger F2/rename.
+- `DeleteFile(string)` — `File.Delete` / `Directory.Delete(_, true)`. No
+  Recycle Bin, no confirmation.
+- `ShowProperties(string)` — same `explorer.exe /select` shell-out; the
+  code comment acknowledges `shell32.dll,ShellExec_RunDLL` would be
+  required for a real properties dialog.
+- `NormalizeWslPath(string)` — accepts `\\wsl.localhost\<distro>\...`,
+  `\\wsl$\<distro>\...`, and raw `/home/...` or `/mnt/...` paths (forward
+  or back slashes). Throws `NotSupportedException` for WSL1 paths matching
+  `\AppData\Local\lxss\`.
+- `ConvertLinuxPathToWsl(string)` — runs `wsl wslpath -w "<path>"`,
+  fallback synthesizes `\\wsl$\<default-distro>\...` (defaulting to
+  `Ubuntu-24.04`).
+- `static void Log(string)` — appends to `Path.GetTempPath()/Grex.log`.
 
 ### Side Effects
 
@@ -322,17 +317,13 @@ flowing back to the UI — it is a fire-and-forget side channel.
 - `string? SupportFailureDetails` and `string? RegistrationFailureDetails`
   expose the most recent failure reason.
 
-Private members:
-
-- `EnsureSupport()` calls `AppNotificationManager.IsSupported()` once and
-  memoizes the result plus a failure message.
-- `EnsureRegistration()` calls `AppNotificationManager.Default.Register()`
-  once, guarded by a lock. It intentionally attempts registration even when
-  `IsSupported` returns `false` because unpackaged apps can return false
-  even when toasts work; on success it back-fills `_isSupported = true`.
-- `EscapeXml(string)` escapes `&`, `<`, `>`, `"`, `'`.
-- `LogToFile(string)` writes timestamped lines to
-  `Path.Combine(Path.GetTempPath(), "Grex.log")`.
+Private members: `EnsureSupport()` memoizes
+`AppNotificationManager.IsSupported()`. `EnsureRegistration()` calls
+`AppNotificationManager.Default.Register()` once under a lock and
+intentionally retries when `IsSupported` returned `false` (unpackaged apps
+report false even when toasts work); on success it back-fills
+`_isSupported = true`. `EscapeXml` escapes `& < > " '`. `LogToFile` writes
+timestamped lines to `Path.GetTempPath()/Grex.log`.
 
 ### Side Effects
 
@@ -446,22 +437,17 @@ can refresh themselves when culture changes.
   `ApplicationLanguages.PrimaryLanguageOverride = culture`, and clears the
   resource-context cache.
 
-Private helpers:
-
-- `GetStringForCulture(key, culture)` resolves through the cached
-  `ResourceContext`. It tries the key, `key.Replace('.', '/')`,
-  `key.Replace('.', '_')`, against both the `Resources` subtree and the
-  prefixed `Resources/<key>` path of the main map.
-- `GetResourceContext(culture)` lazily creates and caches a `ResourceContext`
-  per culture, with `QualifierValues["Language"] = culture`. Throws
-  `InvalidOperationException` if `_resourceManager` is null.
-- `IsValidCulture(string)` is a `try`/`catch` around
-  `CultureInfo.GetCultureInfo`.
-- `ClearResourceContextCache()` empties the per-culture context dictionary
-  whenever the culture is changed.
-- `UpdateDefaultResourceContext(string)` exists but is effectively a
-  no-op — it acknowledges in a comment that WinUI 3 has no public API to
-  set a process-wide default `ResourceContext` for `x:Uid` resolution.
+Private helpers: `GetStringForCulture(key, culture)` tries the key,
+`key.Replace('.', '/')`, and `key.Replace('.', '_')` against both the
+`Resources` subtree and a `Resources/<key>` prefixed path on the main map.
+`GetResourceContext(culture)` lazily caches a `ResourceContext` per culture
+with `QualifierValues["Language"] = culture` and throws
+`InvalidOperationException` if `_resourceManager` is null.
+`IsValidCulture(string)` is a `try`/`catch` around
+`CultureInfo.GetCultureInfo`. `ClearResourceContextCache()` empties the
+context dictionary on culture change. `UpdateDefaultResourceContext(string)`
+is effectively a no-op — its own comment admits WinUI 3 exposes no API to
+set a process-wide default `ResourceContext` for `x:Uid` resolution.
 
 ### Side Effects
 
@@ -613,28 +599,19 @@ Private members:
 
 ### Windows-specific Behavior and Linux Equivalents
 
-- `Microsoft.UI.Xaml.FrameworkElement`,
-  `Microsoft.UI.Xaml.Controls.ToolTipService`,
-  `Microsoft.UI.Xaml.Automation.AutomationProperties`, and
-  `Microsoft.UI.Dispatching.DispatcherQueue` are all WinUI 3 APIs.
+- `FrameworkElement`, `ToolTipService`, `AutomationProperties`, and
+  `DispatcherQueue` are all WinUI 3 APIs with no Linux equivalents.
 - Linux replacement depends on the chosen UI toolkit:
-  - For **Qt/QML or Qt Widgets**, swap `FrameworkElement` for `QWidget*`
-    or `QObject*` (QML items), `ToolTipService.SetToolTip` for
-    `QWidget::setToolTip` (Widgets) or the `ToolTip.text` attached
-    property (QML), and `AutomationProperties.SetHelpText` for
-    `QAccessibleWidget::setDescription` or QML's
-    `Accessible.description`.
-  - For **GTK4**, swap to `Gtk.Widget.SetTooltipText` and the
-    `gtk_accessible_update_property` API for accessibility metadata.
-- `DispatcherQueue.HasThreadAccess` and `TryEnqueue(...)` become Qt's
-  `QMetaObject::invokeMethod(target, ..., Qt::QueuedConnection)` (or
-  `QCoreApplication::instance()->thread() == QThread::currentThread()` for
-  the thread-affinity check). GTK uses `g_main_context_invoke`.
-- Weak references should continue to use
-  `System.WeakReference<T>` — that is BCL, not Windows-specific. No change
-  needed there.
-- The registry is currently a static class; Grexa should keep it static
-  (or at minimum keep it process-singleton) so that XAML/QML code-behind
+  - **Qt Widgets/QML** — `QWidget::setToolTip` (Widgets) or the
+    `ToolTip.text` attached property (QML); accessibility via
+    `QAccessibleWidget::setDescription` or QML `Accessible.description`.
+  - **GTK4** — `Gtk.Widget.SetTooltipText`;
+    `gtk_accessible_update_property` for accessibility metadata.
+- `DispatcherQueue.HasThreadAccess` / `TryEnqueue(...)` become
+  `QMetaObject::invokeMethod(..., Qt::QueuedConnection)` (Qt) or
+  `g_main_context_invoke` (GTK).
+- `System.WeakReference<T>` stays as-is — it is BCL, not Windows.
+- Keep the registry static (or process-singleton) so XAML/QML code-behind
   can register without DI plumbing.
 
 ### Test Coverage Observations
