@@ -138,7 +138,7 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [x] Audit Grex `Services/WindowsSearchIntegration.cs` and document the Linux replacement as optional Baloo candidate seeding.
 - [x] Audit Grex `Services/WindowsSubsystemLinuxService.cs` and document why WSL support is non-applicable for Grexa.
 - [x] Audit Grex `ViewModels/TabViewModel.cs` and document tab state, search/replace lifecycle, status strings, cancellation, sorting, and result filtering.
-- [ ] Audit Grex `ViewModels/MainViewModel.cs` and document tab lifecycle behavior.
+- [x] Audit Grex `ViewModels/MainViewModel.cs` and document tab lifecycle behavior.
 - [ ] Audit Grex `Controls/SearchTabContent.xaml.cs` and document UI workflows, shortcuts, context menus, export, profiles, history, and AI mode transitions.
 - [ ] Audit Grex `Controls/SearchTabContent.xaml` and document layout, controls, result columns, and visual states to preserve or replace.
 - [ ] Audit Grex `Controls/SettingsView.xaml` and `Controls/SettingsView.xaml.cs` and document every settings section and Linux replacement.
