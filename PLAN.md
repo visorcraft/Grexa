@@ -137,7 +137,7 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [x] Audit Grex `Services/DockerSearchService.cs` and document direct grep, fallback mirror, path translation, filters, and cleanup.
 - [x] Audit Grex `Services/WindowsSearchIntegration.cs` and document the Linux replacement as optional Baloo candidate seeding.
 - [x] Audit Grex `Services/WindowsSubsystemLinuxService.cs` and document why WSL support is non-applicable for Grexa.
-- [ ] Audit Grex `ViewModels/TabViewModel.cs` and document tab state, search/replace lifecycle, status strings, cancellation, sorting, and result filtering.
+- [x] Audit Grex `ViewModels/TabViewModel.cs` and document tab state, search/replace lifecycle, status strings, cancellation, sorting, and result filtering.
 - [ ] Audit Grex `ViewModels/MainViewModel.cs` and document tab lifecycle behavior.
 - [ ] Audit Grex `Controls/SearchTabContent.xaml.cs` and document UI workflows, shortcuts, context menus, export, profiles, history, and AI mode transitions.
 - [ ] Audit Grex `Controls/SearchTabContent.xaml` and document layout, controls, result columns, and visual states to preserve or replace.
