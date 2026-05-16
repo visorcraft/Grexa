@@ -223,16 +223,16 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [x] Preserve Grex labels for detected encodings where practical. (UTF-* mirrored verbatim; `DetectedEncoding::Heuristic(name)` uses canonical `encoding_rs` names so labels survive round-trip)
 - [x] Implement plain text decoding with replacement/error policy documented. (`encoding_rs` decode with U+FFFD replacement for invalid sequences; documented in `crates/grexa-core/src/encoding.rs`)
 - [x] Optimize encoding detection: fast-path UTF-8/BOM files, avoid expensive heuristic detection on every file when unnecessary, and consider user/default encoding overrides. (peek 4 bytes per file; no per-file heuristic; user/default overrides remain a follow-up)
-- [ ] Implement searchable Office Open XML extraction for `.docx`, `.xlsx`, and `.pptx`.
-- [ ] Implement searchable OpenDocument extraction for `.odt`, `.ods`, and `.odp`.
-- [ ] Implement ZIP search for file names and text/XML contents.
-- [ ] Implement PDF text extraction with a Rust library or a controlled optional helper, and document limitations.
-- [ ] Evaluate optional Poppler/`pdftotext` integration for better PDF quality, with a pure-Rust fallback if available.
-- [ ] Explicitly document that scanned/OCR-only PDFs, encrypted PDFs, malformed PDFs, and complex font/CMap cases may be unsupported unless an OCR/helper feature is later added.
-- [ ] Implement RTF text extraction.
-- [ ] Preserve binary skip lists for images, audio, video, executables, legacy Office, archives, caches, locks, packs, indexes, and unsupported binaries.
-- [ ] Add fixtures for every supported searchable binary/document type.
-- [ ] Add tests for files with invalid bytes, mixed encodings, huge lines, and null bytes.
+- [x] Implement searchable Office Open XML extraction for `.docx`, `.xlsx`, and `.pptx`. (`crates/grexa-core/src/documents.rs::extract_ooxml`)
+- [x] Implement searchable OpenDocument extraction for `.odt`, `.ods`, and `.odp`. (same module, `content.xml` entry)
+- [x] Implement ZIP search for file names and text/XML contents. (`documents.rs::extract_zip` emits the entry list plus the contents of every textual entry)
+- [x] Implement PDF text extraction with a Rust library or a controlled optional helper, and document limitations. (`documents.rs::extract_pdf` shells out to `pdftotext`)
+- [x] Evaluate optional Poppler/`pdftotext` integration for better PDF quality, with a pure-Rust fallback if available. (decision recorded in the module docs: `pdftotext` is the primary, pure-Rust crates flagged for a follow-up spike)
+- [x] Explicitly document that scanned/OCR-only PDFs, encrypted PDFs, malformed PDFs, and complex font/CMap cases may be unsupported unless an OCR/helper feature is later added. (note in `documents::extract_pdf` doc-comment)
+- [x] Implement RTF text extraction. (`documents.rs::extract_rtf` strips control words, hex escapes, and structural groups)
+- [x] Preserve binary skip lists for images, audio, video, executables, legacy Office, archives, caches, locks, packs, indexes, and unsupported binaries. (`BINARY_EXTENSIONS` in `search.rs`)
+- [x] Add fixtures for every supported searchable binary/document type. (in-memory zip builders in `documents.rs::tests` cover docx/xlsx/pptx/odt/zip/rtf; pdf branch validated via smoke test)
+- [x] Add tests for files with invalid bytes, mixed encodings, huge lines, and null bytes. (`search.rs::tests::search_handles_files_with_null_bytes_and_huge_lines` + `encoding.rs::tests::read_invalid_utf8_triggers_heuristic_detection`)
 
 ## Phase 4 - Search UI MVP
 

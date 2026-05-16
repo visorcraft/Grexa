@@ -1,5 +1,6 @@
 pub mod cancel;
 pub mod desktop;
+pub mod documents;
 pub mod encoding;
 pub mod models;
 pub mod pattern;
@@ -15,6 +16,7 @@ pub use pattern::{PatternEngine, PatternError};
 pub use desktop::{
     EditorPreset, file_manager_show_items_uris, open_in_editor_command, reveal_with_xdg_open,
 };
+pub use documents::{ExtractError, extract_text};
 pub use preview::{ContextLine, ContextPreviewResult, PreviewError, context_preview};
 pub use replace::{
     FileReplaceFailure, FileReplaceReport, ReplaceError, ReplaceOptions, ReplaceSummary,

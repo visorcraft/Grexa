@@ -11,6 +11,7 @@ use unicode_normalization::UnicodeNormalization;
 use unicode_normalization::char::is_combining_mark;
 
 use crate::cancel::CancelToken;
+use crate::documents::extract_text;
 use crate::encoding::{DetectedEncoding, read_text};
 use crate::models::{
     FileSearchResult, SearchOptions, SearchResult, SearchSummary, SizeLimitType, SizeUnit,
@@ -471,39 +472,75 @@ fn search_file(
     regex: Option<&PatternEngine>,
     cancel: &CancelToken,
 ) -> Result<FileScan, SearchError> {
-    // Initial slice: plain text files. Searchable binary/document extraction comes in a later phase.
-    if normalized_extension(path)
-        .is_some_and(|ext| SEARCHABLE_BINARY_EXTENSIONS.contains(&ext.as_str()))
-    {
+    // Searchable-document path: handed off to extractors that decode OOXML,
+    // ODF, ZIP, PDF, and RTF into plain text before line scanning. The
+    // returned encoding is reported as the file's *container* encoding so
+    // result tables still show "UTF-8" (these container formats don't carry a
+    // user-visible charset).
+    let is_searchable_binary = normalized_extension(path)
+        .is_some_and(|ext| SEARCHABLE_BINARY_EXTENSIONS.contains(&ext.as_str()));
+    if is_searchable_binary {
+        let extracted = match extract_text(path) {
+            Ok(Some(text)) => text,
+            Ok(None) => {
+                return Ok(FileScan {
+                    results: Vec::new(),
+                    encoding: None,
+                });
+            }
+            Err(err) => {
+                tracing::debug!(
+                    path = %path.display(),
+                    error = %err,
+                    "document extractor failed; skipping file"
+                );
+                return Ok(FileScan {
+                    results: Vec::new(),
+                    encoding: None,
+                });
+            }
+        };
+        let results = scan_text_buffer(path, root, options, regex, cancel, &extracted);
         return Ok(FileScan {
-            results: Vec::new(),
-            encoding: None,
+            results,
+            encoding: Some(DetectedEncoding::Utf8),
         });
     }
 
     let (text, encoding) = read_text(path)?;
-    let mut results = Vec::new();
+    let results = scan_text_buffer(path, root, options, regex, cancel, &text);
+    Ok(FileScan {
+        results,
+        encoding: Some(encoding),
+    })
+}
 
+/// Walk the buffered text line-by-line and collect matches. Used by both the
+/// plain-text reader and the document extractor path.
+fn scan_text_buffer(
+    path: &Path,
+    root: &Path,
+    options: &SearchOptions,
+    regex: Option<&PatternEngine>,
+    cancel: &CancelToken,
+    text: &str,
+) -> Vec<SearchResult> {
+    let mut results = Vec::new();
     for (idx, line) in text.lines().enumerate() {
         // Cancellation check every 64 lines keeps the latency low for both
         // tiny and huge files without paying for an atomic load per line.
         if idx % 64 == 0 && cancel.is_cancelled() {
-            return Ok(FileScan {
-                results,
-                encoding: Some(encoding),
-            });
+            return results;
         }
 
         let line_number = idx + 1;
         let matches = find_line_matches(line, options, regex);
-
         if matches.is_empty() {
             continue;
         }
 
         let (start, end) = matches[0];
         let (before, matched, after) = preview_segments(line, start, end);
-
         results.push(SearchResult {
             file_name: path
                 .file_name()
@@ -520,11 +557,7 @@ fn search_file(
             match_count: matches.len(),
         });
     }
-
-    Ok(FileScan {
-        results,
-        encoding: Some(encoding),
-    })
+    results
 }
 
 fn find_line_matches(
@@ -918,6 +951,58 @@ mod tests {
                 ..
             }
         )));
+    }
+
+    #[test]
+    fn search_extracts_docx_content() {
+        // Drive the search engine through a .docx fixture and confirm the
+        // document extractor + line scanner cooperate end-to-end.
+        use std::io::Write;
+        use zip::write::SimpleFileOptions;
+
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("paper.docx");
+        let file = std::fs::File::create(&path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file("word/document.xml", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(
+            br#"<?xml version="1.0"?>
+<w:document xmlns:w="http://x">
+  <w:body>
+    <w:p><w:r><w:t>Hello</w:t></w:r></w:p>
+    <w:p><w:r><w:t>TODO write the test</w:t></w:r></w:p>
+  </w:body>
+</w:document>"#,
+        )
+        .unwrap();
+        zip.finish().unwrap();
+
+        let mut options = SearchOptions::new(dir.path(), "TODO");
+        options.include_binary = true;
+        let summary = search(&options).unwrap();
+        assert!(summary.matches >= 1, "no docx matches found");
+        let file_names: Vec<_> = summary
+            .results
+            .iter()
+            .map(|r| r.file_name.clone())
+            .collect();
+        assert!(file_names.contains(&"paper.docx".to_string()));
+    }
+
+    #[test]
+    fn search_handles_files_with_null_bytes_and_huge_lines() {
+        // Files that mix null bytes into otherwise-readable UTF-8 are valid
+        // POSIX content; the search engine should tolerate them. We also
+        // include a single very-long line to make sure neither the previewer
+        // nor the line iterator panic on extreme inputs.
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("weird.txt");
+        let huge = "A".repeat(64 * 1024);
+        let body = format!("line1\nTODO\0null\n{huge} TODO trailing\n");
+        std::fs::write(&path, body.as_bytes()).unwrap();
+        let summary = search(&SearchOptions::new(dir.path(), "TODO")).unwrap();
+        assert!(summary.matches >= 2, "got {summary:?}");
     }
 
     #[test]
