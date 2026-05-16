@@ -6,6 +6,9 @@ use grexa_core::SearchOptions;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub mod secret;
+pub use secret::{SecretError, delete_api_key, load_api_key, store_api_key};
+
 pub const DEFAULT_MODEL: &str = "gpt-4o-mini";
 pub const DEFAULT_TIMEOUT_SECS: u64 = 90;
 

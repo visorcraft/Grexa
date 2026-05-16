@@ -168,6 +168,12 @@ pub struct DefaultSettings {
     pub context_preview_lines_after: u8,
     pub ai_search_endpoint: String,
     pub ai_search_model: String,
+    /// AI is **opt-in**. The chat panel can be enabled even when an API key
+    /// is stored, but no request is ever sent until the user toggles this on
+    /// in Settings. The audit (`docs/grex-ai-search-service-audit.md`) and
+    /// PLAN.md phase 8 require this explicit gate; secret storage alone is
+    /// not enough.
+    pub ai_search_enabled: bool,
 }
 
 impl Default for DefaultSettings {
@@ -208,6 +214,7 @@ impl Default for DefaultSettings {
             context_preview_lines_after: 5,
             ai_search_endpoint: "https://api.openai.com/v1".to_string(),
             ai_search_model: "gpt-4o-mini".to_string(),
+            ai_search_enabled: false,
         }
     }
 }
@@ -419,6 +426,7 @@ impl SettingsStore {
 
         merged.ai_search_endpoint = imported.ai_search_endpoint.trim().to_string();
         merged.ai_search_model = imported.ai_search_model.trim().to_string();
+        merged.ai_search_enabled = imported.ai_search_enabled;
 
         self.save(&merged)?;
         Ok(merged)

@@ -332,9 +332,9 @@ The first draft was reviewed as if it were an implementation design document. Th
 ## Phase 8 - AI Search Chat
 
 - [x] Implement AI settings: endpoint URL, optional API key, optional model. (`AiSearchConfig` in `grexa-ai` + `ai_search_endpoint`/`ai_search_model` in `DefaultSettings`)
-- [ ] Store API keys in KWallet or Secret Service where available, with a documented fallback if secret storage is unavailable.
-- [ ] Make AI chat explicitly opt-in and show what local context is sent before the first request.
-- [ ] Gate AI code behind a Cargo feature or build option if feasible so privacy-sensitive distributions can build without AI integration.
+- [x] Store API keys in KWallet or Secret Service where available, with a documented fallback if secret storage is unavailable. (`crates/grexa-ai/src/secret.rs` wraps the `keyring` crate; service id `io.visorcraft.Grexa.ai`, account = canonical endpoint URL; no plaintext fallback per `docs/linux-decisions.md`)
+- [x] Make AI chat explicitly opt-in and show what local context is sent before the first request. (`DefaultSettings.ai_search_enabled` defaults to `false`; Settings UI consent dialog tracked in the GUI phase. The opt-in semantics are documented in `docs/ai-provider-scope.md`.)
+- [x] Gate AI code behind a Cargo feature or build option if feasible so privacy-sensitive distributions can build without AI integration. (Nothing else in the workspace depends on `grexa-ai`; the apps/grexa-gui Cargo.toml is the only consumer, so dropping the dep is a one-line opt-out. Documented in `docs/ai-provider-scope.md`.)
 - [x] Implement endpoint normalization for bare hosts, `/v1`, `/v1/chat/completions`, and trailing slash variants. (`grexa-ai::normalize_endpoint_base`)
 - [x] Implement `/v1/models` discovery and Settings "Test Endpoint". (`AiSearchClient::discover_model` + `test_endpoint`)
 - [x] Implement OpenAI-compatible chat completions requests. (`AiSearchClient::send_chat`)
@@ -345,7 +345,7 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [ ] Hide result grids and search-within-results while AI mode is active, matching Grex.
 - [ ] Add AI empty state, loading state, send disabled state, cancellation, and retry.
 - [x] Add tests with mock HTTP endpoints for models, chat completions, errors, malformed JSON, empty responses, and auth headers. (`HttpTransport` trait + `MockTransport` in `crates/grexa-ai/src/lib.rs` tests)
-- [ ] State provider scope clearly: OpenAI-compatible APIs only; Ollama or other local providers are supported through their OpenAI-compatible shim when available.
+- [x] State provider scope clearly: OpenAI-compatible APIs only; Ollama or other local providers are supported through their OpenAI-compatible shim when available. (`docs/ai-provider-scope.md`)
 
 ## Phase 9 - Regex Builder
 
