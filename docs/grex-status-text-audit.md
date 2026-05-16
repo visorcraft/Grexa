@@ -1,11 +1,11 @@
 # Grex StatusText Audit
 
-This document records the behavior of the status strip displayed by Grex's
-search tabs — the `TabViewModel.StatusText` property, the strings it is
-populated from, the elapsed-time pluralization rules, and the search-within
-filtered summary. Grexa must either preserve these strings 1:1, reword them
-for Linux semantics, or replace `string.Format` placeholders with ICU
-MessageFormat so that plural forms render correctly in non-English locales.
+This document records the behavior of the status strip in Grex's search
+tabs — `TabViewModel.StatusText`, the resource keys it formats, the
+elapsed-time pluralization rules, and the search-within filtered summary.
+Grexa must either preserve these strings 1:1, reword them for Linux
+semantics, or replace `string.Format` placeholders with ICU MessageFormat
+so plural forms render correctly in non-English locales.
 
 Source evidence:
 
@@ -66,9 +66,7 @@ with a typed severity field rather than parsing the rendered string.
 
 ## 1. Every Status String During Search
 
-There are **seven** status states reachable through `SetStatus` /
-`SetResultsSummary`. All resource lookups quote `Strings/en-US/Resources.resw`
-verbatim.
+All resource lookups below quote `Strings/en-US/Resources.resw` verbatim.
 
 ### 1.1 Idle (initial, after Clear, after cancellation)
 
@@ -77,9 +75,7 @@ and the `OperationCanceledException` branch in both `PerformSearchAsync` and
 `PerformReplaceAsync`.
 
 ```xml
-<data name="ReadyStatus" xml:space="preserve">
-  <value>Ready</value>
-</data>
+<data name="ReadyStatus"><value>Ready</value></data>
 ```
 
 ### 1.2 Searching (in flight)
@@ -89,9 +85,7 @@ result lists are cleared. The trailing ellipsis is ASCII three-dot, not
 U+2026 — Grexa should canonicalize to `…`.
 
 ```xml
-<data name="SearchingStatus" xml:space="preserve">
-  <value>Searching...</value>
-</data>
+<data name="SearchingStatus"><value>Searching...</value></data>
 ```
 
 ### 1.3 Replacing (in flight)
@@ -99,38 +93,31 @@ U+2026 — Grexa should canonicalize to `…`.
 `SetStatus("ReplacingStatus")` at the top of `PerformReplaceAsync`.
 
 ```xml
-<data name="ReplacingStatus" xml:space="preserve">
-  <value>Replacing...</value>
-</data>
+<data name="ReplacingStatus"><value>Replacing...</value></data>
 ```
 
 ### 1.4 No Matches
 
 Present in the catalog but **never assigned** by `TabViewModel`. A
 zero-match search renders `FoundMatchesStatus` with `{0}=0` (e.g.
-`"Found 0 matches in 0 files in 0.04 seconds"`). Grexa can either drop
-the key or wire it in for the `totalMatches == 0` case.
+`"Found 0 matches in 0 files in 0.04 seconds"`).
 
 ```xml
-<data name="NoMatchesStatus" xml:space="preserve">
-  <value>No matches found</value>
-</data>
+<data name="NoMatchesStatus"><value>No matches found</value></data>
 ```
 
 ### 1.5 Search Completed (totals)
 
 `SetResultsSummary("FoundMatchesStatus", totalMatches, fileCount,
-FormatElapsedTime(_searchStopwatch.Elapsed))` is invoked at the end of both
-the Files-mode and Content-mode branches of `PerformSearchAsync`.
+FormatElapsedTime(_searchStopwatch.Elapsed))` at the end of both the
+Files-mode and Content-mode branches of `PerformSearchAsync`.
 
 ```xml
-<data name="FoundMatchesStatus" xml:space="preserve">
-  <value>Found {0} matches in {1} files in {2}</value>
-</data>
+<data name="FoundMatchesStatus"><value>Found {0} matches in {1} files in {2}</value></data>
 ```
 
-Args: `{0}` = total match count (int), `{1}` = file count (int),
-`{2}` = pre-formatted elapsed-time string (see section 4).
+Args: `{0}` = match count (int), `{1}` = file count (int),
+`{2}` = pre-formatted elapsed string (see section 4).
 
 ### 1.6 Filtered Summary (search-within-results narrows results)
 
@@ -141,15 +128,13 @@ _resultsSummaryElapsed)` whenever the filter text is non-empty and
 `_hasResultsSummary` is true.
 
 ```xml
-<data name="FilteredMatchesStatus" xml:space="preserve">
-  <value>Showing {0} matches in {1} files (filtered from {2} matches in {3} files) in {4}</value>
-</data>
+<data name="FilteredMatchesStatus"><value>Showing {0} matches in {1} files (filtered from {2} matches in {3} files) in {4}</value></data>
 ```
 
 Args: `{0}` filtered matches, `{1}` filtered files, `{2}` original matches,
 `{3}` original files, `{4}` original elapsed string. The elapsed time is
-**not** recomputed for the filter — the wall-clock value from the underlying
-search is reused; the filter is a synchronous in-memory pass.
+**not** recomputed; the filter is a synchronous in-memory pass that reuses
+the underlying search's wall-clock.
 
 ### 1.7 Replace Completed (totals)
 
@@ -157,35 +142,29 @@ search is reused; the filter is a synchronous in-memory pass.
 FormatElapsedTime(...))` at the end of `PerformReplaceAsync`.
 
 ```xml
-<data name="ReplacedMatchesStatus" xml:space="preserve">
-  <value>Replaced {0} matches in {1} files in {2}</value>
-</data>
+<data name="ReplacedMatchesStatus"><value>Replaced {0} matches in {1} files in {2}</value></data>
 ```
 
 ### 1.8 Error
 
 `SetStatus("ErrorStatus", ex.Message)` in three places: the docker symlink
-branch (its `{0}` arg is itself the localized
-`DockerSymlinkErrorMessage`), the generic `catch (Exception ex)` block in
-`PerformSearchAsync`, and the same block in `PerformReplaceAsync`.
+branch (its `{0}` arg is itself the localized `DockerSymlinkErrorMessage`),
+the generic `catch (Exception ex)` block in `PerformSearchAsync`, and the
+same block in `PerformReplaceAsync`.
 
 ```xml
-<data name="ErrorStatus" xml:space="preserve">
-  <value>Error: {0}</value>
-</data>
+<data name="ErrorStatus"><value>Error: {0}</value></data>
 ```
 
-The code-behind additionally writes `ViewModel.StatusText = $"Error: {ex.Message}";`
+The code-behind also writes `ViewModel.StatusText = $"Error: {ex.Message}";`
 in three places (`Controls/SearchTabContent.xaml.cs:1536, 2442, 2965`),
-bypassing localization and shipping the English literal `Error:`
-regardless of culture. Grexa must route these through the localization
-service.
+bypassing localization. Grexa must route these through localization.
 
 ### 1.9 InfoBar Frame Strings (static)
 
 ```xml
-<data name="StatusInfoBar.Title"   xml:space="preserve"><value>Search Status</value></data>
-<data name="StatusInfoBar.Message" xml:space="preserve"><value>Ready</value></data>
+<data name="StatusInfoBar.Title"><value>Search Status</value></data>
+<data name="StatusInfoBar.Message"><value>Ready</value></data>
 ```
 
 The fallback `UpdateStatusInfoBar("Ready")` at `MainWindow.xaml.cs:736` is
@@ -346,7 +325,7 @@ Examples: `"1 hour"`, `"1 hour 1 minute"`, `"1 hour 9 minutes"`,
 | `TimeHourSingular`      | 0    | chosen at call site                 | n/a              |
 | `TimeHourPlural`        | 0    | chosen at call site                 | n/a              |
 
-All composite keys use positional placeholders (`{0}..{4}`).
+Composite keys all use positional placeholders.
 
 Key observations:
 
@@ -381,13 +360,9 @@ status-error = Error: { $message }
 status-infobar-title = Search Status
 ```
 
-Notes for the Linux port:
-
-- Promote the ASCII `...` to U+2026 (`…`) per GNOME HIG.
-- `status-error` should drop the literal `Error:` prefix and use the
-  Fluent attribute pattern so the InfoBar severity is set from a typed
-  enum on the view-model, not from `StartsWith("Error:")` string
-  sniffing.
+Notes: promote ASCII `...` to U+2026 (`…`) per GNOME HIG; `status-error`
+should drop the literal `Error:` prefix so severity comes from a typed
+view-model enum, not `StartsWith("Error:")` sniffing.
 
 ### 6.2 Reword For Linux Semantics
 
@@ -397,9 +372,8 @@ Notes for the Linux port:
   `Search results` to match GNOME / KDE result-pane wording.
 - Replace the three `$"Error: {ex.Message}"` literals in
   `Controls/SearchTabContent.xaml.cs` with localized lookups.
-- Remove the InfoBar severity regex `(?:Found|Replaced)\s+(\d+)\s+matches`;
-  surface severity from `TabViewModel` as a `StatusSeverity` enum
-  (`Information | Success | Warning | Error`) and bind directly.
+- Drop the InfoBar severity regex `(?:Found|Replaced)\s+(\d+)\s+matches`;
+  surface severity from `TabViewModel` as a `StatusSeverity` enum and bind.
 
 ### 6.3 ICU MessageFormat (recommended for Grexa)
 

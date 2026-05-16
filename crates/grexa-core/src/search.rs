@@ -176,6 +176,11 @@ pub fn search_with(
         .git_exclude(options.respect_gitignore)
         .git_global(options.respect_gitignore)
         .ignore(options.respect_gitignore)
+        // Honor `.gitignore` even when the search root is not a real git
+        // repository. Grex users routinely point Grexa at extracted archives,
+        // dependency caches, and read-only mounts that have an inherited
+        // `.gitignore` but no `.git/` sibling.
+        .require_git(false)
         .follow_links(options.include_symlinks)
         .same_file_system(false);
 

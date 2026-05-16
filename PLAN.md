@@ -187,7 +187,7 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [x] Implement recursive Linux file walking with streaming results.
 - [x] Use the `ignore` crate or equivalent to handle `.gitignore`, `.ignore`, global git excludes if desired, hidden files, symlinks, and parallel traversal. (`crates/grexa-core/src/search.rs` uses `ignore::WalkBuilder`; golden gitignore fixtures remain a follow-up)
 - [ ] Decide and test bind-mount, overlayfs, btrfs subvolume, and same-filesystem traversal behavior.
-- [ ] Preserve Grex's `.gitignore` behavior through golden tests, especially root-relative and negated patterns.
+- [x] Preserve Grex's `.gitignore` behavior through golden tests, especially root-relative and negated patterns. (`crates/grexa-core/tests/gitignore_parity.rs`, 61 cases; also fixed search engine to call `WalkBuilder::require_git(false)` so `.gitignore` works outside a real git repo)
 - [x] Implement include/exclude hidden files using dotfile semantics plus filesystem metadata where available.
 - [x] Implement include/exclude symbolic links without infinite loops.
 - [ ] Add loop detection for symlinks, bind mounts, hard-linked directory edge cases where supported, and recursive mount layouts.
