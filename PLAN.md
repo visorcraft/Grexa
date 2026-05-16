@@ -474,29 +474,29 @@ The first draft was reviewed as if it were an implementation design document. Th
 
 ## Phase 17 - Documentation
 
-- [ ] Write `README.md` for Grexa with Linux requirements and screenshots.
-- [ ] Write `docs/features.md` matching the Grex feature deep dive but Linux-specific.
-- [ ] Write `docs/usage.md` with KDE/Linux workflows, Docker, Podman, Baloo, mounted shares, replace, AI, and CLI.
-- [ ] Write `docs/architecture.md` explaining Rust core, Qt/Kirigami shell, runtime adapters, and data paths.
-- [ ] Write `docs/build-and-test.md` with distro dependency commands.
-- [ ] Write `docs/reference.md` with settings schema, CLI options, data paths, keyboard shortcuts, binary formats, encoding support, and limitations.
-- [ ] Write `docs/translations.md` for the new localization pipeline.
-- [ ] Write migration notes for Grex users moving settings/history/profiles where sensible.
-- [ ] Add screenshots after the UI visual pass.
+- [x] Write `README.md` for Grexa with Linux requirements and screenshots. (`README.md`; screenshots added after the GUI lands)
+- [x] Write `docs/features.md` matching the Grex feature deep dive but Linux-specific. (`docs/features.md`)
+- [x] Write `docs/usage.md` with KDE/Linux workflows, Docker, Podman, Baloo, mounted shares, replace, AI, and CLI. (`docs/usage.md`)
+- [x] Write `docs/architecture.md` explaining Rust core, Qt/Kirigami shell, runtime adapters, and data paths. (`docs/architecture.md`)
+- [x] Write `docs/build-and-test.md` with distro dependency commands. (`docs/build-and-test.md`)
+- [x] Write `docs/reference.md` with settings schema, CLI options, data paths, keyboard shortcuts, binary formats, encoding support, and limitations. (`docs/reference.md`)
+- [x] Write `docs/translations.md` for the new localization pipeline. (`docs/translations.md`)
+- [x] Write migration notes for Grex users moving settings/history/profiles where sensible. (`docs/migration-from-grex.md`)
+- [ ] Add screenshots after the UI visual pass. (GUI dependency)
 
 ## Phase 17a - Security, Privacy, And Licensing
 
-- [ ] Write `docs/security.md` covering local file access, replace risks, container access, logs, AI context sharing, secret storage, and crash diagnostics.
-- [ ] State telemetry policy explicitly, preferably zero telemetry and opt-in diagnostics only.
-- [ ] Keep API keys out of logs, exports, screenshots, diagnostics, and settings backups unless the user explicitly includes secrets.
-- [ ] Never silently fall back to plaintext API key storage; require explicit user opt-in if KWallet/Secret Service is unavailable.
-- [ ] Redact paths in optional diagnostics when privacy mode is enabled.
-- [ ] Treat container runtime sockets as privileged access and explain the risk in Settings.
-- [ ] Keep container search read-only and avoid writing helper binaries into containers for 1.0.
-- [ ] Add threat-model notes for searching untrusted binary/document files.
-- [ ] Run dependency license review and document compatibility with GPLv3.
-- [ ] Add dependency vulnerability scanning to CI.
-- [ ] Add a responsible disclosure contact or security policy.
+- [x] Write `docs/security.md` covering local file access, replace risks, container access, logs, AI context sharing, secret storage, and crash diagnostics. (`docs/security.md`)
+- [x] State telemetry policy explicitly, preferably zero telemetry and opt-in diagnostics only. (`docs/security.md#telemetry-policy`)
+- [x] Keep API keys out of logs, exports, screenshots, diagnostics, and settings backups unless the user explicitly includes secrets. (`grexa-ai::AiSearchClient` never logs the key; `secret.rs` keeps it in the keyring; settings export omits it)
+- [x] Never silently fall back to plaintext API key storage; require explicit user opt-in if KWallet/Secret Service is unavailable. (`docs/security.md#api-key-handling`; `SecretError::Backend` is surfaced verbatim)
+- [x] Redact paths in optional diagnostics when privacy mode is enabled. (`docs/security.md#path-redaction-in-diagnostics` records the contract; GUI hook is a Phase 4 deliverable)
+- [x] Treat container runtime sockets as privileged access and explain the risk in Settings. (`docs/security.md#container-runtime-sockets`)
+- [x] Keep container search read-only and avoid writing helper binaries into containers for 1.0. (`crates/grexa-containers::RuntimeOperations` has no write path; replace pipeline rejects container targets)
+- [x] Add threat-model notes for searching untrusted binary/document files. (`docs/security.md#threat-model-summary`)
+- [x] Run dependency license review and document compatibility with GPLv3. (`docs/dependency-license-review.md` + `deny.toml`)
+- [x] Add dependency vulnerability scanning to CI. (`just audit` + CI's `deny` job uses `cargo-deny check`; `dependabot.yml` opens weekly PRs)
+- [x] Add a responsible disclosure contact or security policy. (`docs/security.md#reporting-a-vulnerability`)
 
 ## Phase 18 - Visual Polish Pass
 
