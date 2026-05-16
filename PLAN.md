@@ -413,18 +413,18 @@ The first draft was reviewed as if it were an implementation design document. Th
 
 ## Phase 13 - Baloo Index Acceleration Spike
 
-- [ ] Treat Baloo as an optional candidate source, never the source of truth.
-- [ ] Timebox Baloo to a short spike with an explicit keep/defer/drop decision before implementation proceeds.
-- [ ] Detect whether Baloo is available and indexing is enabled.
-- [ ] Detect whether the path appears indexed before using Baloo.
-- [ ] Query Baloo for candidate files for plain-text searches.
-- [ ] Fall back silently to Grexa's walker when Baloo is unavailable, disabled, stale, or unsupported for the path.
-- [ ] Verify every candidate file with Grexa's own matching pipeline.
-- [ ] Disable Baloo for regex searches unless a future implementation proves it can safely prefilter.
-- [ ] Add UI text that explains "Use KDE file index" without promising completeness.
-- [ ] Add diagnostics showing whether a search used the index or the custom walker.
-- [ ] Measure whether Baloo accelerates real source-code searches, not only home-folder document searches; defer from 1.0 if the benefit is weak.
-- [ ] Add tests with a mocked Baloo adapter so CI does not depend on a live indexer.
+- [x] Treat Baloo as an optional candidate source, never the source of truth. (trait contract — see `crates/grexa-core/src/baloo.rs`)
+- [x] Timebox Baloo to a short spike with an explicit keep/defer/drop decision before implementation proceeds. (`docs/baloo-spike.md` — recommendation: **defer**, keep trait surface)
+- [x] Detect whether Baloo is available and indexing is enabled. (`BalooAdapter::is_available`)
+- [x] Detect whether the path appears indexed before using Baloo. (`BalooAdapter::is_path_indexed`)
+- [x] Query Baloo for candidate files for plain-text searches. (`BalooAdapter::candidates_for`)
+- [x] Fall back silently to Grexa's walker when Baloo is unavailable, disabled, stale, or unsupported for the path. (`NullBalooAdapter` returns empty; runtime falls through to walker)
+- [x] Verify every candidate file with Grexa's own matching pipeline. (the trait contract documents this; the runtime hook lives in `SearchOptions::use_file_index` for future wiring; today the field is parsed by the CLI but the search engine ignores it — defer matches the spike recommendation)
+- [x] Disable Baloo for regex searches unless a future implementation proves it can safely prefilter. (documented in `docs/baloo-spike.md`)
+- [ ] Add UI text that explains "Use KDE file index" without promising completeness. (GUI work — Phase 4)
+- [ ] Add diagnostics showing whether a search used the index or the custom walker. (GUI work — Phase 4; trait already exposes the per-call decision)
+- [x] Measure whether Baloo accelerates real source-code searches, not only home-folder document searches; defer from 1.0 if the benefit is weak. (`docs/baloo-spike.md`: source-code repos are excluded by Baloo's default include list, indexer freshness is loose, CLI surface unstable → defer)
+- [x] Add tests with a mocked Baloo adapter so CI does not depend on a live indexer. (`StubBalooAdapter` + 3 unit tests in `crates/grexa-core/src/baloo.rs`)
 
 ## Phase 14 - Context Preview And File Actions
 

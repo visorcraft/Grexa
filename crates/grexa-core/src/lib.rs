@@ -1,3 +1,4 @@
+pub mod baloo;
 pub mod cancel;
 pub mod desktop;
 pub mod documents;
@@ -10,6 +11,9 @@ pub mod search;
 pub mod sort;
 pub mod storage;
 
+pub use baloo::{
+    BalooAdapter, BalooError, BaloosearchCliAdapter, NullBalooAdapter, StubBalooAdapter,
+};
 pub use cancel::CancelToken;
 pub use encoding::{DetectedEncoding, detect_from_bytes, detect_from_path, heuristic_label, read_text};
 pub use pattern::{PatternEngine, PatternError};
