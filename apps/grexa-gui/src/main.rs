@@ -42,6 +42,9 @@ use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
 mod controller;
+mod status;
+mod tab;
+mod workspace;
 
 fn main() -> anyhow::Result<()> {
     let _log_guard = init_tracing();

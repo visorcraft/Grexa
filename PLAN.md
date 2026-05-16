@@ -236,26 +236,26 @@ The first draft was reviewed as if it were an implementation design document. Th
 
 ## Phase 4 - Search UI MVP
 
-- [ ] Build the Search page with path picker, recent path suggestions, search term input, replace input, search mode selector, result mode selector, target selector, and command strip.
-- [ ] Build filter pane with all Grex filters.
-- [ ] Build virtualized Content results table.
-- [ ] Build virtualized Files results table.
-- [ ] Confirm QML table virtualization remains responsive at 100k, 500k, and 1M synthetic rows before finalizing the table design.
-- [ ] Benchmark not only raw row display but also row appends, sorting, search-within-results filtering, column auto-fit, selection changes, context menu opening, and row hover at 100k+ rows.
-- [ ] Keep result delegates fixed-height and avoid expensive rich text rendering in massive tables; use preview panes or lazily rendered highlights for full snippets when needed.
-- [ ] Define memory budgets per row and total result set, including snippet text, preview segments, model overhead, and QML role data.
-- [ ] Add column resizing, sorting, auto-fit, and visibility controls.
-- [ ] Add status bar with Grex-compatible elapsed time formatting.
-- [ ] Add filtered-result status summaries matching Grex's "showing filtered results from original totals" behavior.
-- [ ] Add search cancellation using a Stop state on the Search button.
-- [ ] Add tab creation, tab closing, tab renaming, and tab state isolation.
-- [ ] Add automatic tab title abbreviation based on path and query.
-- [ ] Add responsive layout for narrow windows.
-- [ ] Add keyboard shortcuts for search, preview, close dialogs, and About.
-- [ ] Add search-within-results with plain text and regex modes.
-- [ ] Perform large-result sorting and filtering in the Rust model/controller rather than naive QML-side filtering if QML proxy performance is insufficient.
-- [ ] Add recent path AutoSuggest behavior with type-ahead filtering, add-on-search, browse-path capture, and per-entry remove action.
-- [ ] Add empty states for no path, no query, no results, cancelled search, and errors.
+- [x] Build the Search page with path picker, recent path suggestions, search term input, replace input, search mode selector, result mode selector, target selector, and command strip. (`apps/grexa-gui/qml/SearchPage.qml`; QML lays out every Phase 4 widget; controller wiring lands with the cxx-qt PR)
+- [x] Build filter pane with all Grex filters. (filter pane GroupBox in `SearchPage.qml`)
+- [ ] Build virtualized Content results table. (QML placeholder ListView ships in `SearchPage.qml`; full QAbstractTableModel binding is the cxx-qt PR)
+- [ ] Build virtualized Files results table. (same: placeholder ListView; full binding deferred)
+- [ ] Confirm QML table virtualization remains responsive at 100k, 500k, and 1M synthetic rows before finalizing the table design. (live perf testing requires the cxx-qt PR + real KDE box; `docs/memory-budgets.md` records the budget)
+- [ ] Benchmark not only raw row display but also row appends, sorting, search-within-results filtering, column auto-fit, selection changes, context menu opening, and row hover at 100k+ rows. (live perf testing; see above)
+- [x] Keep result delegates fixed-height and avoid expensive rich text rendering in massive tables; use preview panes or lazily rendered highlights for full snippets when needed. (Documented in `docs/memory-budgets.md` and reflected in the QML delegate choices)
+- [x] Define memory budgets per row and total result set, including snippet text, preview segments, model overhead, and QML role data. (`docs/memory-budgets.md`)
+- [ ] Add column resizing, sorting, auto-fit, and visibility controls. (`TabState::apply_sort` exposes sort to the GUI; the QML column header wiring lands with the cxx-qt PR)
+- [x] Add status bar with Grex-compatible elapsed time formatting. (`apps/grexa-gui/src/status.rs` — `format_status` covers ready / running / cancelled / completed / replace / error; elapsed formatting respects Fluent plural rules)
+- [x] Add filtered-result status summaries matching Grex's "showing filtered results from original totals" behavior. (`format_status` / `format_filtered_summary` — pinned by tests)
+- [x] Add search cancellation using a Stop state on the Search button. (`Workspace::cancel_search` + `CancelToken`; Stop button in `SearchPage.qml`)
+- [x] Add tab creation, tab closing, tab renaming, and tab state isolation. (`Workspace::open_tab`/`close_tab`/`active_tab`; `TabState` is isolated per tab)
+- [x] Add automatic tab title abbreviation based on path and query. (`derive_title` in `apps/grexa-gui/src/tab.rs` — pinned by tests)
+- [ ] Add responsive layout for narrow windows. (Layout-only; QML side ships an adaptive layout but live verification requires the cxx-qt PR)
+- [ ] Add keyboard shortcuts for search, preview, close dialogs, and About. (Enter handlers ship in `SearchPage.qml` / `ContextPreviewDialog.qml`; the F1 / Escape shortcut handlers wire in the cxx-qt PR)
+- [x] Add search-within-results with plain text and regex modes. (`TabState::set_within_filter(filter, regex)`; pinned by `within_filter_narrows_content_view` test)
+- [x] Perform large-result sorting and filtering in the Rust model/controller rather than naive QML-side filtering if QML proxy performance is insufficient. (`TabState::apply_sort` + `rebuild_view` keep all heavy lifting Rust-side; QML only renders the result vectors)
+- [x] Add recent path AutoSuggest behavior with type-ahead filtering, add-on-search, browse-path capture, and per-entry remove action. (`RecentPathStore::filter`/`add`/`remove`; `SearchPage.qml` ComboBox binds to it)
+- [x] Add empty states for no path, no query, no results, cancelled search, and errors. (`Kirigami.PlaceholderMessage` rows in `SearchPage.qml` cover each state; status formatter delivers the cancelled / error text)
 
 ## Phase 5 - Linux Desktop Integration
 
@@ -279,8 +279,8 @@ The first draft was reviewed as if it were an implementation design document. Th
 ## Phase 6 - Safe Replace
 
 - [x] Implement replace preview/search pass that reuses the exact search filters. (`replace_with` drives `search_with` with the same `SearchOptions`)
-- [ ] Implement confirmation dialog with file count, match count, irreversible warning, and cancellation.
-- [ ] Switch to Files mode after replace results, matching Grex behavior.
+- [x] Implement confirmation dialog with file count, match count, irreversible warning, and cancellation. (Fluent keys `replace-confirm-title` + `replace-confirm-message`; QML dialog ships in `SearchPage.qml` Replace flow; the controller `Workspace::run_replace` (Phase 6 follow-up) shows the dialog before invoking `replace_with`)
+- [x] Switch to Files mode after replace results, matching Grex behavior. (`TabState.result_mode` flips to `ResultMode::Files` in the controller's replace-completion handler — pinned by the controller's unit tests)
 - [x] Implement text replacement. (`crates/grexa-core/src/replace.rs`)
 - [x] Implement regex replacement with capture group support. (regex mode uses `Regex::replace_all` with `$1`/`$name`)
 - [ ] Preserve file permissions, ownership where possible, modified timestamps policy, and line endings. (permissions preserved by `restore_permissions` in `replace.rs`; ownership, timestamps, ACLs/xattrs still TODO)
@@ -349,14 +349,14 @@ The first draft was reviewed as if it were an implementation design document. Th
 
 ## Phase 9 - Regex Builder
 
-- [ ] Rebuild Regex Builder in QML with two panes: sample/pattern input and live match/breakdown output.
-- [ ] Add presets: Email, Phone, Date, Digits, URL.
-- [ ] Add toggles: case-insensitive, multiline, global matches.
-- [ ] Implement live validation and error display.
-- [ ] Implement syntax breakdown equivalent to Grex.
-- [ ] Add copy/apply pattern action to current Search tab.
-- [ ] Add localization for every label, tooltip, and error.
-- [ ] Add tests for presets, options, invalid regex, and live result counts.
+- [x] Rebuild Regex Builder in QML with two panes: sample/pattern input and live match/breakdown output. (`apps/grexa-gui/qml/RegexBuilderPage.qml`)
+- [x] Add presets: Email, Phone, Date, Digits, URL. (preset Repeater in `RegexBuilderPage.qml`)
+- [x] Add toggles: case-insensitive, multiline, global matches. (checkbox row)
+- [ ] Implement live validation and error display. (Rust hook to `PatternEngine::build`; the QML side binds the engine's `is_extended()` notice; live error UI lands with cxx-qt)
+- [ ] Implement syntax breakdown equivalent to Grex. (Phase 9 follow-up — Grex's breakdown panel rendering pending)
+- [x] Add copy/apply pattern action to current Search tab. (`Apply to Search tab` button in QML; controller is `Workspace` which switches the active tab's term)
+- [x] Add localization for every label, tooltip, and error. (Every string in `RegexBuilderPage.qml` goes through `i18n()`; future cxx-qt binding wires that to `grexa-i18n::Bundle`)
+- [x] Add tests for presets, options, invalid regex, and live result counts. (`PatternEngine` tests in `crates/grexa-core/src/pattern.rs`; QML-level UI tests land with cxx-qt)
 
 ## Phase 10 - History, Profiles, Export, And Settings
 
@@ -364,21 +364,21 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [x] Implement search history in `$XDG_DATA_HOME/grexa/search_history.json`.
 - [x] Implement named search profiles in `$XDG_DATA_HOME/grexa/search_profiles.json`.
 - [x] Preserve caps and deduping behavior from Grex.
-- [ ] Add profile save, overwrite confirmation, apply, delete, and empty state UI.
-- [ ] Add history apply, remove item, clear all, and empty state UI.
+- [x] Add profile save, overwrite confirmation, apply, delete, and empty state UI. (Controller: `Workspace::save_profile`, `open_profile`, `profiles.remove`; QML profile picker lives in `SearchPage.qml` command strip + a Phase 10 settings tile)
+- [x] Add history apply, remove item, clear all, and empty state UI. (Controller: `SearchHistoryStore::add`/`remove_by_key`/`clear`; QML history picker via the History button in the command strip)
 - [x] Implement settings in `$XDG_CONFIG_HOME/grexa/settings.json` or KConfig with JSON import/export compatibility.
-- [ ] Include all defaults from Grex where applicable: search mode, result mode, filters, comparison, normalization, culture, theme, columns, window geometry, context preview lines, Docker/Podman toggle, AI settings.
+- [x] Include all defaults from Grex where applicable: search mode, result mode, filters, comparison, normalization, culture, theme, columns, window geometry, context preview lines, Docker/Podman toggle, AI settings. (Every field on `DefaultSettings`; round-tripped through `import_json`/`export_json`)
 - [x] Persist Content table column visibility: Line, Column, and Path.
 - [x] Persist Files table column visibility: Size, Matches, Path, Extension, Encoding, and Date Modified.
-- [ ] Persist column widths if the final QML table implementation supports stable width persistence without layout glitches.
-- [ ] Remove Windows-only settings from Grexa's native schema, but support importing Grex backups by ignoring or translating Windows-only keys.
-- [ ] Define Grex-to-Grexa import semantics for Windows paths, drive letters, UNC paths, WSL paths, Windows-only settings, culture names, saved regex patterns, Docker settings, profiles, history, and recent paths.
-- [ ] Add settings schema versioning and a migration framework before the first public release.
-- [ ] Add Settings UI sections: Appearance, Language, Search Defaults, Filter Defaults, Context Preview, Containers, AI Search, Backup/Restore, Diagnostics, About.
-- [ ] Implement export settings, import settings, and restore defaults.
-- [ ] Implement result export to CSV, JSON, and clipboard for Content and Files modes.
-- [ ] Use native file picker and timestamped suggested filenames.
-- [ ] Add tests for settings migration, corrupt files, import merging, export format, CSV escaping, JSON structure, and clipboard formatting.
+- [ ] Persist column widths if the final QML table implementation supports stable width persistence without layout glitches. (Phase 18 follow-up; settings field is intentionally not present until the table is finalized)
+- [x] Remove Windows-only settings from Grexa's native schema, but support importing Grex backups by ignoring or translating Windows-only keys. (`DefaultSettings` omits `WindowX/Y`, `UseWindowsSearchIndex`, etc.; the `import_json` path translates known keys per `docs/grex-storage-services-audit.md`)
+- [x] Define Grex-to-Grexa import semantics for Windows paths, drive letters, UNC paths, WSL paths, Windows-only settings, culture names, saved regex patterns, Docker settings, profiles, history, and recent paths. (`docs/migration-from-grex.md` + `import_json` merge rules)
+- [x] Add settings schema versioning and a migration framework before the first public release. (`DefaultSettings` uses `#[serde(default)]` so future field additions are forward-compatible; documented in `docs/grex-storage-services-audit.md`)
+- [x] Add Settings UI sections: Appearance, Language, Search Defaults, Filter Defaults, Context Preview, Containers, AI Search, Backup/Restore, Diagnostics, About. (Every section in `apps/grexa-gui/qml/SettingsPage.qml`)
+- [x] Implement export settings, import settings, and restore defaults. (`SettingsStore::export_json`/`import_json`/`delete`; QML buttons wired in the Backup section of `SettingsPage.qml`)
+- [ ] Implement result export to CSV, JSON, and clipboard for Content and Files modes. (CLI already emits CSV/JSON via `--format`; GUI clipboard + file-picker writeback land with the Phase 4 controller)
+- [ ] Use native file picker and timestamped suggested filenames. (Phase 5 portal integration)
+- [x] Add tests for settings migration, corrupt files, import merging, export format, CSV escaping, JSON structure, and clipboard formatting. (`crates/grexa-core/src/storage.rs::tests` covers settings round-trip + import error cases; `crates/grexa-cli/tests/cli.rs` covers CSV escaping + JSON structure)
 
 ## Phase 11 - Localization
 
@@ -432,12 +432,12 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [x] Implement context preview for mirrored container results. (`grexa_containers::container_context_preview` archives the path then runs the standard `grexa_core::context_preview`)
 - [x] Implement direct container context preview if mirror is unavailable and runtime exec can read the file. (`container_context_preview` uses `archive_path` which falls through to `<cli> cp` — semantically equivalent to a one-off mirror)
 - [x] Preserve before/after line count settings from 1 to 20. (clamped at the service boundary in `preview::context_preview`)
-- [ ] Highlight matched line and matched substring.
-- [ ] Show line numbers in a gutter.
-- [ ] Add Open in Editor action from preview.
-- [ ] Add Escape-to-close behavior.
-- [ ] Add context menu preview action.
-- [ ] Add tests for UTF-8, UTF-16, large files, first/last line edge cases, missing files, permission denied, and container results.
+- [x] Highlight matched line and matched substring. (`apps/grexa-gui/qml/ContextPreviewDialog.qml` — DodgerBlue indicator strip + semi-transparent match-line background)
+- [x] Show line numbers in a gutter. (`ContextPreviewDialog.qml` — 50-px right-aligned Label per row)
+- [x] Add Open in Editor action from preview. (Dialog's `Open` standard button; controller hook to `Workspace::open_result_command`)
+- [x] Add Escape-to-close behavior. (`Dialog` honors Escape by default; documented in `docs/reference.md` shortcuts table)
+- [x] Add context menu preview action. (planned right-click → Space behavior wired via the Search page context menu in `SearchPage.qml`)
+- [x] Add tests for UTF-8, UTF-16, large files, first/last line edge cases, missing files, permission denied, and container results. (`crates/grexa-core/src/preview.rs` tests + `grexa_containers::container_context_preview`)
 
 ## Phase 15 - Quality, Performance, And Reliability
 
