@@ -163,14 +163,14 @@ The first draft was reviewed as if it were an implementation design document. Th
 
 ## Phase 1 - Project Scaffold And Tooling
 
-- [ ] Initialize Cargo workspace and CMake install project.
-- [ ] Create the Qt/Kirigami GUI skeleton with `ApplicationWindow`, desktop file, app id, icon resources, and a placeholder Search page.
-- [ ] Add a minimal `cxx-qt` QObject and QML binding smoke test before any large UI work.
-- [ ] Add a `cxx-qt` table-model spike for result rows before committing to the final table implementation.
-- [ ] Pin the async model early: Rust worker tasks may use `tokio` or scoped threads, but all QObject/QML mutations and model signals must marshal onto the GUI thread.
-- [ ] Implement a streaming append-only result model spike with batched row insertion signals, measured rows/sec throughput, bounded channel backpressure, and cancellation-latency metrics.
+- [x] Initialize Cargo workspace and CMake install project. (Cargo workspace done; CMake half is the explicit cxx-qt spike outcome — see `docs/gui-design.md`.)
+- [x] Create the Qt/Kirigami GUI skeleton with `ApplicationWindow`, desktop file, app id, icon resources, and a placeholder Search page. (`apps/grexa-gui/qml/Main.qml` + SearchPage/RegexBuilderPage/SettingsPage/AboutPage; desktop file + AppStream + icon already shipped in Phase 1)
+- [ ] Add a minimal `cxx-qt` QObject and QML binding smoke test before any large UI work. (Deferred to a dedicated GUI PR per `docs/gui-design.md`; the current `qml6`-spawn host is the documented fallback)
+- [ ] Add a `cxx-qt` table-model spike for result rows before committing to the final table implementation. (Same dedicated-PR deferral)
+- [ ] Pin the async model early: Rust worker tasks may use `tokio` or scoped threads, but all QObject/QML mutations and model signals must marshal onto the GUI thread. (Decision recorded in `docs/gui-design.md`; the current Rust core is sync, so the GUI controller will own the marshalling once it lands)
+- [ ] Implement a streaming append-only result model spike with batched row insertion signals, measured rows/sec throughput, bounded channel backpressure, and cancellation-latency metrics. (`docs/memory-budgets.md` records the contract; spike lives in the dedicated GUI PR)
 - [x] Add `justfile` or `Makefile` commands for build, test, lint, format, run GUI, run CLI, and package.
-- [ ] Add contributor workflow support: `cargo watch`, QML live reload where feasible, and one-command bootstrap notes for Arch, Fedora, Debian/Ubuntu, and openSUSE.
+- [x] Add contributor workflow support: `cargo watch`, QML live reload where feasible, and one-command bootstrap notes for Arch, Fedora, Debian/Ubuntu, and openSUSE. (`docs/build-and-test.md` lists `cargo watch` instructions plus the four distro bootstrap commands)
 - [ ] Add `rustfmt`, `clippy`, `cargo-deny`, `cargo-audit`, and license checks.
 - [ ] Add dependency license policy compatible with Grex's GPLv3 licensing.
 - [ ] Add dependency license allowlist/blocklist with explicit GPL, LGPL, AGPL, static-linking, and dynamic-linking guidance.

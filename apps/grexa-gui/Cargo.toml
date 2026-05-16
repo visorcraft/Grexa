@@ -4,5 +4,16 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Grexa Qt 6 / Kirigami GUI shell"
 
 [dependencies]
+anyhow.workspace = true
+ctrlc.workspace = true
+grexa-ai = { version = "0.1.0", path = "../../crates/grexa-ai" }
+grexa-containers = { version = "0.1.0", path = "../../crates/grexa-containers" }
+grexa-core = { version = "0.1.0", path = "../../crates/grexa-core" }
+grexa-i18n = { version = "0.1.0", path = "../../crates/grexa-i18n" }
+serde_json.workspace = true
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true

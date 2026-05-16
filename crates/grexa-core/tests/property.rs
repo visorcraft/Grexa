@@ -14,6 +14,16 @@ use grexa_core::{SearchOptions, search};
 use proptest::prelude::*;
 use tempfile::tempdir;
 
+/// Extensions the search engine classifies as binary and skips by default
+/// (see `BINARY_EXTENSIONS` in `crates/grexa-core/src/search.rs`). The
+/// property test below filters its random extensions against this set so a
+/// regression in binary-skip isn't conflated with a glob-matching failure.
+const BINARY_EXTS: &[&str] = &[
+    "exe", "dll", "obj", "bin", "zip", "tar", "gz", "7z", "rar", "png", "jpg", "jpeg", "gif",
+    "bmp", "ico", "svg", "webp", "mp3", "mp4", "avi", "mkv", "wav", "flac", "ogg", "pdf", "doc",
+    "docx", "xls", "xlsx", "ppt", "pptx", "pdb", "cache", "lock", "pack", "idx", "rtf",
+];
+
 proptest! {
     /// Globs of the form `*.<ext>` always match a file with that extension
     /// and never match a file with a different extension. The randomized
@@ -26,6 +36,8 @@ proptest! {
         sibling_ext in "[a-z]{1,5}",
     ) {
         prop_assume!(ext != sibling_ext);
+        prop_assume!(!BINARY_EXTS.contains(&ext.as_str()));
+        prop_assume!(!BINARY_EXTS.contains(&sibling_ext.as_str()));
 
         let dir = tempdir().unwrap();
         let match_file = dir.path().join(format!("{name_root}.{ext}"));

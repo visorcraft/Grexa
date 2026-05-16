@@ -542,6 +542,18 @@ dependencies = [
 [[package]]
 name = "grexa"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ctrlc",
+ "grexa-ai",
+ "grexa-containers",
+ "grexa-core",
+ "grexa-i18n",
+ "serde_json",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "grexa-ai"
