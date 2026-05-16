@@ -19,8 +19,8 @@ pub use desktop::{
 pub use documents::{ExtractError, extract_text};
 pub use preview::{ContextLine, ContextPreviewResult, PreviewError, context_preview};
 pub use replace::{
-    FileReplaceFailure, FileReplaceReport, ReplaceError, ReplaceOptions, ReplaceSummary,
-    replace_with,
+    FileReplaceFailure, FileReplaceReport, ReplaceError, ReplaceJournalEntry, ReplaceOptions,
+    ReplaceSummary, load_residual_journal, replace_with, set_journal_path_override,
 };
 pub use models::{
     FileSearchResult, OutputFormat, SearchOptions, SearchResult, SearchResultSortField,

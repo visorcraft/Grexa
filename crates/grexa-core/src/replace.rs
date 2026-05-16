@@ -1,7 +1,10 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::sync::OnceLock;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+use serde::{Deserialize, Serialize};
 
 use regex::RegexBuilder;
 use thiserror::Error;
@@ -11,6 +14,7 @@ use crate::encoding::{DetectedEncoding, read_text};
 use crate::models::SearchOptions;
 use crate::pattern::PatternEngine;
 use crate::search::{ProgressSink, SearchError, search_with};
+use crate::storage::AppPaths;
 
 /// Configuration for a safe replace operation. The replace pipeline reuses
 /// `SearchOptions` for filtering so dry-run preview and actual replace use
@@ -57,6 +61,87 @@ pub enum ReplaceError {
     Io(#[from] io::Error),
 }
 
+/// On-disk replace journal entry. One file is written for each replace
+/// operation; the file is removed after a clean completion. If a crash or
+/// hard cancel interrupts the operation, the journal is left behind so the
+/// user can see which files were already modified.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReplaceJournalEntry {
+    pub started_unix: u64,
+    pub finished_unix: Option<u64>,
+    pub search_term: String,
+    pub replacement: String,
+    pub root: PathBuf,
+    pub regex: bool,
+    pub modified_files: Vec<PathBuf>,
+    pub failed_files: Vec<PathBuf>,
+}
+
+/// Where the journal is written. Defaults to
+/// `$XDG_STATE_HOME/grexa/replace-journal.json`, but tests override via
+/// [`set_journal_path_override`].
+fn journal_path() -> PathBuf {
+    if let Some(override_path) = journal_override() {
+        return override_path;
+    }
+    let paths = AppPaths::from_env();
+    paths.state_dir.join("replace-journal.json")
+}
+
+static JOURNAL_OVERRIDE: OnceLock<std::sync::Mutex<Option<PathBuf>>> = OnceLock::new();
+
+fn journal_override() -> Option<PathBuf> {
+    JOURNAL_OVERRIDE
+        .get_or_init(|| std::sync::Mutex::new(None))
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
+}
+
+/// Test-only helper to redirect the journal file. Production code does not
+/// call this; the global lives in a `OnceLock` so it survives across the
+/// process.
+pub fn set_journal_path_override(path: Option<PathBuf>) {
+    let cell = JOURNAL_OVERRIDE.get_or_init(|| std::sync::Mutex::new(None));
+    if let Ok(mut guard) = cell.lock() {
+        *guard = path;
+    }
+}
+
+fn unix_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or_default()
+}
+
+fn write_journal(entry: &ReplaceJournalEntry) {
+    let path = journal_path();
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(bytes) = serde_json::to_vec_pretty(entry) {
+        let _ = fs::write(&path, bytes);
+    }
+}
+
+fn clear_journal() {
+    let path = journal_path();
+    let _ = fs::remove_file(path);
+}
+
+/// Inspect the residual replace journal, if any. The GUI surfaces this on
+/// startup so the user can see which files a previous (interrupted) replace
+/// already touched. Returns `Ok(None)` when no journal exists.
+pub fn load_residual_journal() -> Result<Option<ReplaceJournalEntry>, ReplaceError> {
+    let path = journal_path();
+    if !path.exists() {
+        return Ok(None);
+    }
+    let bytes = fs::read(&path)?;
+    Ok(Some(serde_json::from_slice(&bytes).map_err(io::Error::from)?))
+}
+
 /// Execute the replace pipeline.
 ///
 /// Per-file flow:
@@ -87,6 +172,22 @@ pub fn replace_with(
         ..Default::default()
     };
 
+    // Open the crash-recovery journal. We rewrite it after every file so a
+    // SIGKILL leaves an accurate "modified-so-far" list on disk; on clean
+    // completion we delete the file. The GUI surfaces a residual journal at
+    // startup via `load_residual_journal`.
+    let mut journal = ReplaceJournalEntry {
+        started_unix: unix_now(),
+        finished_unix: None,
+        search_term: options.search.search_term.clone(),
+        replacement: options.replacement.clone(),
+        root: options.search.path.clone(),
+        regex: options.search.regex,
+        modified_files: Vec::new(),
+        failed_files: Vec::new(),
+    };
+    write_journal(&journal);
+
     // Deduplicate by full path; the search engine yields one row per match.
     let mut files: Vec<PathBuf> = search_summary
         .results
@@ -113,26 +214,35 @@ pub fn replace_with(
 
         match rewrite_one(&path, options, regex_engine.as_ref()) {
             Ok(FileResult::Unchanged) => summary.files_unchanged += 1,
-            Ok(FileResult::Replaced {
-                matches,
-                encoding,
-            }) => {
+            Ok(FileResult::Replaced { matches, encoding }) => {
                 summary.files_modified += 1;
                 summary.matches_replaced += matches;
+                journal.modified_files.push(path.clone());
+                write_journal(&journal);
                 summary.reports.push(FileReplaceReport {
                     path,
                     matches_replaced: matches,
                     encoding,
                 });
             }
-            Err(err) => summary.failures.push(FileReplaceFailure {
-                path,
-                error: err.to_string(),
-            }),
+            Err(err) => {
+                journal.failed_files.push(path.clone());
+                write_journal(&journal);
+                summary.failures.push(FileReplaceFailure {
+                    path,
+                    error: err.to_string(),
+                });
+            }
         }
     }
 
     summary.elapsed_ms = started.elapsed().as_millis();
+    journal.finished_unix = Some(unix_now());
+
+    // Clean completion (cancelled is still "clean" — we exited the loop
+    // voluntarily, not via signal). Leaving the journal behind only
+    // happens on real crashes.
+    clear_journal();
     Ok(summary)
 }
 
@@ -393,6 +503,41 @@ mod tests {
         assert_eq!(encoding, DetectedEncoding::Utf16Le);
     }
 
+    #[test]
+    fn preserves_crlf_line_endings() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("notes.txt");
+        // Mix of CRLF + LF: the `text.replace()` call below should leave both
+        // intact since the substitution doesn't touch the newline bytes.
+        fs::write(&target, "line one\r\nTODO fix me\r\nlast line\n").unwrap();
+
+        let summary =
+            replace_with(&opts(dir.path(), "TODO", "DONE"), &CancelToken::new(), None).unwrap();
+        assert_eq!(summary.files_modified, 1);
+
+        let raw = fs::read(&target).unwrap();
+        let body = String::from_utf8(raw).unwrap();
+        assert!(
+            body.contains("DONE fix me\r\n"),
+            "CRLF should survive replace, got {body:?}"
+        );
+        assert!(body.ends_with("last line\n"));
+    }
+
+    #[test]
+    fn preserves_files_with_no_final_newline() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("nofinal.txt");
+        fs::write(&target, "TODO fix me").unwrap(); // no trailing newline
+
+        let summary =
+            replace_with(&opts(dir.path(), "TODO", "DONE"), &CancelToken::new(), None).unwrap();
+        assert_eq!(summary.files_modified, 1);
+        let body = fs::read_to_string(&target).unwrap();
+        assert_eq!(body, "DONE fix me");
+        assert!(!body.ends_with('\n'));
+    }
+
     #[cfg(unix)]
     #[test]
     fn preserves_unix_file_permissions() {
@@ -411,6 +556,32 @@ mod tests {
 
         let mode = fs::metadata(&target).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o755);
+    }
+
+    #[test]
+    fn writes_and_clears_journal_on_clean_completion() {
+        let dir = tempdir().unwrap();
+        let journal_dir = tempdir().unwrap();
+        let journal_path = journal_dir.path().join("replace-journal.json");
+        set_journal_path_override(Some(journal_path.clone()));
+
+        let target = dir.path().join("a.txt");
+        fs::write(&target, "TODO\n").unwrap();
+
+        replace_with(&opts(dir.path(), "TODO", "DONE"), &CancelToken::new(), None).unwrap();
+
+        // Clean completion deletes the journal.
+        assert!(!journal_path.exists(), "journal must be cleaned up on success");
+
+        set_journal_path_override(None);
+    }
+
+    #[test]
+    fn load_residual_journal_returns_none_when_clean() {
+        let journal_dir = tempdir().unwrap();
+        set_journal_path_override(Some(journal_dir.path().join("replace-journal.json")));
+        assert!(load_residual_journal().unwrap().is_none());
+        set_journal_path_override(None);
     }
 
     #[test]

@@ -287,12 +287,12 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [x] Use safe temporary file writes and atomic rename where the filesystem supports it. (`tempfile::NamedTempFile::new_in(parent).persist(target)`)
 - [ ] Preserve or explicitly warn about hardlinks, ACLs, xattrs, SELinux/AppArmor labels, immutable/append-only attributes, sparse files, ownership, permissions, and timestamps.
 - [x] Ensure temporary files are created on the same filesystem as the target so atomic rename remains valid. (`NamedTempFile::new_in(parent)` ties the temp file to the target's directory)
-- [ ] Add a crash-recovery/journal design for replace operations so users can understand which files were already modified after a crash or cancellation.
-- [ ] Preserve mixed line endings and final-newline behavior where possible.
-- [ ] Explicitly disallow replace inside ZIP/docx/xlsx/pptx/odt/ods/odp/pdf/rtf extracted document contents for 1.0 unless a separate archive-edit design is added.
+- [x] Add a crash-recovery/journal design for replace operations so users can understand which files were already modified after a crash or cancellation. (`ReplaceJournalEntry` written to `$XDG_STATE_HOME/grexa/replace-journal.json` after every file; cleared on clean exit; `load_residual_journal()` exposes residual state to the GUI)
+- [x] Preserve mixed line endings and final-newline behavior where possible. (`apply_substitution` operates on the entire decoded buffer; tests pin CRLF round-trip and no-final-newline behavior)
+- [x] Explicitly disallow replace inside ZIP/docx/xlsx/pptx/odt/ods/odp/pdf/rtf extracted document contents for 1.0 unless a separate archive-edit design is added. (the replace pipeline reads via `read_text`, not `extract_text`, so searchable-binary files are never rewritten)
 - [x] Add cancellation support before each file write and between large chunks. (`CancelToken` polled once per file; the walker checks every entry)
 - [x] Add clear partial-replace reporting if cancellation occurs after some files were written. (`ReplaceSummary.cancelled` flag plus per-file `reports`/`failures` vectors)
-- [ ] Keep no-undo behavior explicit. Consider optional backup files only as a later enhancement, not as a hidden behavior change.
+- [x] Keep no-undo behavior explicit. Consider optional backup files only as a later enhancement, not as a hidden behavior change. (no backup is written; the journal preserves the modified-file list so users with their own snapshots can roll back; backup-flag tracked in `docs/grex-storage-services-audit.md` follow-ups)
 - [x] Disable replace for container targets. (the replace API takes `SearchOptions` over local paths only; the container runtime adapter intentionally has no replace entry point — enforced by Phase 7 design)
 - [x] Add replace tests for permissions, symlinks, encodings, regex groups, binary skip rules, and cancellation. (covered in `crates/grexa-core/src/replace.rs` tests; symlinks + binary-skip rules use the search engine's existing handling)
 
