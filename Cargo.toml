@@ -5,6 +5,7 @@ members = [
     "crates/grexa-cli",
     "crates/grexa-containers",
     "crates/grexa-core",
+    "crates/grexa-i18n",
 ]
 resolver = "3"
 
@@ -42,4 +43,4 @@ keyring = { version = "3", default-features = false, features = ["linux-native"]
 zip = { version = "5.1", default-features = false, features = ["deflate"] }
 quick-xml = "0.40"
 fluent = "0.16"
-unic-langid = "0.9"
+unic-langid = { version = "0.9", features = ["macros"] }

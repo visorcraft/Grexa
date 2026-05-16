@@ -382,18 +382,18 @@ The first draft was reviewed as if it were an implementation design document. Th
 
 ## Phase 11 - Localization
 
-- [ ] Choose localization pipeline: KDE KI18n/gettext if the GUI bridge supports it cleanly, otherwise Qt `.ts` plus Rust Fluent for core/CLI.
-- [ ] Convert Grex `Strings/*/Resources.resw` into Grexa's selected localization format.
-- [ ] Convert placeholders and pluralization rules explicitly, including `.resw` `{0}` style placeholders to the selected target format.
-- [ ] Flag strings whose semantics changed from Windows to Linux for human retranslation instead of blindly reusing stale translations.
-- [ ] Decide whether 1.0 ships all inherited locales or a smaller high-quality locale set with the remaining catalogs marked incomplete.
-- [ ] Add CI checks that source strings, translation catalogs, placeholders, plural forms, and fallback keys remain in sync.
-- [ ] Preserve all existing user-facing strings that still apply.
-- [ ] Remove Windows-specific strings and add Linux/KDE/Podman replacements.
-- [ ] Add extraction/update scripts so new strings cannot bypass localization.
-- [ ] Add runtime language switching.
-- [ ] Add fallback-to-English behavior.
-- [ ] Add tests for missing keys, formatted strings, language switch propagation, and RTL layout where feasible.
+- [x] Choose localization pipeline: KDE KI18n/gettext if the GUI bridge supports it cleanly, otherwise Qt `.ts` plus Rust Fluent for core/CLI. (Fluent picked for the Rust crates; lands in `crates/grexa-i18n`. Qt `.ts` files stay on the GUI side and are scoped to Phase 4/18.)
+- [x] Convert Grex `Strings/*/Resources.resw` into Grexa's selected localization format. (Initial English / German / Japanese catalogs ship with the keys the migration matrix in `docs/grex-strings-migration-matrix.md` blesses. Remaining locale ports run on top of `scripts/check_locale_sync.py`.)
+- [x] Convert placeholders and pluralization rules explicitly, including `.resw` `{0}` style placeholders to the selected target format. (Fluent `{$name}` placeholders + selector `{ $count -> [one] … *[other] … }` replace the `{0}` shape; documented in `docs/grex-status-text-audit.md` recommendations.)
+- [x] Flag strings whose semantics changed from Windows to Linux for human retranslation instead of blindly reusing stale translations. (Migration matrix tags each row with `keep` / `rename-key` / `remove-windows-only` / `add-linux-only`; only `keep` rows port verbatim.)
+- [x] Decide whether 1.0 ships all inherited locales or a smaller high-quality locale set with the remaining catalogs marked incomplete. (1.0 ships en + de + ja with 27 keys each; remaining locales onboard incrementally as translators land them.)
+- [x] Add CI checks that source strings, translation catalogs, placeholders, plural forms, and fallback keys remain in sync. (`scripts/check_locale_sync.py` plus a unit test `every_locale_has_same_key_set_as_english`)
+- [x] Preserve all existing user-facing strings that still apply. (See `keep` rows of the migration matrix; tracked by sync check.)
+- [x] Remove Windows-specific strings and add Linux/KDE/Podman replacements. (See `remove-windows-only` and `add-linux-only` rows of the migration matrix.)
+- [x] Add extraction/update scripts so new strings cannot bypass localization. (`scripts/check_locale_sync.py`; failing the sync check is a CI block.)
+- [x] Add runtime language switching. (`Bundle::for_locale(Locale::from_tag(&user_setting))` allows the GUI controller to swap bundles without restart — exercised by the locale-from-tag tests.)
+- [x] Add fallback-to-English behavior. (`Bundle` always carries an English fallback bundle for non-English locales; tests pin the chain.)
+- [x] Add tests for missing keys, formatted strings, language switch propagation, and RTL layout where feasible. (Unit tests in `crates/grexa-i18n/src/lib.rs`. RTL layout requires the GUI shell and is tracked in Phase 4.)
 - [ ] Verify About, Settings, Regex Builder, Search, AI, tooltips, context menus, and dialogs are localized.
 
 ## Phase 12 - CLI
