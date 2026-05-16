@@ -3,7 +3,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use encoding_rs::Encoding;
 use regex::RegexBuilder;
 use thiserror::Error;
 
@@ -241,16 +240,8 @@ fn encode_for_writeback(text: &str, encoding: DetectedEncoding) -> Vec<u8> {
 }
 
 fn encode_utf16(text: &str, bom: &[u8], little_endian: bool) -> Vec<u8> {
-    // encoding_rs encodes UTF-16 LE/BE directly; we prepend a BOM to keep the
-    // file recognizable after rewrite.
-    let encoder: &Encoding = if little_endian {
-        encoding_rs::UTF_16LE
-    } else {
-        encoding_rs::UTF_16BE
-    };
-    let _ = encoder; // encoding_rs does not expose an encoder for UTF-16; fall
-    // back to the standard library encoder.
-
+    // encoding_rs only exposes a decoder for UTF-16; the stdlib UTF-16 iterator
+    // is enough for round-trip writes.
     let mut bytes = Vec::with_capacity(bom.len() + text.len() * 2);
     bytes.extend_from_slice(bom);
     for code_unit in text.encode_utf16() {

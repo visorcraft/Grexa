@@ -549,6 +549,95 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [ ] Spike Baloo candidate seeding to confirm it is worth implementing.
 - [ ] Spike editor open-to-line behavior across Kate, VS Code, and JetBrains.
 
+## Status Snapshot (2026-05-16)
+
+Progress through PLAN.md so far: 82 of 433 checkboxes ticked (~19%). The
+shipped foundation is the Rust core (`grexa-core`), the AI HTTP client
+(`grexa-ai`), the container runtime detector (`grexa-containers`), and the
+CLI (`grexa-cli`). 127 tests pass workspace-wide and `cargo clippy
+--workspace --all-targets -- -D warnings` is clean.
+
+## Big Rocks Remaining
+
+These are the largest unblocked work items, grouped so a contributor can
+pick the right size of task for the time they have.
+
+### Multi-PR efforts (one engineer ≥ 1 week each)
+
+- **Phase 1 + 4 — Qt 6 / QML / Kirigami GUI shell with `cxx-qt`.** The
+  apps/grexa-gui crate is a placeholder. The Rust controllers, table
+  models, command strip, filter pane, tab strip, and virtualized result
+  tables all need to be built on top of the existing core types
+  (`SearchSummary`, `ReplaceSummary`, `ContextPreviewResult`, etc.). The
+  Phase 1 cxx-qt spike has not been started; do that first.
+- **Phase 7 — Container search runtime.** Detection is done. Remaining:
+  HTTP-over-Unix-socket client for Docker + Podman, container listing,
+  grep-capability probing, direct `exec` search with argv construction,
+  archive mirror fallback under `$XDG_CACHE_HOME/grexa/container-mirrors`,
+  BusyBox/distroless handling, runtime matrix tests.
+- **Phase 11 — Localization.** Choose the catalog format (Fluent for Rust
+  + Qt `.ts` for QML is the leading candidate), wire extraction scripts,
+  port `Strings/*/Resources.resw` from Grex, add CI sync checks, add
+  runtime language switch. Decision must precede the GUI strings phase.
+- **Phase 3 — Searchable document extraction.** Add OOXML (`.docx`,
+  `.xlsx`, `.pptx`), ODF (`.odt`, `.ods`, `.odp`), ZIP contents, PDF
+  text, and RTF. PDF in particular needs a spike (Rust crate vs.
+  `pdftotext` helper) before implementation.
+
+### Single-PR chunks (one engineer ≤ 3 days each)
+
+- **Phase 2 — Culture-aware text search.** ICU strategy spike (ICU4X vs.
+  system ICU4C), then Turkish-i, German sharp-s, combining diacritics,
+  Greek sigma, CJK width, emoji/grapheme-cluster fixtures, slow-path
+  status surfacing.
+- **Phase 2 — Regex engine compatibility.** Two-engine strategy
+  (`regex` fast path + `fancy-regex` / PCRE2 extended path), import-time
+  warnings for Grex regex patterns the chosen engine cannot honor,
+  golden fixtures for lookaround / backreferences / Unicode classes.
+- **Phase 3 — Heuristic encoding detection.** Layer `chardetng` on top
+  of the BOM detector for BOM-less files; expose detector confidence in
+  the result so the GUI can warn on guesses.
+- **Phase 7 — Container listing + direct grep.** Build on the existing
+  `ContainerRuntime` detector to issue list/exec calls against Docker
+  Engine API and Podman libpod API.
+- **Phase 13 — Baloo candidate seeding spike.** Confirm whether Baloo
+  speeds up real source-code searches enough to justify carrying the
+  integration. Timebox to a short spike before implementation.
+- **Phase 8 — Secret storage for the AI API key.** KWallet + Secret
+  Service backend, plaintext fallback only with explicit user opt-in, a
+  Cargo feature flag that lets privacy-sensitive distros build without
+  AI integration at all.
+- **Phase 5 — KDE color-scheme integration + portal file picker.**
+  Editor argv builders and FileManager1 URI helpers exist; the actual
+  D-Bus dispatch and KColorScheme reader still need to be written.
+- **Phase 6 — Replace polish.** Mixed line-ending preservation,
+  symlink/hardlink policy, ACL/xattr handling, optional backup files
+  behind a flag, crash-recovery journal.
+- **Phase 12 — CLI advanced options.** Decide whether to expose the
+  comparison/normalization/culture matrix and the container flags
+  (`--runtime`, `--container`, `--container-path`); add `--use-index`
+  once Phase 13 lands.
+
+### Audit + spec follow-ups (≤ 1 day each)
+
+- **Phase 0** lines 150, 151, 152, 153, 154, 155, 156, 157, 158, 159.
+  Mostly small per-service or per-feature audit docs that unblock
+  downstream implementation but ship no code.
+- **Phase 0 line 160** — write `docs/feature-parity.md`. Big synthesis
+  doc, mostly a matrix. Wait for the GUI to take shape so the
+  "implementation" column has real entries to point to.
+- **Phase 0 line 162** — peer review the parity doc.
+
+### Packaging + release
+
+- **Phase 16 — Packaging.** Flatpak manifest, AppImage, distro
+  recipes. None started.
+- **Phase 17 + 17a — Docs + security/privacy.** README, features,
+  usage, architecture, build, reference, translations, threat-model
+  doc. Many sub-tasks; none started.
+- **Phase 18 — Visual polish.** Gated on the GUI existing.
+- **Phase 19 — Release readiness.** Gated on every other phase.
+
 ## Non-Goals
 
 - [ ] Do not preserve Windows GUI, WinUI, Windows Search, Windows toast, Windows App Runtime, WSL delegation, UNC path handling, or Windows-specific editor logic.
