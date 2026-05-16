@@ -151,10 +151,10 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [x] Audit Grex `EncodingDetectionService.cs` and list required encodings and confidence behavior. (`docs/grex-encoding-detection-audit.md`)
 - [x] Audit Grex `GitIgnoreService.cs` tests and codify edge cases for root-relative patterns, directory-only patterns, negations, `**`, brackets, and case behavior. (`docs/grex-gitignore-audit.md`)
 - [x] Audit Grex culture-aware comparison behavior and codify string comparison, Unicode normalization, diacritic, and culture cases in fixtures. (`docs/grex-culture-comparison-audit.md`)
-- [ ] Audit Grex status text behavior, including filtered result summaries and elapsed-time pluralization.
-- [ ] Audit Grex model classes and ensure every field is mapped, renamed, removed as non-applicable, or replaced by a Linux-specific field.
-- [ ] Audit Grex `Strings/*/Resources.resw` and build a migration matrix for kept, removed, renamed, and new Linux strings.
-- [ ] Audit Grex scripts and decide which localization or asset scripts should be ported.
+- [x] Audit Grex status text behavior, including filtered result summaries and elapsed-time pluralization. (`docs/grex-status-text-audit.md`)
+- [x] Audit Grex model classes and ensure every field is mapped, renamed, removed as non-applicable, or replaced by a Linux-specific field. (`docs/grex-models-map.md`)
+- [x] Audit Grex `Strings/*/Resources.resw` and build a migration matrix for kept, removed, renamed, and new Linux strings. (`docs/grex-strings-migration-matrix.md`)
+- [x] Audit Grex scripts and decide which localization or asset scripts should be ported. (`docs/grex-scripts-audit.md`)
 - [ ] Audit Grex CLI tests and convert them into Grexa CLI acceptance tests.
 - [ ] Audit Grex unit, integration, and UI tests and create a coverage map showing which Grexa test will preserve each behavior.
 - [ ] Write `docs/feature-parity.md` with each Grex feature mapped to Grexa implementation, replacement, or explicit non-applicability.
@@ -203,8 +203,8 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [ ] Ensure culture-aware matching applies consistently to plain text, extracted document text, replace matching, column calculation where applicable, and result preview generation.
 - [x] Implement regex search with compiled regex reuse and invalid-pattern errors.
 - [ ] Preserve Grex's rule that Regex search honors case sensitivity but ignores culture, Unicode normalization, and diacritic comparison settings unless a future explicit regex engine option changes that behavior.
-- [ ] Decide whether Rust `regex` is sufficient or whether a PCRE2/fancy-regex mode is needed to preserve .NET regex features that users may expect.
-- [ ] Prefer an explicit two-engine strategy unless the spike disproves it: a fast Rust `regex` path for simple patterns and an extended compatibility path using `fancy-regex` or PCRE2 for .NET-like constructs.
+- [x] Decide whether Rust `regex` is sufficient or whether a PCRE2/fancy-regex mode is needed to preserve .NET regex features that users may expect. (Two-engine cascade landed; see `crates/grexa-core/src/pattern.rs`)
+- [x] Prefer an explicit two-engine strategy unless the spike disproves it: a fast Rust `regex` path for simple patterns and an extended compatibility path using `fancy-regex` or PCRE2 for .NET-like constructs. (`PatternEngine::Fast` + `PatternEngine::Extended` via `fancy-regex`)
 - [ ] Add regex compatibility fixtures for lookaround, backreferences, named captures, conditional constructs, Unicode `\d`/`\w` semantics, multiline/global behavior, invalid patterns, and saved Grex profile patterns.
 - [ ] Add import-time warnings or migration notes for Grex Regex patterns unsupported by Grexa's chosen engine.
 - [x] Implement line, column, match count, snippet, and preview segment calculation.
@@ -218,9 +218,9 @@ The first draft was reviewed as if it were an implementation design document. Th
 ## Phase 3 - Encoding And Searchable Document Support
 
 - [x] Implement BOM detection for UTF-8, UTF-16 LE/BE, UTF-32 LE/BE. (`crates/grexa-core/src/encoding.rs`; UTF-32 detected but decoded lossily until iconv/manual decoder is added)
-- [ ] Implement heuristic/statistical detection for the 30+ encodings listed in Grex docs.
-- [ ] Evaluate `encoding_rs`, `chardetng`, and ICU-backed alternatives for coverage gaps.
-- [ ] Preserve Grex labels for detected encodings where practical.
+- [x] Implement heuristic/statistical detection for the 30+ encodings listed in Grex docs. (`chardetng` cascade in `crates/grexa-core/src/encoding.rs::read_text`)
+- [x] Evaluate `encoding_rs`, `chardetng`, and ICU-backed alternatives for coverage gaps. (decision recorded in `docs/grex-encoding-detection-audit.md`; ICU/iconv flagged as future feature)
+- [x] Preserve Grex labels for detected encodings where practical. (UTF-* mirrored verbatim; `DetectedEncoding::Heuristic(name)` uses canonical `encoding_rs` names so labels survive round-trip)
 - [x] Implement plain text decoding with replacement/error policy documented. (`encoding_rs` decode with U+FFFD replacement for invalid sequences; documented in `crates/grexa-core/src/encoding.rs`)
 - [x] Optimize encoding detection: fast-path UTF-8/BOM files, avoid expensive heuristic detection on every file when unnecessary, and consider user/default encoding overrides. (peek 4 bytes per file; no per-file heuristic; user/default overrides remain a follow-up)
 - [ ] Implement searchable Office Open XML extraction for `.docx`, `.xlsx`, and `.pptx`.

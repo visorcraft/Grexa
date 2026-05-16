@@ -9,6 +9,7 @@ use thiserror::Error;
 use crate::cancel::CancelToken;
 use crate::encoding::{DetectedEncoding, read_text};
 use crate::models::SearchOptions;
+use crate::pattern::PatternEngine;
 use crate::search::{ProgressSink, SearchError, search_with};
 
 /// Configuration for a safe replace operation. The replace pipeline reuses
@@ -97,9 +98,7 @@ pub fn replace_with(
 
     let regex_engine = if options.search.regex {
         Some(
-            RegexBuilder::new(&options.search.search_term)
-                .case_insensitive(!options.search.case_sensitive)
-                .build()
+            PatternEngine::build(&options.search.search_term, !options.search.case_sensitive)
                 .map_err(|err| ReplaceError::InvalidRegex(err.to_string()))?,
         )
     } else {
@@ -148,7 +147,7 @@ enum FileResult {
 fn rewrite_one(
     path: &Path,
     options: &ReplaceOptions,
-    regex_engine: Option<&regex::Regex>,
+    regex_engine: Option<&PatternEngine>,
 ) -> Result<FileResult, io::Error> {
     let original_metadata = fs::symlink_metadata(path)?;
     let (text, encoding) = read_text(path)?;
@@ -157,7 +156,7 @@ fn rewrite_one(
         return Ok(FileResult::Unchanged);
     }
 
-    let encoded = encode_for_writeback(&new_text, encoding);
+    let encoded = encode_for_writeback(&new_text, &encoding);
     atomic_write(path, &encoded)?;
     restore_permissions(path, &original_metadata)?;
     Ok(FileResult::Replaced { matches, encoding })
@@ -174,11 +173,11 @@ fn restore_permissions(path: &Path, original: &fs::Metadata) -> io::Result<()> {
 fn apply_substitution(
     text: &str,
     options: &ReplaceOptions,
-    regex_engine: Option<&regex::Regex>,
+    regex_engine: Option<&PatternEngine>,
 ) -> (String, usize) {
-    if let Some(re) = regex_engine {
-        let count = re.find_iter(text).count();
-        let replaced = re.replace_all(text, options.replacement.as_str()).into_owned();
+    if let Some(engine) = regex_engine {
+        let count = engine.find_iter(text).len();
+        let replaced = engine.replace_all(text, options.replacement.as_str());
         return (replaced, count);
     }
 
@@ -222,7 +221,7 @@ fn count_occurrences(text: &str, needle: &str) -> usize {
     count
 }
 
-fn encode_for_writeback(text: &str, encoding: DetectedEncoding) -> Vec<u8> {
+fn encode_for_writeback(text: &str, encoding: &DetectedEncoding) -> Vec<u8> {
     match encoding {
         DetectedEncoding::Utf8 => text.as_bytes().to_vec(),
         DetectedEncoding::Utf8Bom => {
@@ -236,6 +235,19 @@ fn encode_for_writeback(text: &str, encoding: DetectedEncoding) -> Vec<u8> {
         // UTF-32 round-trip is not supported yet (detect-only); fall back to
         // UTF-8 so we never silently corrupt the file by writing garbage.
         DetectedEncoding::Utf32Le | DetectedEncoding::Utf32Be => text.as_bytes().to_vec(),
+        // Heuristic encodings (windows-1252, Shift_JIS, etc.): re-encode
+        // through encoding_rs so the file stays in its detected charset.
+        // Characters that can't be represented in the target encoding are
+        // serialized as numeric character references — that's encoding_rs's
+        // documented "encode with HTML escapes" behavior and it matches the
+        // safest interpretation of "preserve original encoding".
+        DetectedEncoding::Heuristic(name) => match encoding_rs::Encoding::for_label(name.as_bytes()) {
+            Some(codec) => {
+                let (encoded, _, _) = codec.encode(text);
+                encoded.into_owned()
+            }
+            None => text.as_bytes().to_vec(),
+        },
     }
 }
 

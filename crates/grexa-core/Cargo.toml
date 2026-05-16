@@ -6,7 +6,9 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+chardetng.workspace = true
 encoding_rs.workspace = true
+fancy-regex.workspace = true
 globset.workspace = true
 ignore.workspace = true
 regex.workspace = true

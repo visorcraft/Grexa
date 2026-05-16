@@ -2,6 +2,7 @@ pub mod cancel;
 pub mod desktop;
 pub mod encoding;
 pub mod models;
+pub mod pattern;
 pub mod preview;
 pub mod replace;
 pub mod search;
@@ -9,7 +10,8 @@ pub mod sort;
 pub mod storage;
 
 pub use cancel::CancelToken;
-pub use encoding::{DetectedEncoding, detect_from_bytes, detect_from_path, read_text};
+pub use encoding::{DetectedEncoding, detect_from_bytes, detect_from_path, heuristic_label, read_text};
+pub use pattern::{PatternEngine, PatternError};
 pub use desktop::{
     EditorPreset, file_manager_show_items_uris, open_in_editor_command, reveal_with_xdg_open,
 };

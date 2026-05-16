@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::{DirEntry, WalkBuilder};
-use regex::{Regex, RegexBuilder};
+use regex::Regex;
 use thiserror::Error;
 use unicode_normalization::UnicodeNormalization;
 use unicode_normalization::char::is_combining_mark;
@@ -16,6 +16,7 @@ use crate::models::{
     FileSearchResult, SearchOptions, SearchResult, SearchSummary, SizeLimitType, SizeUnit,
     UnicodeNormalizationMode,
 };
+use crate::pattern::PatternEngine;
 
 /// Streaming events emitted by [`search_with`] when the caller supplies a
 /// progress sink. Designed to be cheap to ignore — the GUI is expected to
@@ -149,14 +150,19 @@ pub fn search_with(
 
     let regex = if options.regex {
         Some(
-            RegexBuilder::new(&options.search_term)
-                .case_insensitive(!options.case_sensitive)
-                .build()
+            PatternEngine::build(&options.search_term, !options.case_sensitive)
                 .map_err(|err| SearchError::InvalidRegex(err.to_string()))?,
         )
     } else {
         None
     };
+
+    if regex.as_ref().is_some_and(PatternEngine::is_extended) {
+        tracing::info!(
+            pattern = %options.search_term,
+            "regex compiled via fancy-regex extended engine (slower path)"
+        );
+    }
 
     let filename_filter = FileNameFilter::parse(&options.match_file_names)?;
     let exclude_filter = ExcludeDirFilter::parse(&options.exclude_dirs)?;
@@ -354,10 +360,9 @@ pub fn aggregate_file_results(
 
             let encoding_label = encodings
                 .get(&full_path)
-                .copied()
+                .cloned()
                 .unwrap_or(DetectedEncoding::Utf8)
-                .label()
-                .to_string();
+                .label();
 
             FileSearchResult {
                 file_name,
@@ -458,7 +463,7 @@ fn search_file(
     path: &Path,
     root: &Path,
     options: &SearchOptions,
-    regex: Option<&Regex>,
+    regex: Option<&PatternEngine>,
     cancel: &CancelToken,
 ) -> Result<FileScan, SearchError> {
     // Initial slice: plain text files. Searchable binary/document extraction comes in a later phase.
@@ -520,13 +525,10 @@ fn search_file(
 fn find_line_matches(
     line: &str,
     options: &SearchOptions,
-    regex: Option<&Regex>,
+    regex: Option<&PatternEngine>,
 ) -> Vec<(usize, usize)> {
-    if let Some(regex) = regex {
-        return regex
-            .find_iter(line)
-            .map(|mat| (mat.start(), mat.end()))
-            .collect();
+    if let Some(engine) = regex {
+        return engine.find_iter(line);
     }
 
     let original = normalize_for_text_search(line, options);
@@ -933,11 +935,18 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("legacy.txt");
         // "TODO" followed by raw 0xFF, then "fix" — used to crash the line
-        // reader; now lossily decodes.
+        // reader. With the chardetng cascade in `encoding::read_text` this is
+        // now identified as a legacy 8-bit encoding (chardetng usually picks
+        // windows-1252). The important contract: the file is searched, "TODO"
+        // is found, and the engine labels the encoding instead of crashing.
         fs::write(&path, b"TODO\xFFfix\n").unwrap();
         let summary = search(&SearchOptions::new(dir.path(), "TODO")).unwrap();
         assert_eq!(summary.matches, 1);
-        assert_eq!(summary.file_results[0].encoding, "UTF-8");
+        let label = &summary.file_results[0].encoding;
+        assert!(
+            label != "UTF-8" && !label.is_empty(),
+            "expected a chardetng-detected legacy label, got {label:?}"
+        );
     }
 
     #[test]
