@@ -17,11 +17,19 @@ repository = "https://github.com/visorcraft/grexa"
 [workspace.dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
+clap_complete = "4.5"
+clap_mangen = "0.2"
+ctrlc = "3.4"
+encoding_rs = "0.8"
+ureq = { version = "2.10", features = ["json"] }
 globset = "0.4"
 ignore = "0.4"
 regex = "1.11"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_repr = "0.1"
 tempfile = "3.15"
+assert_cmd = "2.0"
+predicates = "3.1"
 thiserror = "2.0"
 unicode-normalization = "0.1"

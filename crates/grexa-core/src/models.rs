@@ -74,6 +74,7 @@ pub struct SearchOptions {
     pub unicode_normalization_mode: UnicodeNormalizationMode,
     pub diacritic_sensitive: bool,
     pub culture: Option<String>,
+    pub use_file_index: bool,
 }
 
 impl SearchOptions {
@@ -98,6 +99,7 @@ impl SearchOptions {
             unicode_normalization_mode: UnicodeNormalizationMode::None,
             diacritic_sensitive: true,
             culture: None,
+            use_file_index: false,
         }
     }
 }
@@ -142,6 +144,8 @@ pub struct SearchSummary {
     pub matches: usize,
     pub skipped_files: usize,
     pub elapsed_ms: u128,
+    #[serde(default)]
+    pub cancelled: bool,
 }
 
 impl SearchSummary {

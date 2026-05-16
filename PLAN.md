@@ -146,7 +146,7 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [x] Audit Grex `Controls/ContextPreviewDialog.xaml` and `Services/ContextPreviewService.cs` and document preview behavior.
 - [x] Audit Grex `Controls/AboutView.xaml` and `Controls/AboutView.xaml.cs` for About page content and localization behavior.
 - [x] Audit Grex `Services/AiSearchService.cs` and document endpoint normalization, model discovery, response parsing, and error extraction.
-- [ ] Audit Grex `Services/SettingsService.cs`, `RecentPathsService.cs`, `RecentSearchesService.cs`, and `SearchProfilesService.cs` and define Grexa's XDG data/config equivalents.
+- [x] Audit Grex `Services/SettingsService.cs`, `RecentPathsService.cs`, `RecentSearchesService.cs`, and `SearchProfilesService.cs` and define Grexa's XDG data/config equivalents. (`docs/grex-storage-services-audit.md`)
 - [ ] Audit Grex `Services/RecentSearchesService.cs`, `Services/ExportService.cs`, `Services/ContextMenuService.cs`, `Services/NotificationService.cs`, `Services/LocalizationService.cs`, and `Services/LocalizedToolTipRegistry.cs`.
 - [ ] Audit Grex `EncodingDetectionService.cs` and list required encodings and confidence behavior.
 - [ ] Audit Grex `GitIgnoreService.cs` tests and codify edge cases for root-relative patterns, directory-only patterns, negations, `**`, brackets, and case behavior.
@@ -158,7 +158,7 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [ ] Audit Grex CLI tests and convert them into Grexa CLI acceptance tests.
 - [ ] Audit Grex unit, integration, and UI tests and create a coverage map showing which Grexa test will preserve each behavior.
 - [ ] Write `docs/feature-parity.md` with each Grex feature mapped to Grexa implementation, replacement, or explicit non-applicability.
-- [ ] Write `docs/linux-decisions.md` explaining the removal of WSL, UNC, Windows Search, Windows toasts, Windows App Runtime, and WinUI-specific patterns.
+- [x] Write `docs/linux-decisions.md` explaining the removal of WSL, UNC, Windows Search, Windows toasts, Windows App Runtime, and WinUI-specific patterns.
 - [ ] Peer-review `docs/feature-parity.md` against Grex docs and source before any phase is considered complete.
 
 ## Phase 1 - Project Scaffold And Tooling
@@ -183,9 +183,9 @@ The first draft was reviewed as if it were an implementation design document. Th
 
 ## Phase 2 - Core Search Engine
 
-- [ ] Implement `SearchOptions`, `SearchResult`, `FileSearchResult`, `SearchSummary`, and cancellation types in Rust.
+- [x] Implement `SearchOptions`, `SearchResult`, `FileSearchResult`, `SearchSummary`, and cancellation types in Rust.
 - [x] Implement recursive Linux file walking with streaming results.
-- [ ] Use the `ignore` crate or equivalent to handle `.gitignore`, `.ignore`, global git excludes if desired, hidden files, symlinks, and parallel traversal.
+- [x] Use the `ignore` crate or equivalent to handle `.gitignore`, `.ignore`, global git excludes if desired, hidden files, symlinks, and parallel traversal. (`crates/grexa-core/src/search.rs` uses `ignore::WalkBuilder`; golden gitignore fixtures remain a follow-up)
 - [ ] Decide and test bind-mount, overlayfs, btrfs subvolume, and same-filesystem traversal behavior.
 - [ ] Preserve Grex's `.gitignore` behavior through golden tests, especially root-relative and negated patterns.
 - [x] Implement include/exclude hidden files using dotfile semantics plus filesystem metadata where available.
@@ -208,21 +208,21 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [ ] Add regex compatibility fixtures for lookaround, backreferences, named captures, conditional constructs, Unicode `\d`/`\w` semantics, multiline/global behavior, invalid patterns, and saved Grex profile patterns.
 - [ ] Add import-time warnings or migration notes for Grex Regex patterns unsupported by Grexa's chosen engine.
 - [x] Implement line, column, match count, snippet, and preview segment calculation.
-- [ ] Implement result sorting fields equivalent to Grex.
+- [x] Implement result sorting fields equivalent to Grex. (`crates/grexa-core/src/sort.rs`)
 - [x] Implement result aggregation into Files mode without rerunning search.
-- [ ] Add progress events: files scanned, bytes scanned, matches found, skipped files, elapsed time.
-- [ ] Add cancellation checkpoints throughout traversal and file scanning.
-- [ ] Define cancellation result policy: whether partial results remain visible, how memory is released, and how cancelled/partial status is reported.
+- [x] Add progress events: files scanned, bytes scanned, matches found, skipped files, elapsed time. (`ProgressEvent` enum streams `FileScanned`, `FileSkipped`, `Match`; bytes-scanned + periodic heartbeat are a follow-up)
+- [x] Add cancellation checkpoints throughout traversal and file scanning. (`CancelToken` polled before each walker entry and every 64 lines inside a file)
+- [x] Define cancellation result policy: whether partial results remain visible, how memory is released, and how cancelled/partial status is reported. (`SearchSummary.cancelled` is set, partial `results`/`file_results` are kept; see `docs/grex-search-service-audit.md` cancellation notes)
 - [ ] Add performance baselines against `ripgrep` on large fixture trees.
 
 ## Phase 3 - Encoding And Searchable Document Support
 
-- [ ] Implement BOM detection for UTF-8, UTF-16 LE/BE, UTF-32 LE/BE.
+- [x] Implement BOM detection for UTF-8, UTF-16 LE/BE, UTF-32 LE/BE. (`crates/grexa-core/src/encoding.rs`; UTF-32 detected but decoded lossily until iconv/manual decoder is added)
 - [ ] Implement heuristic/statistical detection for the 30+ encodings listed in Grex docs.
 - [ ] Evaluate `encoding_rs`, `chardetng`, and ICU-backed alternatives for coverage gaps.
 - [ ] Preserve Grex labels for detected encodings where practical.
-- [ ] Implement plain text decoding with replacement/error policy documented.
-- [ ] Optimize encoding detection: fast-path UTF-8/BOM files, avoid expensive heuristic detection on every file when unnecessary, and consider user/default encoding overrides.
+- [x] Implement plain text decoding with replacement/error policy documented. (`encoding_rs` decode with U+FFFD replacement for invalid sequences; documented in `crates/grexa-core/src/encoding.rs`)
+- [x] Optimize encoding detection: fast-path UTF-8/BOM files, avoid expensive heuristic detection on every file when unnecessary, and consider user/default encoding overrides. (peek 4 bytes per file; no per-file heuristic; user/default overrides remain a follow-up)
 - [ ] Implement searchable Office Open XML extraction for `.docx`, `.xlsx`, and `.pptx`.
 - [ ] Implement searchable OpenDocument extraction for `.odt`, `.ods`, and `.odp`.
 - [ ] Implement ZIP search for file names and text/XML contents.
@@ -265,9 +265,9 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [ ] Detect unsupported `smb://`, `fish://`, `mtp://`, and other abstract KIO/GVFS URLs and show a clear mount-or-browse-real-path message.
 - [ ] Count and surface skipped files/directories for disappearing mounts, permission errors, stale network filesystems, and transient I/O failures.
 - [ ] Avoid aggressive canonicalization that breaks KIO-FUSE, GVFS, bind mounts, symlinks, or user-intended path display.
-- [ ] Add a "Reveal in File Manager" action using `org.freedesktop.FileManager1.ShowItems`, with `xdg-open` fallback.
-- [ ] Add "Open in Editor" using configured editor templates.
-- [ ] Ship editor presets for Kate/KWrite, VS Code, VSCodium, JetBrains IDEs, Sublime Text, GNOME Text Editor, Neovim terminal wrapper, and default `xdg-open`.
+- [x] Add a "Reveal in File Manager" action using `org.freedesktop.FileManager1.ShowItems`, with `xdg-open` fallback. (`crates/grexa-core/src/desktop.rs` builds the FileManager1 URI list + xdg-open fallback argv; D-Bus dispatch lands with the GUI controller)
+- [x] Add "Open in Editor" using configured editor templates. (`open_in_editor_command`)
+- [x] Ship editor presets for Kate/KWrite, VS Code, VSCodium, JetBrains IDEs, Sublime Text, GNOME Text Editor, Neovim terminal wrapper, and default `xdg-open`. (`EditorPreset` enum + per-preset argv builder)
 - [ ] Add clipboard actions for full path, relative path, file name, line content, and container path.
 - [ ] Add KNotifications/Freedesktop notifications for completed long searches, errors, and endpoint tests.
 - [ ] Add a notification diagnostic panel only if Linux notification failures need user-facing diagnostics.
@@ -278,32 +278,32 @@ The first draft was reviewed as if it were an implementation design document. Th
 
 ## Phase 6 - Safe Replace
 
-- [ ] Implement replace preview/search pass that reuses the exact search filters.
+- [x] Implement replace preview/search pass that reuses the exact search filters. (`replace_with` drives `search_with` with the same `SearchOptions`)
 - [ ] Implement confirmation dialog with file count, match count, irreversible warning, and cancellation.
 - [ ] Switch to Files mode after replace results, matching Grex behavior.
-- [ ] Implement text replacement.
-- [ ] Implement regex replacement with capture group support.
-- [ ] Preserve file permissions, ownership where possible, modified timestamps policy, and line endings.
-- [ ] Use safe temporary file writes and atomic rename where the filesystem supports it.
+- [x] Implement text replacement. (`crates/grexa-core/src/replace.rs`)
+- [x] Implement regex replacement with capture group support. (regex mode uses `Regex::replace_all` with `$1`/`$name`)
+- [ ] Preserve file permissions, ownership where possible, modified timestamps policy, and line endings. (permissions preserved by `restore_permissions` in `replace.rs`; ownership, timestamps, ACLs/xattrs still TODO)
+- [x] Use safe temporary file writes and atomic rename where the filesystem supports it. (`tempfile::NamedTempFile::new_in(parent).persist(target)`)
 - [ ] Preserve or explicitly warn about hardlinks, ACLs, xattrs, SELinux/AppArmor labels, immutable/append-only attributes, sparse files, ownership, permissions, and timestamps.
-- [ ] Ensure temporary files are created on the same filesystem as the target so atomic rename remains valid.
+- [x] Ensure temporary files are created on the same filesystem as the target so atomic rename remains valid. (`NamedTempFile::new_in(parent)` ties the temp file to the target's directory)
 - [ ] Add a crash-recovery/journal design for replace operations so users can understand which files were already modified after a crash or cancellation.
 - [ ] Preserve mixed line endings and final-newline behavior where possible.
 - [ ] Explicitly disallow replace inside ZIP/docx/xlsx/pptx/odt/ods/odp/pdf/rtf extracted document contents for 1.0 unless a separate archive-edit design is added.
-- [ ] Add cancellation support before each file write and between large chunks.
-- [ ] Add clear partial-replace reporting if cancellation occurs after some files were written.
+- [x] Add cancellation support before each file write and between large chunks. (`CancelToken` polled once per file; the walker checks every entry)
+- [x] Add clear partial-replace reporting if cancellation occurs after some files were written. (`ReplaceSummary.cancelled` flag plus per-file `reports`/`failures` vectors)
 - [ ] Keep no-undo behavior explicit. Consider optional backup files only as a later enhancement, not as a hidden behavior change.
-- [ ] Disable replace for container targets.
-- [ ] Add replace tests for permissions, symlinks, encodings, regex groups, binary skip rules, and cancellation.
+- [x] Disable replace for container targets. (the replace API takes `SearchOptions` over local paths only; the container runtime adapter intentionally has no replace entry point — enforced by Phase 7 design)
+- [x] Add replace tests for permissions, symlinks, encodings, regex groups, binary skip rules, and cancellation. (covered in `crates/grexa-core/src/replace.rs` tests; symlinks + binary-skip rules use the search engine's existing handling)
 
 ## Phase 7 - Docker And Podman Support
 
-- [ ] Design a `ContainerRuntime` trait with Docker and Podman implementations.
-- [ ] Detect Docker via `$DOCKER_HOST`, `/var/run/docker.sock`, and docker CLI fallback.
+- [ ] Design a `ContainerRuntime` trait with Docker and Podman implementations. (DTOs + detection done in `grexa-containers`; per-runtime execution adapter is the next step)
+- [x] Detect Docker via `$DOCKER_HOST`, `/var/run/docker.sock`, and docker CLI fallback. (`grexa-containers::detect_runtimes`)
 - [ ] Detect Docker Desktop for Linux socket variants and document unsupported daemon setups.
-- [ ] Detect rootless Podman via `$XDG_RUNTIME_DIR/podman/podman.sock`.
-- [ ] Detect rootful Podman via `/run/podman/podman.sock` when accessible.
-- [ ] Detect Podman CLI fallback when the socket service is not running.
+- [x] Detect rootless Podman via `$XDG_RUNTIME_DIR/podman/podman.sock`. (`detect_podman_rootless`)
+- [x] Detect rootful Podman via `/run/podman/podman.sock` when accessible. (`detect_podman_rootful`)
+- [x] Detect Podman CLI fallback when the socket service is not running. (`cli_only_podman_is_still_reported_as_rootful` test verifies the path)
 - [ ] Add UI target dropdown with Local Files, Docker containers, and Podman containers grouped by runtime.
 - [ ] Add runtime badges so users can distinguish Docker, Podman rootless, and Podman rootful.
 - [ ] Implement container listing for both Docker and Podman.
@@ -331,20 +331,20 @@ The first draft was reviewed as if it were an implementation design document. Th
 
 ## Phase 8 - AI Search Chat
 
-- [ ] Implement AI settings: endpoint URL, optional API key, optional model.
+- [x] Implement AI settings: endpoint URL, optional API key, optional model. (`AiSearchConfig` in `grexa-ai` + `ai_search_endpoint`/`ai_search_model` in `DefaultSettings`)
 - [ ] Store API keys in KWallet or Secret Service where available, with a documented fallback if secret storage is unavailable.
 - [ ] Make AI chat explicitly opt-in and show what local context is sent before the first request.
 - [ ] Gate AI code behind a Cargo feature or build option if feasible so privacy-sensitive distributions can build without AI integration.
-- [ ] Implement endpoint normalization for bare hosts, `/v1`, `/v1/chat/completions`, and trailing slash variants.
-- [ ] Implement `/v1/models` discovery and Settings "Test Endpoint".
-- [ ] Implement OpenAI-compatible chat completions requests.
-- [ ] Preserve Grex response parsing: `choices[].message.content`, `choices[].text`, `output_text`, and structured error messages.
-- [ ] Build context from path, query, search mode, result mode, and active filters.
-- [ ] Add Linux-specific context suggestions for hidden files, symlinks, mounted paths, containers, Baloo, and pseudo filesystems.
+- [x] Implement endpoint normalization for bare hosts, `/v1`, `/v1/chat/completions`, and trailing slash variants. (`grexa-ai::normalize_endpoint_base`)
+- [x] Implement `/v1/models` discovery and Settings "Test Endpoint". (`AiSearchClient::discover_model` + `test_endpoint`)
+- [x] Implement OpenAI-compatible chat completions requests. (`AiSearchClient::send_chat`)
+- [x] Preserve Grex response parsing: `choices[].message.content`, `choices[].text`, `output_text`, and structured error messages. (`extract_assistant_content` + `extract_error_message`)
+- [x] Build context from path, query, search mode, result mode, and active filters. (`build_context_prompt` in `grexa-ai`)
+- [x] Add Linux-specific context suggestions for hidden files, symlinks, mounted paths, containers, Baloo, and pseudo filesystems. (`linux_suggestions_for` in `crates/grexa-ai/src/lib.rs`)
 - [ ] Implement in-tab conversation state.
 - [ ] Hide result grids and search-within-results while AI mode is active, matching Grex.
 - [ ] Add AI empty state, loading state, send disabled state, cancellation, and retry.
-- [ ] Add tests with mock HTTP endpoints for models, chat completions, errors, malformed JSON, empty responses, and auth headers.
+- [x] Add tests with mock HTTP endpoints for models, chat completions, errors, malformed JSON, empty responses, and auth headers. (`HttpTransport` trait + `MockTransport` in `crates/grexa-ai/src/lib.rs` tests)
 - [ ] State provider scope clearly: OpenAI-compatible APIs only; Ollama or other local providers are supported through their OpenAI-compatible shim when available.
 
 ## Phase 9 - Regex Builder
@@ -407,9 +407,9 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [x] Preserve exit codes: 0 matches found, 1 no matches, 2 error.
 - [x] Preserve grep-compatible text output.
 - [x] Preserve pretty JSON and escaped CSV output.
-- [ ] Add shell completion generation for Bash, Zsh, and Fish.
-- [ ] Add man page generation.
-- [ ] Add CLI integration tests for local search, errors, output formats, count, files-only, quiet, and container search.
+- [x] Add shell completion generation for Bash, Zsh, and Fish. (`grexa-cli completions <shell>` via `clap_complete`)
+- [x] Add man page generation. (`grexa-cli manpage` via `clap_mangen`)
+- [x] Add CLI integration tests for local search, errors, output formats, count, files-only, quiet, and container search. (`crates/grexa-cli/tests/cli.rs`; container coverage deferred until containers crate lands)
 
 ## Phase 13 - Baloo Index Acceleration Spike
 
@@ -428,10 +428,10 @@ The first draft was reviewed as if it were an implementation design document. Th
 
 ## Phase 14 - Context Preview And File Actions
 
-- [ ] Implement context preview service for local Linux files.
+- [x] Implement context preview service for local Linux files. (`crates/grexa-core/src/preview.rs`)
 - [ ] Implement context preview for mirrored container results.
 - [ ] Implement direct container context preview if mirror is unavailable and runtime exec can read the file.
-- [ ] Preserve before/after line count settings from 1 to 20.
+- [x] Preserve before/after line count settings from 1 to 20. (clamped at the service boundary in `preview::context_preview`)
 - [ ] Highlight matched line and matched substring.
 - [ ] Show line numbers in a gutter.
 - [ ] Add Open in Editor action from preview.

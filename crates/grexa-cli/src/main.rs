@@ -1,12 +1,42 @@
+use std::io;
 use std::path::PathBuf;
 
-use clap::{Parser, ValueEnum};
-use grexa_core::{OutputFormat, SearchOptions, SearchResult, SizeLimitType, SizeUnit, search};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use clap_complete::Shell;
+use grexa_core::{
+    CancelToken, OutputFormat, SearchOptions, SearchResult, SizeLimitType, SizeUnit, search_with,
+};
 
 #[derive(Debug, Parser)]
 #[command(name = "grexa-cli")]
+#[command(version)]
 #[command(about = "Grexa - fast Linux file content search")]
+#[command(args_conflicts_with_subcommands = true)]
 struct Cli {
+    /// Top-level command. When omitted, the positional `path`/`term` are used
+    /// for a one-shot search.
+    #[command(subcommand)]
+    command: Option<Command>,
+
+    #[command(flatten)]
+    search: Option<SearchArgs>,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Print shell completion script for the requested shell.
+    Completions {
+        /// Target shell.
+        #[arg(value_enum)]
+        shell: Shell,
+    },
+    /// Print the man page in roff format. Pipe through `gzip -c > grexa-cli.1.gz`
+    /// or save as `grexa-cli.1` for installation under `/usr/share/man/man1`.
+    Manpage,
+}
+
+#[derive(Debug, Parser, Clone)]
+struct SearchArgs {
     /// Directory path to search.
     path: PathBuf,
 
@@ -25,8 +55,9 @@ struct Cli {
     #[arg(short = 'g', long = "gitignore")]
     gitignore: bool,
 
-    /// Include hidden files and directories.
-    #[arg(short = 'H', long = "include-hidden")]
+    /// Include hidden files and directories. Also accepts the `--hidden`
+    /// alias from `rg` for ergonomics.
+    #[arg(short = 'H', long = "include-hidden", visible_alias = "hidden")]
     include_hidden: bool,
 
     /// Include searchable binary/document files.
@@ -34,7 +65,8 @@ struct Cli {
     include_binary: bool,
 
     /// Include system/dependency directories such as .git and node_modules.
-    #[arg(short = 's', long = "include-system")]
+    /// `--no-ignore` is accepted as a `rg`-style alias.
+    #[arg(short = 's', long = "include-system", visible_alias = "no-ignore")]
     include_system: bool,
 
     /// Do not recurse into subdirectories.
@@ -107,7 +139,7 @@ enum CliSizeLimitType {
 fn main() {
     let cli = Cli::parse();
 
-    match run(cli) {
+    match dispatch(cli) {
         Ok(code) => std::process::exit(code),
         Err(err) => {
             eprintln!("Error: {err}");
@@ -116,36 +148,68 @@ fn main() {
     }
 }
 
-fn run(cli: Cli) -> anyhow::Result<i32> {
-    let mut options = SearchOptions::new(&cli.path, &cli.term);
-    options.regex = cli.regex;
-    options.case_sensitive = cli.case_sensitive;
-    options.respect_gitignore = cli.gitignore;
-    options.include_hidden = cli.include_hidden;
-    options.include_binary = cli.include_binary;
-    options.include_system = cli.include_system;
-    options.include_subfolders = !cli.no_subfolders;
-    options.include_symlinks = cli.include_symlinks;
-    options.match_file_names = cli.match_files.unwrap_or_default();
-    options.exclude_dirs = cli.exclude_dirs.unwrap_or_default();
-    options.size_limit_kb = cli
+fn dispatch(cli: Cli) -> anyhow::Result<i32> {
+    match cli.command {
+        Some(Command::Completions { shell }) => {
+            let mut cmd = Cli::command();
+            let name = cmd.get_name().to_string();
+            clap_complete::generate(shell, &mut cmd, name, &mut io::stdout());
+            Ok(0)
+        }
+        Some(Command::Manpage) => {
+            let cmd = Cli::command();
+            let man = clap_mangen::Man::new(cmd);
+            man.render(&mut io::stdout())?;
+            Ok(0)
+        }
+        None => {
+            let search = cli.search.ok_or_else(|| {
+                anyhow::anyhow!("missing required <path> <term> arguments; run `grexa-cli --help`")
+            })?;
+            run_search(search)
+        }
+    }
+}
+
+fn run_search(args: SearchArgs) -> anyhow::Result<i32> {
+    let mut options = SearchOptions::new(&args.path, &args.term);
+    options.regex = args.regex;
+    options.case_sensitive = args.case_sensitive;
+    options.respect_gitignore = args.gitignore;
+    options.include_hidden = args.include_hidden;
+    options.include_binary = args.include_binary;
+    options.include_system = args.include_system;
+    options.include_subfolders = !args.no_subfolders;
+    options.include_symlinks = args.include_symlinks;
+    options.match_file_names = args.match_files.unwrap_or_default();
+    options.exclude_dirs = args.exclude_dirs.unwrap_or_default();
+    options.size_limit_kb = args
         .size_limit
-        .map(|value| convert_to_kb(value, cli.size_unit));
-    options.size_unit = cli.size_unit.into();
-    options.size_limit_type = cli.size_type.into();
+        .map(|value| convert_to_kb(value, args.size_unit));
+    options.size_unit = args.size_unit.into();
+    options.size_limit_type = args.size_type.into();
 
-    let summary = search(&options)?;
+    let cancel = CancelToken::new();
+    let handler_token = cancel.clone();
+    let _ = ctrlc::set_handler(move || {
+        handler_token.cancel();
+    });
 
-    if cli.quiet {
+    let summary = search_with(&options, &cancel, None)?;
+    if summary.cancelled {
+        eprintln!("grexa-cli: search cancelled; partial results follow");
+    }
+
+    if args.quiet {
         return Ok(if summary.results.is_empty() { 1 } else { 0 });
     }
 
-    if cli.count {
+    if args.count {
         println!("{}", summary.matches);
         return Ok(if summary.results.is_empty() { 1 } else { 0 });
     }
 
-    if cli.files_only {
+    if args.files_only {
         let mut files: Vec<_> = summary
             .results
             .iter()
@@ -159,7 +223,7 @@ fn run(cli: Cli) -> anyhow::Result<i32> {
         return Ok(if summary.results.is_empty() { 1 } else { 0 });
     }
 
-    match cli.format.into() {
+    match args.format.into() {
         OutputFormat::Text => print_text(&summary.results),
         OutputFormat::Json => print_json(&summary.results)?,
         OutputFormat::Csv => print_csv(&summary.results),
