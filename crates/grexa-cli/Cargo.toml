@@ -1,0 +1,12 @@
+[package]
+name = "grexa-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+grexa-core = { version = "0.1.0", path = "../grexa-core" }
+serde_json.workspace = true
