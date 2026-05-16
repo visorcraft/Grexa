@@ -3,6 +3,18 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+pub mod runtime;
+pub mod search;
+
+pub use runtime::{
+    CliRuntime, CommandInvocation, CommandResult, CommandRunner, MockCommandRunner,
+    RuntimeError, RuntimeOperations, SystemCommandRunner,
+};
+pub use search::{
+    ContainerSearchHit, ContainerSearchOptions, ContainerSearchSummary, parse_grep_output,
+    prune_mirrors, search_container,
+};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ContainerRuntimeKind {
     Docker,

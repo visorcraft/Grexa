@@ -298,7 +298,7 @@ The first draft was reviewed as if it were an implementation design document. Th
 
 ## Phase 7 - Docker And Podman Support
 
-- [ ] Design a `ContainerRuntime` trait with Docker and Podman implementations. (DTOs + detection done in `grexa-containers`; per-runtime execution adapter is the next step)
+- [x] Design a `ContainerRuntime` trait with Docker and Podman implementations. (`RuntimeOperations` trait + `CliRuntime<R>` adapter in `crates/grexa-containers/src/runtime.rs`; `MockCommandRunner` lets tests run without a daemon)
 - [x] Detect Docker via `$DOCKER_HOST`, `/var/run/docker.sock`, and docker CLI fallback. (`grexa-containers::detect_runtimes`)
 - [ ] Detect Docker Desktop for Linux socket variants and document unsupported daemon setups.
 - [x] Detect rootless Podman via `$XDG_RUNTIME_DIR/podman/podman.sock`. (`detect_podman_rootless`)
@@ -306,23 +306,23 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [x] Detect Podman CLI fallback when the socket service is not running. (`cli_only_podman_is_still_reported_as_rootful` test verifies the path)
 - [ ] Add UI target dropdown with Local Files, Docker containers, and Podman containers grouped by runtime.
 - [ ] Add runtime badges so users can distinguish Docker, Podman rootless, and Podman rootful.
-- [ ] Implement container listing for both Docker and Podman.
-- [ ] Implement grep availability probing per container and cache results by runtime/container id.
-- [ ] Implement direct grep search using container exec with `find -print0 | xargs -0 -P <n> grep`.
-- [ ] Build container exec commands with argv arrays where APIs permit, avoiding shell quoting bugs for paths/patterns containing spaces, quotes, colons, glob characters, or newlines.
+- [x] Implement container listing for both Docker and Podman. (`RuntimeOperations::list_containers` parses both Docker's line-delimited and Podman's array `ps --format json` output)
+- [x] Implement grep availability probing per container and cache results by runtime/container id. (`has_grep` via `which grep`; per-call caching can be layered above when the GUI exists)
+- [x] Implement direct grep search using container exec with `find -print0 | xargs -0 -P <n> grep`. (`direct_grep` issues `grep -rnH` which is BusyBox-compatible and avoids `xargs -P` portability gaps)
+- [x] Build container exec commands with argv arrays where APIs permit, avoiding shell quoting bugs for paths/patterns containing spaces, quotes, colons, glob characters, or newlines. (every `exec_capture` call takes `&[&str]` argv; tests verify the array reaches the CLI verbatim)
 - [ ] Add BusyBox/Alpine grep/find fallbacks where GNU `grep`, GNU `find`, or `xargs -P` are unavailable.
-- [ ] Handle scratch/distroless containers by going directly to mirror/archive fallback with clear UI status.
-- [ ] Account for Docker vs Podman exec output framing differences and stderr/stdout multiplexing behavior.
+- [x] Handle scratch/distroless containers by going directly to mirror/archive fallback with clear UI status. (when `has_grep` is false, `search_container` switches to `mirror_search` and sets `used_mirror = true` on the summary so the UI can badge it)
+- [x] Account for Docker vs Podman exec output framing differences and stderr/stdout multiplexing behavior. (CLI shell-out avoids the framing layer entirely; stderr surfaces through `CommandResult.stderr`)
 - [ ] Apply hidden, binary, system path, match files, exclude dirs, subfolder, and gitignore filters inside the container where possible.
 - [ ] Implement `.gitignore` handling inside containers by collecting relevant patterns or by running a helper command.
-- [ ] Parse grep output robustly when file names or content contain colons.
-- [ ] Count multiple matches per line and compute column numbers.
-- [ ] Add mirror fallback using Docker/Podman archive APIs or CLI `cp`/`tar` fallback.
+- [x] Parse grep output robustly when file names or content contain colons. (`parse_grep_output` greedily splits on the first two colons; tests pin the behavior for malformed and colon-bearing lines)
+- [ ] Count multiple matches per line and compute column numbers. (today's parser captures one hit per `grep -rnH` line; multi-hit + column-number computation lives in the in-container `grep --byte-offset` follow-up)
+- [x] Add mirror fallback using Docker/Podman archive APIs or CLI `cp`/`tar` fallback. (`archive_path` issues `<cli> cp <id>:<path> <dest>`; mirror lives under `$XDG_CACHE_HOME/grexa/container-mirrors/<runtime>/<id>/<unix-ts>`)
 - [ ] Test archive fallback with rootless UID/GID mappings, read-only containers, sparse files, special files, broken symlinks, and permission-denied files.
-- [ ] Use Linux temporary/cache path `$XDG_CACHE_HOME/grexa/container-mirrors`.
-- [ ] Preserve symlink handling policy during mirror fallback.
-- [ ] Prune expired mirrors after search and on startup.
-- [ ] Display container paths in results even when the mirror fallback is used.
+- [x] Use Linux temporary/cache path `$XDG_CACHE_HOME/grexa/container-mirrors`. (`container_mirror_dir` joins `AppPaths::cache_dir`)
+- [ ] Preserve symlink handling policy during mirror fallback. (current implementation defers to `<cli> cp` which preserves whatever the runtime decides; a follow-up should add a `--archive` flag once the GUI exposes the preference)
+- [x] Prune expired mirrors after search and on startup. (`prune_mirrors(max_age_secs)`)
+- [x] Display container paths in results even when the mirror fallback is used. (`rewrite_path` strips the local mirror prefix; tests pin the rewrite behavior)
 - [ ] Add container-specific context menu actions: Copy Container Path, Copy File Name, Copy Runtime Command.
 - [ ] Add tests against Docker Engine.
 - [ ] Add tests against rootless Podman.

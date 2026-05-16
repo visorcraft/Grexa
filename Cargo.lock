@@ -515,7 +515,12 @@ dependencies = [
 name = "grexa-containers"
 version = "0.1.0"
 dependencies = [
+ "grexa-core",
  "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]
