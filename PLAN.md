@@ -142,7 +142,7 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [x] Audit Grex `Controls/SearchTabContent.xaml.cs` and document UI workflows, shortcuts, context menus, export, profiles, history, and AI mode transitions.
 - [x] Audit Grex `Controls/SearchTabContent.xaml` and document layout, controls, result columns, and visual states to preserve or replace.
 - [x] Audit Grex `Controls/SettingsView.xaml` and `Controls/SettingsView.xaml.cs` and document every settings section and Linux replacement.
-- [ ] Audit Grex `Controls/RegexBuilderView.xaml` and `Controls/RegexBuilderView.xaml.cs` and document Regex Builder behavior.
+- [x] Audit Grex `Controls/RegexBuilderView.xaml` and `Controls/RegexBuilderView.xaml.cs` and document Regex Builder behavior.
 - [ ] Audit Grex `Controls/ContextPreviewDialog.xaml` and `Services/ContextPreviewService.cs` and document preview behavior.
 - [ ] Audit Grex `Controls/AboutView.xaml` and `Controls/AboutView.xaml.cs` for About page content and localization behavior.
 - [ ] Audit Grex `Services/AiSearchService.cs` and document endpoint normalization, model discovery, response parsing, and error extraction.
