@@ -28,6 +28,7 @@ pub struct Controllers {
     pub command_runner: SystemCommandRunner,
 }
 
+#[allow(dead_code)]
 impl Controllers {
     pub fn new() -> anyhow::Result<Self> {
         let paths = AppPaths::from_env();

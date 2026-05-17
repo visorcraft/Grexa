@@ -1,47 +1,70 @@
-# GUI Design + cxx-qt Spike Outcome
+# GUI Design + Spike Outcome
 
-## Spike outcome: deferred to a dedicated PR
+## Spike outcome: `qmetaobject` chosen as the Rust ⇄ Qt bridge
 
-PLAN.md Phase 1 calls for a `cxx-qt` spike before committing to the
-Rust ⇄ Qt bridge. The spike was attempted in this session and the
-findings are recorded here.
+PLAN.md Phase 1 calls for a Rust ⇄ Qt bridge spike before committing
+to the GUI stack. Two paths were evaluated.
 
-**Recommendation: build the GUI in a dedicated PR series with CMake
-installed.** The current Cargo-only repo can't host a clean cxx-qt
-build because `cxx-qt-build` 0.7 still requires a CMake configure /
-build pipeline to generate the C++ shims that pair with the Rust
-QObjects. Layering CMake on top of the workspace is justified for the
-GUI work but is too disruptive to land alongside the non-GUI items.
+**`cxx-qt` 0.8** — rejected. The current Cargo-only repo can't host a
+clean cxx-qt build: `cxx-qt-build` 0.8 wraps its initializer registry
+around a `links = "<crate>"` Cargo convention that downstream
+binaries can't easily satisfy without the full cxx-qt-build → CMake
+→ qmake6 toolchain. A smoke test with the documented API
+(`CxxQtBuilder::new().qt_module("Core").file(...).build()` plus
+`cxx_qt::init_crate!(cxx_qt_lib)`) failed to link with
+`undefined symbol: cxx_qt_init_crate_cxx_qt_lib` — the cxx-qt-lib
+initializer is exported only when CMake threads it through. We
+re-evaluate when cxx-qt ships a pure-Cargo flow or when CMake is on
+every Grexa CI host.
 
-What this session does instead:
+**`qmetaobject` 0.2** — accepted. Pure Rust, no build script, no
+CMake. `cargo build -p grexa` produces a working binary that
+registers QObjects under `com.visorcraft.Grexa 1.0`, boots a
+`QmlEngine`, and runs the full Qt event loop. Verified locally with
+`QT_QPA_PLATFORM=offscreen target/release/grexa` exiting 0 after the
+QML loads. The QObject surface is in `apps/grexa-gui/src/qobjects.rs`;
+the workspace controllers (`workspace.rs`, `tab.rs`, `status.rs`)
+remain the source of truth for business logic.
 
-1. Ships a structured Rust GUI host at `apps/grexa-gui/src/main.rs`
-   that links every core crate so we know the workspace compiles
-   end-to-end against the GUI.
-2. Ships a Kirigami QML skeleton under `apps/grexa-gui/qml/` that
-   declares every page the full UI needs. Each placeholder page calls
-   out what data Rust feeds it.
-3. Wires a runtime spawn of `qml6` against the bundled QML so a user
-   can launch `cargo run -p grexa` and see the navigation rail + four
-   placeholder pages.
-4. Records the wiring decisions here so the next engineer can pick
-   them up without re-deciding.
+What ships today:
+
+1. **A working Qt 6 binary.** `cargo run -p grexa` registers
+   `SearchController` with Qt's metaobject system and launches the
+   Kirigami QML shell.
+2. **A SearchController QObject** with `status_text`, `match_count`,
+   `busy`, and `recent_path_count` properties, `status_changed` and
+   `history_changed` signals, and `start_search` / `cancel` /
+   `recent_paths_json` slots. The real `grexa-core` search engine
+   drives it; the recent-paths store records every path; the
+   workspace state is shared via a thread-local pointer so QML
+   instances see the same state.
+3. **A complete QML page set** at `apps/grexa-gui/qml/` — Main +
+   Search + Regex Builder + Settings + About + Context Preview +
+   AiChatPanel + DesignTokens.
+4. **Unit tests** that exercise the QObject end-to-end against a real
+   tempdir (`search_controller_drives_real_search` in `qobjects.rs`).
 
 ## Module map
 
 ```
 apps/grexa-gui/
-├── Cargo.toml          # depends on every other Grexa crate
+├── Cargo.toml          # depends on every other Grexa crate + qmetaobject
 ├── src/
-│   ├── main.rs         # logging + controller bootstrap + qml6 spawn
-│   └── controller.rs   # `Controllers` struct: settings, bundle,
-│                       # cancel token, AI client, command runner
+│   ├── main.rs         # logging + workspace install + QmlEngine boot
+│   ├── qobjects.rs     # SearchController QObject (qmetaobject) + workspace TLS
+│   ├── controller.rs   # `Controllers` struct: settings, bundle, cancel
+│   ├── tab.rs          # `TabState` per-tab state
+│   ├── workspace.rs    # `Workspace`: tabs + persistent stores + replace
+│   └── status.rs       # `format_status` Fluent-aware status formatter
 └── qml/
-    ├── Main.qml             # Kirigami ApplicationWindow + nav rail
-    ├── SearchPage.qml       # Phase 4 destination
-    ├── RegexBuilderPage.qml # Phase 9 destination
-    ├── SettingsPage.qml     # Phase 10 destination
-    └── AboutPage.qml        # Phase 4 destination
+    ├── Main.qml                # Kirigami ApplicationWindow + nav rail
+    ├── SearchPage.qml          # path + term + filters + result list
+    ├── RegexBuilderPage.qml    # presets + sample + live matches
+    ├── SettingsPage.qml        # every settings section
+    ├── ContextPreviewDialog.qml# gutter + match-line highlight
+    ├── AiChatPanel.qml         # disabled / empty / busy / error states
+    ├── AboutPage.qml           # version + license + credits
+    └── DesignTokens.qml        # spacing / radius / colors / typography
 ```
 
 ## Wiring contracts
@@ -91,21 +114,23 @@ rename / drag is GUI-only; the Rust side only needs:
 - `set_active(id)`
 - `get_tab(id) -> &TabState`
 
-## Build pipeline (planned)
+## Build pipeline (current)
 
-Once CMake is added to the host environment:
+Pure Cargo. `cargo build -p grexa` produces a self-contained binary
+linked against `libQt6Core.so` / `libQt6Qml.so` from the system Qt
+runtime. No CMake, no build script in `apps/grexa-gui`.
 
-1. `cargo build` runs the workspace; `cargo build -p grexa` also
-   triggers `cxx-qt-build` which generates C++ glue + a small `.qrc`.
-2. `cmake` is invoked from the `cxx-qt-build` build script with a
-   minimal `CMakeLists.txt` under `apps/grexa-gui/`.
-3. `cmake` produces a shared object that `apps/grexa-gui/target` links
-   against; `cargo` ties the final binary together.
-4. QML files are bundled via Qt's resource system (`qrc`) so the
-   release binary is self-contained.
+If a future PR wants cxx-qt's compile-time generated bindings (sharper
+typing, automatic property notification, QML enum exposure), it should:
 
-The current `qml6`-spawn approach is good enough for a placeholder and
-keeps the build pure-Cargo.
+1. Add `cxx-qt` + `cxx-qt-build` + `cxx-qt-lib` to the workspace.
+2. Introduce a `CMakeLists.txt` under `apps/grexa-gui` and update the
+   CI host bootstrap to install CMake + Qt6 dev packages.
+3. Migrate `qobjects.rs` from `qmetaobject` to `cxx_qt::bridge`.
+
+The qmetaobject implementation is the production path until that
+migration. QML files load via `QmlEngine::load_file`; an installed
+binary picks them up from `/usr/share/grexa/qml/`.
 
 ## What lands when the dedicated GUI PR opens
 

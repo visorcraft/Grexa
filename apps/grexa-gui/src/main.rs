@@ -1,106 +1,83 @@
 //! Grexa GUI shell entry point.
 //!
-//! The Qt 6 / Kirigami front-end is being built in two stages. **This
-//! binary** is the Rust-side host: it wires `grexa-core`, `grexa-ai`,
-//! `grexa-containers`, and `grexa-i18n` together behind a thin set of
-//! controller types, and bootstraps the QML runtime via Qt's `qml6` binary.
+//! Uses `qmetaobject` for the Rust ⇄ Qt bridge. The cxx-qt spike
+//! (`docs/gui-design.md`) recommended this as the pure-Rust fallback
+//! when CMake isn't on the dev / CI host; cxx-qt 0.8 expects a
+//! CMake-driven Interface pipeline that's hostile to a Cargo-only
+//! workspace.
 //!
-//! ## Why not cxx-qt?
+//! Runtime contract:
 //!
-//! `cxx-qt` is the medium-term plan, but its build pipeline integrates
-//! with CMake. The current Grexa repo is Cargo-only. Phase 1 of
-//! [PLAN.md](../../PLAN.md) calls for an explicit cxx-qt spike before
-//! committing to it; this binary represents the *fallback* path
-//! described there: a thin Qt/QML host that talks to a Rust library via
-//! a local JSON-RPC channel (in this binary's case, simple stdin/stdout
-//! framing).
-//!
-//! ## What this binary actually does today
-//!
-//! 1. Initialise structured logging (mirrors `grexa-cli`'s setup).
-//! 2. Construct the controller objects from the core crates so we know
-//!    they compile end-to-end against the GUI host.
-//! 3. Locate the QML entrypoint at
-//!    `apps/grexa-gui/qml/Main.qml` and launch `qml6 Main.qml` as a
-//!    child process.
-//! 4. Pipe the controller events to the QML runtime via JSON over the
-//!    child's stdin (one event per line; QML reads via `XMLHttpRequest`
-//!    onto a localhost FIFO in the eventual full implementation).
-//!
-//! In v0.1.0-alpha the QML side is a deliberately stubbed Search page
-//! that displays the static text "Grexa GUI shell — controllers wired
-//! but render path pending Phase 4". The structure under
-//! `apps/grexa-gui/qml/` is real; each empty page documents exactly
-//! what data Rust will feed it.
+//! 1. Initialize structured logging (mirrors `grexa-cli`).
+//! 2. Build the shared `Workspace` and install it via
+//!    `qobjects::install_workspace`.
+//! 3. Register the Grexa QObjects (`SearchController`) under the
+//!    `com.visorcraft.Grexa 1.0` QML module.
+//! 4. Boot a `QmlEngine`, load `qml/Main.qml` from
+//!    `CARGO_MANIFEST_DIR` during development or
+//!    `/usr/share/grexa/qml/` when installed.
+//! 5. Enter the Qt event loop.
 
+use std::cell::RefCell;
 use std::path::PathBuf;
-use std::process::Command;
+use std::rc::Rc;
 
-use anyhow::Context;
 use grexa_core::AppPaths;
+use qmetaobject::*;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
 mod controller;
+mod qobjects;
 mod status;
 mod tab;
 mod workspace;
 
-fn main() -> anyhow::Result<()> {
+fn main() {
     let _log_guard = init_tracing();
+    tracing::info!("Grexa GUI shell starting");
 
-    let _controllers = controller::Controllers::new()?;
-    tracing::info!("Grexa GUI shell starting (Phase 4 placeholder)");
+    let workspace = Rc::new(RefCell::new(workspace::Workspace::new()));
+    qobjects::install_workspace(workspace);
+    qobjects::register_qml_types();
 
-    let qml_path = locate_qml_main()?;
-    let runtime = locate_qml_runtime().context(
-        "Could not find `qml6` / `qmlscene6` on $PATH. Install Qt 6 Quick \
-         (Arch: pacman -S qt6-declarative).",
-    )?;
-
-    println!(
-        "Grexa GUI host is wired but the QML front-end is a placeholder. \
-         Launching `{runtime} {qml}` as a smoke test.",
-        runtime = runtime.display(),
-        qml = qml_path.display(),
-    );
-
-    let status = Command::new(&runtime)
-        .arg(&qml_path)
-        .status()
-        .with_context(|| format!("failed to spawn {}", runtime.display()))?;
-    std::process::exit(status.code().unwrap_or(0));
+    let mut engine = QmlEngine::new();
+    match locate_qml_main() {
+        Some(path) => {
+            engine.load_file(path.to_string_lossy().to_string().into());
+        }
+        None => {
+            // Inline smoke QML — used only when neither the dev path
+            // nor the installed path is reachable. Confirms the
+            // Rust→QML registration works.
+            engine.load_data(
+                r#"
+import QtQuick
+import com.visorcraft.Grexa 1.0
+Item {
+    SearchController { id: ctl }
+    Component.onCompleted: {
+        console.log("Grexa GUI smoke:", ctl.statusText)
+        Qt.quit()
+    }
+}
+"#
+                .into(),
+            );
+        }
+    }
+    engine.exec();
 }
 
-fn locate_qml_main() -> anyhow::Result<PathBuf> {
-    // Prefer the in-repo QML during development.
+fn locate_qml_main() -> Option<PathBuf> {
     let cargo_manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let candidate = cargo_manifest.join("qml").join("Main.qml");
     if candidate.is_file() {
-        return Ok(candidate);
+        return Some(candidate);
     }
-    // Installed location.
     let installed = PathBuf::from("/usr/share/grexa/qml/Main.qml");
     if installed.is_file() {
-        return Ok(installed);
-    }
-    Err(anyhow::anyhow!(
-        "no QML entrypoint found (looked under {:?} and {:?})",
-        candidate,
-        installed
-    ))
-}
-
-fn locate_qml_runtime() -> Option<PathBuf> {
-    for name in &["qml6", "qmlscene6", "qmlscene"] {
-        if let Ok(path) = std::env::var("PATH") {
-            for dir in std::env::split_paths(&path) {
-                let candidate = dir.join(name);
-                if candidate.is_file() {
-                    return Some(candidate);
-                }
-            }
-        }
+        return Some(installed);
     }
     None
 }

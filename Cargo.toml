@@ -37,6 +37,7 @@ thiserror = "2.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tracing-appender = "0.2"
+qmetaobject = "0.2"
 unicode-normalization = "0.1"
 fancy-regex = "0.16"
 chardetng = "0.1"
