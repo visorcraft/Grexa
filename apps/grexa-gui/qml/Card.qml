@@ -16,7 +16,9 @@ Rectangle {
     property string title: ""
     property string subtitle: ""
 
-    Layout.fillWidth: true
+    // Consumers opt into stretching by setting `Layout.fillWidth` on
+    // the instance — baking it in here caused unexpected stretching
+    // when a Card sits inside a Row/Flow.
     color: app.tokens.surface1
     radius: app.tokens.radiusCard
     border.color: app.tokens.separator

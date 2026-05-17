@@ -38,6 +38,19 @@ Kirigami.ApplicationWindow {
 
     DesignTokens { id: tokens }
 
+    // Render a Qt color as a CSS `rgba(R, G, B, A)` string. We avoid
+    // `Qt.rgba(...).toString()` because it emits `#aarrggbb`, which
+    // CSS doesn't reliably interpret — Qt's RichText subset and the
+    // `<span style='background-color: …'>` path either treat it as
+    // opaque RGB (dropping alpha) or as an invalid color.
+    function rgbaCss(c) {
+        const r = Math.round(c.r * 255)
+        const g = Math.round(c.g * 255)
+        const b = Math.round(c.b * 255)
+        const a = c.a
+        return "rgba(" + r + "," + g + "," + b + "," + a + ")"
+    }
+
     SearchController { id: searchController }
     SettingsController {
         id: settingsController
@@ -46,7 +59,9 @@ Kirigami.ApplicationWindow {
     RegexBuilderController { id: regexController }
     AiController {
         id: aiController
-        Component.onCompleted: refreshKeyState()
+        // Pull endpoint + model + key state from settings on startup
+        // so the chat panel doesn't first-launch with an empty endpoint.
+        Component.onCompleted: reloadFromSettings()
     }
 
     pageStack.initialPage: searchPage
@@ -63,21 +78,20 @@ Kirigami.ApplicationWindow {
     }
 
     // ---- Sidebar -------------------------------------------------
+    // Mailspring-class chrome panel: distinct surface tint (cooler
+    // than canvas), generous padding, ALL-CAPS micro-section labels,
+    // and full-width pill rows for nav items. A hairline at the
+    // right edge keeps the boundary clean without a hard divider.
     globalDrawer: Kirigami.OverlayDrawer {
         id: drawer
         edge: Qt.LeftEdge
         modal: false
         drawerOpen: true
-        width: Kirigami.Units.gridUnit * 13
+        width: Kirigami.Units.gridUnit * 14
         handleVisible: false
 
         background: Rectangle {
-            // Subtle vertical gradient — top tint, bottom matches the
-            // page background so it doesn't visually divide too hard.
-            gradient: Gradient {
-                GradientStop { position: 0.0; color: tokens.surface2 }
-                GradientStop { position: 1.0; color: tokens.surface1 }
-            }
+            color: tokens.surfaceSidebar
             Rectangle {
                 anchors.right: parent.right
                 anchors.top: parent.top
@@ -90,31 +104,41 @@ Kirigami.ApplicationWindow {
         contentItem: ColumnLayout {
             spacing: 0
 
-            // -- App header
+            // -- App header — icon tile + wordmark + tagline.
+            // The icon sits inside a soft rounded tile so it reads
+            // as the app brand "lozenge" the way Mailspring's mark
+            // sits in the top-left chrome.
             RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 56
+                Layout.preferredHeight: 64
                 Layout.topMargin: tokens.spaceL
                 Layout.leftMargin: tokens.spaceL
                 Layout.rightMargin: tokens.spaceL
-                Layout.bottomMargin: tokens.spaceM
+                Layout.bottomMargin: tokens.spaceL
                 spacing: tokens.spaceM
 
-                Image {
-                    source: "qrc:/qt/qml/com/visorcraft/Grexa/resources/grexa.svg"
-                    sourceSize.width: 34
-                    sourceSize.height: 34
-                    Layout.preferredWidth: 34
-                    Layout.preferredHeight: 34
-                    smooth: true
+                Rectangle {
+                    Layout.preferredWidth: 40
+                    Layout.preferredHeight: 40
+                    radius: tokens.radiusAvatar
+                    color: "transparent"
+                    Image {
+                        anchors.fill: parent
+                        source: "qrc:/qt/qml/com/visorcraft/Grexa/resources/grexa.svg"
+                        sourceSize.width: 40
+                        sourceSize.height: 40
+                        smooth: true
+                    }
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 0
+                    spacing: 1
                     Controls.Label {
                         text: "Grexa"
-                        font.pixelSize: tokens.textSubheading
+                        font.pixelSize: tokens.textSubheading + 1
                         font.weight: tokens.weightBold
+                        font.family: tokens.sansFamily
+                        font.letterSpacing: -0.2
                     }
                     Controls.Label {
                         text: qsTr("Fast file search")
@@ -130,12 +154,12 @@ Kirigami.ApplicationWindow {
                 Layout.leftMargin: tokens.spaceL
                 Layout.rightMargin: tokens.spaceL
                 Layout.topMargin: tokens.spaceS
-                Layout.bottomMargin: tokens.spaceXS
+                Layout.bottomMargin: tokens.spaceS
                 text: qsTr("WORKSPACE")
                 font.pixelSize: 10
-                font.weight: tokens.weightMedium
-                font.letterSpacing: 1.4
-                opacity: 0.45
+                font.weight: tokens.weightSemibold
+                font.letterSpacing: 1.6
+                opacity: 0.5
             }
             NavItem {
                 Layout.fillWidth: true
@@ -150,13 +174,13 @@ Kirigami.ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.leftMargin: tokens.spaceL
                 Layout.rightMargin: tokens.spaceL
-                Layout.topMargin: tokens.spaceL
-                Layout.bottomMargin: tokens.spaceXS
+                Layout.topMargin: tokens.spaceXL
+                Layout.bottomMargin: tokens.spaceS
                 text: qsTr("TOOLS")
                 font.pixelSize: 10
-                font.weight: tokens.weightMedium
-                font.letterSpacing: 1.4
-                opacity: 0.45
+                font.weight: tokens.weightSemibold
+                font.letterSpacing: 1.6
+                opacity: 0.5
             }
             NavItem {
                 Layout.fillWidth: true
@@ -182,34 +206,39 @@ Kirigami.ApplicationWindow {
 
             Item { Layout.fillHeight: true; Layout.fillWidth: true }
 
-            // -- Footer separator + meta
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.leftMargin: tokens.spaceL
-                Layout.rightMargin: tokens.spaceL
-                Layout.bottomMargin: tokens.spaceS
-                height: 1
-                color: tokens.separator
-            }
+            // -- Footer — version pill on the left, license badge
+            // on the right. No hard divider; the breathing room
+            // sells the separation.
             RowLayout {
                 Layout.fillWidth: true
                 Layout.leftMargin: tokens.spaceL
                 Layout.rightMargin: tokens.spaceL
-                Layout.bottomMargin: tokens.spaceM
+                Layout.bottomMargin: tokens.spaceL
+                Layout.topMargin: tokens.spaceM
                 spacing: tokens.spaceS
 
-                Controls.Label {
-                    text: "v" + Qt.application.version
-                    font.pixelSize: tokens.textCaption
-                    font.family: tokens.monoFamily
-                    opacity: 0.55
+                Rectangle {
+                    radius: tokens.radiusPill
+                    color: tokens.surface1
+                    border.color: tokens.separator
+                    border.width: 1
+                    implicitHeight: 22
+                    implicitWidth: versionLabel.implicitWidth + tokens.spaceM * 2
+                    Controls.Label {
+                        id: versionLabel
+                        anchors.centerIn: parent
+                        text: "v" + Qt.application.version
+                        font.pixelSize: tokens.textCaption
+                        font.family: tokens.monoFamily
+                        opacity: 0.7
+                    }
                 }
                 Item { Layout.fillWidth: true }
                 Controls.Label {
                     text: "GPL-3.0"
                     font.pixelSize: tokens.textCaption
                     font.family: tokens.monoFamily
-                    opacity: 0.45
+                    opacity: 0.4
                 }
             }
         }

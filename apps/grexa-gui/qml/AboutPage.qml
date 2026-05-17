@@ -133,6 +133,7 @@ Kirigami.ScrollablePage {
 
             // Lineage card
             Card {
+                Layout.fillWidth: true
                 title: qsTr("Lineage")
                 subtitle: qsTr("Grexa inherits its behavior contract from VisorCraft's upstream Windows tool — every divergence is recorded in docs/linux-decisions.md.")
                 RowLayout {
@@ -150,6 +151,7 @@ Kirigami.ScrollablePage {
 
             // Attribution card
             Card {
+                Layout.fillWidth: true
                 title: qsTr("Third-party credits")
                 subtitle: qsTr("Every direct + transitive crate, with full license text, is auto-generated into docs/credits-third-party.md.")
                 RowLayout {

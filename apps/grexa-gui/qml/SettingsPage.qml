@@ -72,7 +72,13 @@ Kirigami.ScrollablePage {
                 PrimaryButton {
                     text: qsTr("Apply")
                     icon.name: "dialog-ok-apply"
-                    onClicked: page.settings.apply()
+                    onClicked: {
+                        page.settings.apply()
+                        // Push the newly persisted endpoint/model/key
+                        // state into the AI controller so the chat
+                        // panel sees changes without restarting.
+                        page.ai.reloadFromSettings()
+                    }
                 }
             }
         }
@@ -88,6 +94,7 @@ Kirigami.ScrollablePage {
 
             // -- Appearance
             Card {
+                Layout.fillWidth: true
                 title: qsTr("Appearance")
                 subtitle: qsTr("Theme variant — the GTK/Plasma host palette still drives the chrome; this picks the in-app accent.")
                 RowLayout {
@@ -111,6 +118,7 @@ Kirigami.ScrollablePage {
 
             // -- Search defaults
             Card {
+                Layout.fillWidth: true
                 title: qsTr("Search defaults")
                 subtitle: qsTr("Applied to every new tab. You can still toggle these per-search in the Search page.")
                 GridLayout {
@@ -158,6 +166,7 @@ Kirigami.ScrollablePage {
 
             // -- Filter defaults
             Card {
+                Layout.fillWidth: true
                 title: qsTr("Filter defaults")
                 subtitle: qsTr("Glob patterns and directory excludes that pre-populate every new search.")
                 ColumnLayout {
@@ -172,7 +181,7 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         placeholderText: "*.rs|*.toml|-target*"
                         text: page.settings.defaultMatchFiles
-                        onEditingFinished: page.settings.defaultMatchFiles = text
+                        onTextEdited: page.settings.defaultMatchFiles = text
                     }
                     Controls.Label {
                         text: qsTr("Exclude dirs")
@@ -184,13 +193,14 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         placeholderText: "node_modules, target, .venv"
                         text: page.settings.defaultExcludeDirs
-                        onEditingFinished: page.settings.defaultExcludeDirs = text
+                        onTextEdited: page.settings.defaultExcludeDirs = text
                     }
                 }
             }
 
             // -- Context preview
             Card {
+                Layout.fillWidth: true
                 title: qsTr("Context preview")
                 subtitle: qsTr("How many lines surround a match when you open the preview dialog.")
                 GridLayout {
@@ -214,6 +224,7 @@ Kirigami.ScrollablePage {
 
             // -- Containers
             Card {
+                Layout.fillWidth: true
                 title: qsTr("Containers")
                 subtitle: qsTr("Allow Grexa to search inside running Docker and Podman containers.")
                 Controls.CheckBox {
@@ -225,6 +236,7 @@ Kirigami.ScrollablePage {
 
             // -- AI Search
             Card {
+                Layout.fillWidth: true
                 title: qsTr("AI Search")
                 subtitle: qsTr("OpenAI-compatible chat endpoint. API key is stored in Secret Service (KWallet / GNOME Keyring) and never round-trips through QML.")
                 ColumnLayout {
@@ -248,7 +260,7 @@ Kirigami.ScrollablePage {
                             Layout.fillWidth: true
                             placeholderText: "https://api.openai.com/v1"
                             text: page.settings.aiEndpoint
-                            onEditingFinished: {
+                            onTextEdited: {
                                 page.settings.aiEndpoint = text
                                 page.ai.endpoint = text
                             }
@@ -258,7 +270,7 @@ Kirigami.ScrollablePage {
                             Layout.fillWidth: true
                             placeholderText: "gpt-4o-mini"
                             text: page.settings.aiModel
-                            onEditingFinished: {
+                            onTextEdited: {
                                 page.settings.aiModel = text
                                 page.ai.model = text
                             }
@@ -323,6 +335,7 @@ Kirigami.ScrollablePage {
 
             // -- Diagnostics
             Card {
+                Layout.fillWidth: true
                 title: qsTr("Diagnostics")
                 subtitle: qsTr("Where Grexa writes its logs and how to control verbosity.")
                 ColumnLayout {

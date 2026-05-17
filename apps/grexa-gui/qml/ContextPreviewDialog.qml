@@ -41,7 +41,7 @@ Controls.Dialog {
                 .replace(/>/g, "&gt;")
             if (isMatch) {
                 html += "<div style='background-color:"
-                    + app.tokens.matchTint.toString()
+                    + app.rgbaCss(app.tokens.matchTint)
                     + "; padding:2px 6px;'>"
                     + escaped + "</div>"
             } else {

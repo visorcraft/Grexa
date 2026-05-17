@@ -57,31 +57,25 @@ Kirigami.Page {
         // ============================================================
         // Toolbar / SearchBar strip
         // ============================================================
-        Item {
+        Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 92
-            // Subtle top-bar gradient
+            color: app.tokens.surface0
+            // Hairline bottom edge — subtler than v1.
             Rectangle {
-                anchors.fill: parent
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: app.tokens.surface1 }
-                    GradientStop { position: 1.0; color: app.tokens.surface0 }
-                }
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    height: 1
-                    color: app.tokens.separator
-                }
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 1
+                color: app.tokens.separator
             }
             SearchBar {
                 id: searchBar
                 anchors.fill: parent
                 anchors.leftMargin: app.tokens.spaceXL
                 anchors.rightMargin: app.tokens.spaceXL
-                anchors.topMargin: app.tokens.spaceXL
-                anchors.bottomMargin: app.tokens.spaceXL
+                anchors.topMargin: app.tokens.spaceL + 2
+                anchors.bottomMargin: app.tokens.spaceL + 2
                 recentPathsModel: recentPaths
                 busy: page.controller.busy
                 onSubmitted: page.launchSearch()
@@ -90,7 +84,7 @@ Kirigami.Page {
         }
 
         // ============================================================
-        // Secondary action row — Stop / Clear + counter
+        // Secondary action row — Stop / Clear / AI assist + counter
         // ============================================================
         RowLayout {
             Layout.fillWidth: true
@@ -116,22 +110,58 @@ Kirigami.Page {
                 enabled: !page.controller.busy && page.controller.matchCount > 0
                 onClicked: page.controller.clearResults()
             }
+            Controls.Button {
+                id: aiToggle
+                flat: true
+                checkable: true
+                icon.name: "tools-symbolic"
+                text: qsTr("AI assist")
+                display: Controls.AbstractButton.TextBesideIcon
+                enabled: app.settingsController.aiSearchEnabled
+                Controls.ToolTip.visible: hovered && !enabled
+                Controls.ToolTip.text: qsTr("Enable AI in Settings → AI Search to use this panel.")
+                onCheckedChanged: checked ? aiDrawer.open() : aiDrawer.close()
+            }
             Item { Layout.fillWidth: true }
+            // Live status pill — match count + files, with a soft
+            // accent fill and animated counter shimmer. Mailspring
+            // uses similar pills for unread/important counters.
             Rectangle {
                 visible: page.controller.matchCount > 0
                 radius: app.tokens.radiusPill
                 color: app.tokens.accentMute
-                border.color: app.tokens.accent
+                border.color: Qt.rgba(app.tokens.accent.r,
+                                      app.tokens.accent.g,
+                                      app.tokens.accent.b, 0.45)
                 border.width: 1
-                implicitHeight: 22
-                implicitWidth: matchCountLabel.implicitWidth + app.tokens.spaceM * 2
-                Controls.Label {
-                    id: matchCountLabel
-                    anchors.centerIn: parent
-                    text: qsTr("%1 matches · %2 files").arg(page.controller.matchCount).arg(page.controller.filesMatched)
-                    font.pixelSize: app.tokens.textCaption
-                    font.weight: app.tokens.weightMedium
-                    color: app.tokens.accent
+                implicitHeight: 26
+                implicitWidth: matchCountLabel.implicitWidth + app.tokens.spaceL * 2 + 16
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: app.tokens.spaceM
+                    anchors.rightMargin: app.tokens.spaceL
+                    spacing: app.tokens.spaceXS
+                    Rectangle {
+                        Layout.preferredWidth: 6
+                        Layout.preferredHeight: 6
+                        radius: 3
+                        color: app.tokens.accent
+                        Layout.alignment: Qt.AlignVCenter
+                        SequentialAnimation on opacity {
+                            running: page.controller.busy
+                            loops: Animation.Infinite
+                            NumberAnimation { from: 1; to: 0.4; duration: 700 }
+                            NumberAnimation { from: 0.4; to: 1; duration: 700 }
+                        }
+                    }
+                    Controls.Label {
+                        id: matchCountLabel
+                        Layout.alignment: Qt.AlignVCenter
+                        text: qsTr("%1 matches · %2 files").arg(page.controller.matchCount).arg(page.controller.filesMatched)
+                        font.pixelSize: app.tokens.textCaption + 1
+                        font.weight: app.tokens.weightSemibold
+                        color: app.tokens.accent
+                    }
                 }
             }
         }
@@ -179,10 +209,14 @@ Kirigami.Page {
                 visible: resultList.count === 0 && !page.controller.busy
                 title: qsTr("Search anywhere on your system")
                 explanation: qsTr("Pick a folder, type a term, and we'll stream matches as they appear.")
+                // Suggestion chips use tilde paths — `start_search` runs
+                // them through `expand_tilde` before constructing
+                // `SearchOptions`, so `~/code` resolves to $HOME/code
+                // on whichever machine is running the binary.
                 chipsModel: [
-                    { label: qsTr("~/code · TODO"),       path: "/work/repos/visorcraft/grexa/crates", term: "TODO" },
-                    { label: qsTr("~ · fn\\s+\\w+_test"), path: ".",                                  term: "fn\\s+\\w+_test" },
-                    { label: qsTr("/etc · password"),     path: "/etc",                               term: "password" }
+                    { label: qsTr("~/code · TODO"),       path: "~/code",   term: "TODO" },
+                    { label: qsTr("~ · fn .* test"),      path: "~",        term: "fn\\s+\\w+_test" },
+                    { label: qsTr("/etc · password"),     path: "/etc",     term: "password" }
                 ]
                 onChipClicked: function(idx, data) {
                     page.applyExample(data.path, data.term)
@@ -214,12 +248,13 @@ Kirigami.Page {
         }
 
         // ============================================================
-        // Status footer
+        // Status footer — slim, generous side padding, semantic
+        // status pip on the left and monospace counters on the right.
         // ============================================================
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 30
-            color: app.tokens.surface1
+            Layout.preferredHeight: 32
+            color: app.tokens.surfaceSidebar
             Rectangle {
                 anchors.left: parent.left
                 anchors.right: parent.right
@@ -239,19 +274,37 @@ Kirigami.Page {
                          : page.controller.matchCount > 0 ? app.tokens.success
                          : app.tokens.separatorStrong
                     Behavior on color { ColorAnimation { duration: app.tokens.durationNormal } }
+                    // Soft pulsing halo while busy
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: parent.width + 6
+                        height: parent.height + 6
+                        radius: width / 2
+                        color: "transparent"
+                        border.color: app.tokens.warning
+                        border.width: 1
+                        opacity: page.controller.busy ? 0.6 : 0
+                        SequentialAnimation on opacity {
+                            running: page.controller.busy
+                            loops: Animation.Infinite
+                            NumberAnimation { from: 0.6; to: 0; duration: 900 }
+                            NumberAnimation { from: 0; to: 0.6; duration: 0 }
+                        }
+                    }
                 }
                 Controls.Label {
                     Layout.fillWidth: true
                     text: page.controller.statusText.length > 0 ? page.controller.statusText : qsTr("Ready")
-                    font.pixelSize: app.tokens.textCaption
-                    opacity: 0.75
+                    font.pixelSize: app.tokens.textCaption + 1
+                    font.family: app.tokens.sansFamily
+                    opacity: 0.72
                     elide: Text.ElideMiddle
                 }
                 Controls.Label {
                     visible: page.controller.filesScanned > 0
                     text: qsTr("scanned %1").arg(page.controller.filesScanned)
                     font.pixelSize: app.tokens.textCaption
-                    opacity: 0.45
+                    opacity: 0.5
                     font.family: app.tokens.monoFamily
                 }
                 Controls.Label {
@@ -277,5 +330,65 @@ Kirigami.Page {
 
     ContextPreviewDialog {
         id: contextPreview
+    }
+
+    // AI assist drawer — slides in from the right when the user
+    // clicks the "AI assist" toolbar button. Disabled (and the
+    // button greyed out) when ai_search_enabled is false; that
+    // toggle is the audited opt-in.
+    Controls.Drawer {
+        id: aiDrawer
+        edge: Qt.RightEdge
+        modal: false
+        interactive: true
+        dim: false
+        width: Math.min(page.width * 0.4, 460)
+        height: page.height
+        // `opened`/`position` are FINAL on Controls.Drawer — drive
+        // visibility via the parent's `open()`/`close()` calls
+        // (wired through `aiToggle.onCheckedChanged`) and reflect
+        // closure back to the toggle here.
+        onClosed: aiToggle.checked = false
+        onOpened: aiToggle.checked = true
+
+        Rectangle {
+            anchors.fill: parent
+            color: app.tokens.surface1
+            border.color: app.tokens.separator
+            border.width: 1
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: app.tokens.spaceL
+                spacing: app.tokens.spaceM
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Controls.Label {
+                        text: qsTr("AI assist")
+                        font.pixelSize: app.tokens.textSubheading
+                        font.weight: app.tokens.weightBold
+                        Layout.fillWidth: true
+                    }
+                    Controls.Button {
+                        flat: true
+                        icon.name: "window-close-symbolic"
+                        display: Controls.AbstractButton.IconOnly
+                        onClicked: aiDrawer.close()
+                    }
+                }
+                Controls.Label {
+                    Layout.fillWidth: true
+                    text: qsTr("Ask about the codebase. Your query is sent to the configured endpoint only when the panel is enabled in Settings.")
+                    font.pixelSize: app.tokens.textCaption
+                    opacity: 0.6
+                    wrapMode: Text.WordWrap
+                }
+                AiChatPanel {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                }
+            }
+        }
     }
 }

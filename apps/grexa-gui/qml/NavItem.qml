@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: 2026 VisorCraft LLC
 // SPDX-License-Identifier: GPL-3.0-only
 
-// Sidebar navigation entry.
+// Sidebar navigation entry — Mailspring-style.
 //
-// 32px tall · 18px icon · 13px label · subtle hover/press/active
-// states · 3px accent bar on the left of the active item, eased in.
+// 36px tall · 18px icon · 13px label · the active row paints a soft
+// accent-tinted pill across its whole width, with the icon and label
+// switching to the accent color. Hover gives a lighter wash; press
+// drops one more step. No left accent bar — the full-row fill does
+// the work.
 
 import QtQuick
 import QtQuick.Controls as Controls
@@ -13,7 +16,7 @@ import org.kde.kirigami as Kirigami
 
 Item {
     id: root
-    height: 32
+    height: app.tokens.navRowHeight
 
     property string label: ""
     property string iconName: ""
@@ -22,9 +25,11 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        anchors.leftMargin: 6
-        anchors.rightMargin: 6
-        radius: app.tokens.radiusButton
+        anchors.leftMargin: app.tokens.spaceS
+        anchors.rightMargin: app.tokens.spaceS
+        anchors.topMargin: 1
+        anchors.bottomMargin: 1
+        radius: app.tokens.radiusInput
         color: {
             if (root.active) return app.tokens.accentMute
             if (mouseArea.containsPress) return app.tokens.surface2
@@ -32,19 +37,15 @@ Item {
             return "transparent"
         }
         Behavior on color { ColorAnimation { duration: app.tokens.durationSnap } }
-    }
 
-    // Active accent bar (just to the right of the left padding)
-    Rectangle {
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.leftMargin: 2
-        width: 3
-        height: 16
-        radius: 1.5
-        color: app.tokens.accent
-        opacity: root.active ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: app.tokens.durationSnap } }
+        // Faint accent edge on the active row — adds depth without
+        // a separate left bar. Mailspring uses something close to
+        // this on the focused account row.
+        border.color: root.active ? Qt.rgba(app.tokens.accent.r,
+                                            app.tokens.accent.g,
+                                            app.tokens.accent.b, 0.25)
+                                  : "transparent"
+        border.width: 1
     }
 
     RowLayout {
@@ -55,18 +56,22 @@ Item {
 
         Kirigami.Icon {
             source: root.iconName
-            implicitWidth: 16
-            implicitHeight: 16
+            implicitWidth: 18
+            implicitHeight: 18
             color: root.active ? app.tokens.accent : Kirigami.Theme.textColor
             opacity: root.active ? 1.0 : 0.75
             isMask: true
+            Behavior on color { ColorAnimation { duration: app.tokens.durationSnap } }
         }
         Controls.Label {
             text: root.label
             font.pixelSize: app.tokens.textBody
-            font.weight: root.active ? app.tokens.weightMedium : app.tokens.weightNormal
-            opacity: root.active ? 1.0 : 0.85
+            font.family: app.tokens.sansFamily
+            font.weight: root.active ? app.tokens.weightSemibold : app.tokens.weightNormal
+            color: root.active ? app.tokens.accent : Kirigami.Theme.textColor
+            opacity: root.active ? 1.0 : 0.88
             Layout.fillWidth: true
+            Behavior on color { ColorAnimation { duration: app.tokens.durationSnap } }
         }
     }
 

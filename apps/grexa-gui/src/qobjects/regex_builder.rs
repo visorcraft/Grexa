@@ -13,6 +13,7 @@ use std::pin::Pin;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
 use grexa_core::PatternEngine;
+use serde_json;
 
 #[cxx_qt::bridge]
 pub mod ffi {
@@ -36,6 +37,14 @@ pub mod ffi {
         /// `match_count` and `error`.
         #[qinvokable]
         fn evaluate(self: Pin<&mut RegexBuilderController>);
+
+        /// Return the byte offsets of every match in `sample` against
+        /// the current `pattern` / `case_insensitive` as a JSON array
+        /// of `[start, end]` pairs. QML uses these to draw a highlight
+        /// overlay that is guaranteed to agree with `match_count` —
+        /// no JS regex engine is involved.
+        #[qinvokable]
+        fn match_ranges_json(self: &RegexBuilderController) -> QString;
     }
 }
 
@@ -62,6 +71,21 @@ impl RegexBuilderControllerRust {
             Err(err) => (0, err.to_string()),
         }
     }
+
+    /// JSON-encoded `[[start, end], ...]` pairs of byte offsets in
+    /// `sample`. Returns `"[]"` when the pattern is empty or invalid.
+    pub fn match_ranges_json_str(pattern: &str, sample: &str, case_insensitive: bool) -> String {
+        if pattern.is_empty() {
+            return "[]".into();
+        }
+        match PatternEngine::build(pattern, case_insensitive) {
+            Ok(engine) => {
+                let ranges = engine.find_iter(sample);
+                serde_json::to_string(&ranges).unwrap_or_else(|_| "[]".into())
+            }
+            Err(_) => "[]".into(),
+        }
+    }
 }
 
 impl ffi::RegexBuilderController {
@@ -72,6 +96,15 @@ impl ffi::RegexBuilderController {
         let (count, err) = RegexBuilderControllerRust::evaluate_strings(&pattern, &sample, ci);
         self.as_mut().set_match_count(count);
         self.as_mut().set_error(QString::from(&err));
+    }
+
+    fn match_ranges_json(&self) -> QString {
+        let r = self.rust();
+        QString::from(&RegexBuilderControllerRust::match_ranges_json_str(
+            &r.pattern.to_string(),
+            &r.sample.to_string(),
+            r.case_insensitive,
+        ))
     }
 }
 
@@ -99,5 +132,21 @@ mod tests {
         let (count, err) = RegexBuilderControllerRust::evaluate_strings("", "any", false);
         assert_eq!(count, 0);
         assert_eq!(err, "");
+    }
+
+    #[test]
+    fn match_ranges_json_emits_pairs() {
+        let json = RegexBuilderControllerRust::match_ranges_json_str(
+            "TODO",
+            "TODO 1\nTODO 2\nplain",
+            false,
+        );
+        assert_eq!(json, "[[0,4],[7,11]]");
+    }
+
+    #[test]
+    fn match_ranges_json_returns_empty_array_on_error() {
+        let json = RegexBuilderControllerRust::match_ranges_json_str("(", "irrelevant", false);
+        assert_eq!(json, "[]");
     }
 }

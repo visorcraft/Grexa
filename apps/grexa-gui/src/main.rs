@@ -77,9 +77,31 @@ fn main() {
         return;
     }
 
+    // Wire `objectCreationFailed` so a broken QML payload yields a
+    // loud log line instead of an empty window with a silent event
+    // loop. The signal fires for every root URL that fails to load
+    // (Qt 6.4+); the only realistic root in our binary is Main.qml,
+    // so any fire is fatal — set a flag and short-circuit before
+    // `exec()` starts.
+    let load_failed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    if let Some(engine) = engine.as_mut() {
+        let flag = load_failed.clone();
+        engine
+            .on_object_creation_failed(move |_pin, url| {
+                tracing::error!("QML failed to load: {}", url.to_string());
+                flag.store(true, std::sync::atomic::Ordering::SeqCst);
+            })
+            .release();
+    }
+
     if let Some(engine) = engine.as_mut() {
         let url = QUrl::from("qrc:/qt/qml/com/visorcraft/Grexa/qml/Main.qml");
         engine.load(&url);
+    }
+
+    if load_failed.load(std::sync::atomic::Ordering::SeqCst) {
+        tracing::error!("QML payload did not instantiate — exiting before the event loop.");
+        std::process::exit(2);
     }
 
     if let Some(app) = app.as_mut() {

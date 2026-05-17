@@ -30,36 +30,42 @@ Kirigami.Page {
     }
 
     function refreshHighlight() {
-        const pattern = patternField.text
         const sample = sampleArea.text
-        if (pattern.length === 0 || controller.error.length > 0) {
-            sampleArea.markdownText = sample
-            sampleArea.text = sample
+        if (patternField.text.length === 0 || controller.error.length > 0) {
+            sampleHighlight.text = ""
             return
         }
+        // Single source of truth: ask the Rust controller for the
+        // exact byte ranges its engine matched. The JS regex engine
+        // is no longer in the loop, so the highlight cannot drift
+        // from the match-count badge.
+        let ranges = []
         try {
-            const flags = caseInsensitive.checked ? "gi" : "g"
-            const re = new RegExp(pattern, flags)
-            // Build rich text with inline <mark> spans.
-            let html = ""
-            let last = 0
-            let m
-            while ((m = re.exec(sample)) !== null) {
-                if (m.index === re.lastIndex) re.lastIndex++
-                html += escapeHtml(sample.substring(last, m.index))
-                html += "<span style='background-color:"
-                    + app.tokens.matchTint.toString()
-                    + "; padding:0 2px;'>"
-                    + escapeHtml(m[0])
-                    + "</span>"
-                last = m.index + m[0].length
-            }
-            html += escapeHtml(sample.substring(last))
-            sampleArea.textFormat = TextEdit.RichText
-            sampleHighlight.text = "<pre style='font-family:monospace;'>" + html + "</pre>"
-        } catch (e) {
+            ranges = JSON.parse(controller.matchRangesJson())
+        } catch (_e) {
             sampleHighlight.text = ""
+            return
         }
+        if (ranges.length === 0) {
+            sampleHighlight.text = ""
+            return
+        }
+        let html = ""
+        let last = 0
+        const tint = app.rgbaCss(app.tokens.matchTint)
+        for (let i = 0; i < ranges.length; ++i) {
+            const start = ranges[i][0]
+            const end   = ranges[i][1]
+            if (start < last) continue   // overlapping ranges — keep monotonic
+            html += escapeHtml(sample.substring(last, start))
+            html += "<span style='background-color:" + tint
+                + "; padding:0 2px;'>"
+                + escapeHtml(sample.substring(start, end))
+                + "</span>"
+            last = end
+        }
+        html += escapeHtml(sample.substring(last))
+        sampleHighlight.text = "<pre style='font-family:monospace;'>" + html + "</pre>"
     }
 
     function escapeHtml(s) {
@@ -86,19 +92,16 @@ Kirigami.Page {
         spacing: 0
 
         // -- Header
-        Item {
+        Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 64
+            Layout.preferredHeight: 76
+            color: app.tokens.surface0
             Rectangle {
-                anchors.fill: parent
-                color: app.tokens.surface0
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    height: 1
-                    color: app.tokens.separator
-                }
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 1
+                color: app.tokens.separator
             }
             RowLayout {
                 anchors.fill: parent
@@ -107,15 +110,18 @@ Kirigami.Page {
                 spacing: app.tokens.spaceM
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 0
+                    spacing: 1
                     Controls.Label {
                         text: qsTr("Regex Builder")
                         font.pixelSize: app.tokens.textHeading
                         font.weight: app.tokens.weightBold
+                        font.family: app.tokens.sansFamily
+                        font.letterSpacing: -0.3
                     }
                     Controls.Label {
                         text: qsTr("Test patterns against sample text — same engine the search uses.")
-                        font.pixelSize: app.tokens.textCaption
+                        font.pixelSize: app.tokens.textCaption + 1
+                        font.family: app.tokens.sansFamily
                         opacity: 0.6
                     }
                 }
@@ -173,19 +179,26 @@ Kirigami.Page {
                         radius: app.tokens.radiusPill
                         property bool selected: page.activePreset === index
                         color: selected ? app.tokens.accentMute
-                            : chipMouse.containsMouse ? app.tokens.surface2
+                            : chipMouse.containsPress ? app.tokens.surface2
+                            : chipMouse.containsMouse ? app.tokens.accentMute
                             : app.tokens.surface1
-                        border.color: selected ? app.tokens.accent : app.tokens.separator
+                        border.color: selected || chipMouse.containsMouse
+                            ? app.tokens.accent : app.tokens.separatorStrong
                         border.width: 1
-                        implicitHeight: 28
+                        implicitHeight: 32
                         implicitWidth: presetLabel.implicitWidth + app.tokens.spaceL * 2
+                        Behavior on color { ColorAnimation { duration: app.tokens.durationSnap } }
+                        Behavior on border.color { ColorAnimation { duration: app.tokens.durationSnap } }
                         Controls.Label {
                             id: presetLabel
                             anchors.centerIn: parent
                             text: modelData.name
-                            font.pixelSize: app.tokens.textCaption
-                            font.weight: selected ? app.tokens.weightMedium : app.tokens.weightNormal
-                            color: selected ? app.tokens.accent : Kirigami.Theme.textColor
+                            font.pixelSize: app.tokens.textCaption + 1
+                            font.family: app.tokens.sansFamily
+                            font.weight: selected ? app.tokens.weightSemibold : app.tokens.weightMedium
+                            color: selected || chipMouse.containsMouse ? app.tokens.accent : Kirigami.Theme.textColor
+                            opacity: selected || chipMouse.containsMouse ? 1.0 : 0.85
+                            Behavior on color { ColorAnimation { duration: app.tokens.durationSnap } }
                         }
                         MouseArea {
                             id: chipMouse

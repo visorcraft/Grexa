@@ -27,6 +27,29 @@ use grexa_core::{
 
 use super::workspace_handle::with_workspace;
 
+/// Resolve a leading `~/` against `$HOME`. The empty-state chips,
+/// recent-paths combo, and Workspace history all advertise tilde
+/// paths — without this the search engine errors with
+/// `PathNotFound("~/code")`.
+fn expand_tilde(path: &str) -> String {
+    let home = std::env::var_os("HOME");
+    if let Some(rest) = path.strip_prefix("~/")
+        && let Some(home) = home.as_ref()
+    {
+        let mut p = std::path::PathBuf::from(home);
+        p.push(rest);
+        return p.to_string_lossy().into_owned();
+    }
+    if path == "~"
+        && let Some(home) = home
+    {
+        return std::path::PathBuf::from(home)
+            .to_string_lossy()
+            .into_owned();
+    }
+    path.to_string()
+}
+
 /// How many matches the worker collects before queueing a batch hop to
 /// the GUI thread. Tuned for 16ms render budget at typical match
 /// preview widths.
@@ -202,6 +225,10 @@ pub struct SearchControllerRust {
     recent_path_count: i32,
     rows: Vec<ResultRow>,
     cancel_token: Option<CancelToken>,
+    /// Monotonic counter incremented on every `start_search`. Late
+    /// `thread.queue` hops from a prior worker compare their captured
+    /// generation against this and drop themselves when stale.
+    active_generation: u64,
 }
 
 impl SearchControllerRust {
@@ -261,19 +288,25 @@ impl ffi::SearchController {
         case_sensitive: bool,
         whole_word: bool,
     ) {
-        // Cancel any in-flight search so we don't end up with two workers
-        // pushing into the same model.
+        // Cancel any in-flight search so we don't end up with two
+        // workers pushing into the same model.
         if let Some(token) = self.as_ref().rust().cancel_token.clone() {
             token.cancel();
         }
 
-        // Clear the model up-front so QML sees the reset before rows start
-        // streaming in.
+        // Bump the generation. Closures queued by the prior worker
+        // capture the old value and become no-ops; everything queued
+        // from this point on captures the new one.
+        let generation = self.as_ref().rust().active_generation.wrapping_add(1);
+        self.as_mut().rust_mut().active_generation = generation;
+
+        // Clear the model up-front so QML sees the reset before rows
+        // start streaming in.
         unsafe { self.as_mut().begin_reset_model() };
         self.as_mut().rust_mut().rows.clear();
         unsafe { self.as_mut().end_reset_model() };
 
-        let path_str = path.to_string();
+        let path_str = expand_tilde(&path.to_string());
         let term_str = term.to_string();
         let cancel = CancelToken::new();
         self.as_mut().rust_mut().cancel_token = Some(cancel.clone());
@@ -284,12 +317,26 @@ impl ffi::SearchController {
         self.as_mut().set_busy(true);
         self.as_mut().set_status_text(QString::from("Searching…"));
 
+        // Forward the persisted Settings into the SearchOptions so
+        // toggles like `Respect .gitignore`, `Include hidden`, the
+        // default match-files glob, etc. actually shape this search.
+        // The fast/slow boolean flags from the SearchBar override
+        // settings for *this* invocation only.
         let mut options = SearchOptions::new(PathBuf::from(&path_str), &term_str);
         options.regex = regex;
         options.case_sensitive = case_sensitive;
-        // SearchOptions doesn't expose a whole-word toggle yet; tracked
-        // for Phase 4 follow-up. The QML side passes the flag so the
-        // wiring is in place when the core lands it.
+        let settings = with_workspace(|w| w.settings.load().unwrap_or_default());
+        options.respect_gitignore = settings.respect_gitignore;
+        options.include_hidden = settings.include_hidden_items;
+        options.include_binary = settings.include_binary_files;
+        options.include_system = settings.include_system_files;
+        options.include_subfolders = settings.include_subfolders;
+        options.include_symlinks = settings.include_symbolic_links;
+        options.match_file_names = settings.default_match_files.clone();
+        options.exclude_dirs = settings.default_exclude_dirs.clone();
+        // Whole-word filtering isn't yet exposed in `SearchOptions`;
+        // tracked as a real follow-up against grexa-core, not a
+        // silent drop. When that lands, set `options.whole_word`.
         let _ = whole_word;
 
         let thread = self.qt_thread();
@@ -308,7 +355,7 @@ impl ffi::SearchController {
                     let _ = thread.queue(move |pin| {
                         let scanned_i32 = scanned as i32;
                         let matched_i32 = matched as i32;
-                        push_rows(pin, rows, scanned_i32, matched_i32);
+                        push_rows(pin, generation, rows, scanned_i32, matched_i32);
                     });
                 };
 
@@ -336,7 +383,7 @@ impl ffi::SearchController {
 
             let cancelled = cancel.is_cancelled();
             let _ = thread.queue(move |pin| {
-                finish_search(pin, outcome, cancelled, &path_str);
+                finish_search(pin, generation, outcome, cancelled, &path_str);
             });
         });
     }
@@ -378,7 +425,15 @@ impl ffi::SearchController {
             return QString::from("(invalid line number)");
         }
         let path = std::path::PathBuf::from(path.to_string());
-        match context_preview(&path, line as usize, 5, 5) {
+        // Read the user-configured ±N from the persisted Settings,
+        // clamping to grexa-core's 0..=50 range. Falls back to 5/5
+        // (the historical default in the audit) when settings can't
+        // be read for some reason.
+        let (before, after) = with_workspace(|w| {
+            let s = w.settings.load().unwrap_or_default();
+            (s.context_preview_lines_before.min(50), s.context_preview_lines_after.min(50))
+        });
+        match context_preview(&path, line as usize, before, after) {
             Ok(result) => {
                 let mut buf = String::new();
                 for ln in &result.lines {
@@ -426,16 +481,20 @@ impl ffi::SearchController {
 
 fn push_rows(
     mut pin: Pin<&mut ffi::SearchController>,
+    generation: u64,
     rows: Vec<ResultRow>,
     files_scanned: i32,
     files_matched: i32,
 ) {
+    // Drop hops from a prior search whose generation no longer
+    // matches the controller's current one — see `start_search`.
+    if pin.as_ref().rust().active_generation != generation {
+        return;
+    }
     if rows.is_empty() {
         return;
     }
     let parent = QModelIndex::default();
-    // Two-step append: peek the range first so we can wrap the actual
-    // mutation in `begin_insert_rows` / `end_insert_rows`.
     let preview_first = pin.as_ref().rust().row_count();
     let preview_last = preview_first + rows.len() as i32 - 1;
     unsafe {
@@ -457,10 +516,16 @@ fn push_rows(
 
 fn finish_search(
     mut pin: Pin<&mut ffi::SearchController>,
+    generation: u64,
     outcome: Result<grexa_core::SearchSummary, grexa_core::SearchError>,
     cancelled: bool,
     path_str: &str,
 ) {
+    // Same generation gate as `push_rows`: ignore late finishes
+    // from a search that the user has already superseded.
+    if pin.as_ref().rust().active_generation != generation {
+        return;
+    }
     pin.as_mut().set_busy(false);
     match outcome {
         Ok(summary) => {
