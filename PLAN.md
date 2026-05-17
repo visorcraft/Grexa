@@ -630,22 +630,40 @@ When the maintainer cuts `v0.1.0-alpha` / `v1.0.0`:
 - Fill the release notes template at
   `docs/release-notes-template.md` and tag.
 
-## Dedicated follow-up PR
+## Rust ⇄ Qt bridge
 
-The Qt cxx-qt build pipeline is the one outstanding piece of code
-work. It is intentionally scoped to a single follow-up PR:
+`cargo run -p grexa` boots the full Qt event loop via `qmetaobject`
+and loads the Kirigami QML shell. The cxx-qt 0.8 path was attempted
+and rejected — its `cxx-qt-build` link pipeline depends on a
+CMake-driven initializer registry that's hostile to a Cargo-only
+workspace (`undefined symbol: cxx_qt_init_crate_cxx_qt_lib`).
+qmetaobject is the production bridge until cxx-qt ships a pure-Cargo
+flow.
 
-- Add `cxx-qt` / `cxx-qt-build` / `cxx-qt-lib` to
-  `apps/grexa-gui/Cargo.toml`.
-- Add a minimal `CMakeLists.txt` and document the dual Cargo + CMake
-  build.
-- Stand up the QObject wrappers around `Workspace`, `TabState`,
-  `AiSearchClient`, and the `ContextPreviewResult` model.
-- Drop the `qml6`-spawn fallback in `apps/grexa-gui/src/main.rs`.
+Verification:
 
-Until that PR lands, `cargo run -p grexa` runs the placeholder pages
-via `qml6`. The Rust side is feature-complete; the cxx-qt PR is a
-"plumbing replacement" rather than new functionality.
+    $ QT_QPA_PLATFORM=offscreen target/release/grexa
+    INFO  Grexa GUI shell starting
+    $ echo $?
+    0
+
+Decision and module map: `docs/gui-design.md`.
+
+## Optional follow-ups
+
+Nice-to-haves, not blockers for 1.0:
+
+- Migrate `qobjects.rs` from `qmetaobject` to `cxx_qt::bridge` once
+  the cxx-qt build chain is friendlier (or once Grexa CI hosts ship
+  CMake). qmetaobject is fine for v1.0; cxx-qt's compile-time-typed
+  property notifications are a quality-of-life upgrade.
+- Layer ICU4X under the `--comparison current-culture` matrix to
+  honor Turkish-i / German ß / Greek sigma. Audit + 43-case fixture
+  matrix already in `docs/grex-culture-comparison-audit.md`.
+- Land the live container-daemon test matrix behind a
+  `container-live` Cargo feature.
+- Land the byte-offset multi-hit-per-line grep parser for richer
+  container result columns.
 
 ## Non-Goals
 
