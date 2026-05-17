@@ -34,6 +34,11 @@ install -m644 packaging/io.visorcraft.Grexa.metainfo.xml \
     "$APP_DIR/usr/share/metainfo/io.visorcraft.Grexa.metainfo.xml"
 install -m644 packaging/icons/scalable/io.visorcraft.Grexa.svg \
     "$APP_DIR/usr/share/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg"
+for sz in 16 24 32 48 64 96 128 192 256 512; do
+    mkdir -p "$APP_DIR/usr/share/icons/hicolor/${sz}x${sz}/apps"
+    install -m644 "packaging/icons/${sz}x${sz}/apps/io.visorcraft.Grexa.png" \
+        "$APP_DIR/usr/share/icons/hicolor/${sz}x${sz}/apps/io.visorcraft.Grexa.png"
+done
 
 "$APP_DIR/usr/bin/grexa-cli" manpage > "$APP_DIR/usr/share/man/man1/grexa-cli.1"
 

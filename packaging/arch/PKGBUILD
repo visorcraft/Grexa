@@ -56,6 +56,12 @@ package() {
         "${pkgdir}/usr/share/metainfo/io.visorcraft.Grexa.metainfo.xml"
     install -Dm644 packaging/icons/scalable/io.visorcraft.Grexa.svg \
         "${pkgdir}/usr/share/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg"
+    # Sized PNG icons for taskbars / HiDPI panels that don't render the
+    # scalable SVG cleanly at small sizes.
+    for sz in 16 24 32 48 64 96 128 192 256 512; do
+        install -Dm644 "packaging/icons/${sz}x${sz}/apps/io.visorcraft.Grexa.png" \
+            "${pkgdir}/usr/share/icons/hicolor/${sz}x${sz}/apps/io.visorcraft.Grexa.png"
+    done
 
     "${pkgdir}/usr/bin/grexa-cli" manpage \
         | install -Dm644 /dev/stdin "${pkgdir}/usr/share/man/man1/grexa-cli.1"

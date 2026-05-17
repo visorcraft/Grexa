@@ -107,6 +107,30 @@ pub mod ffi {
         #[qproperty(i32, files_scanned)]
         #[qproperty(bool, busy)]
         #[qproperty(i32, recent_path_count)]
+        // 0 = Local, 1 = Docker, 2 = Podman (rootless), 3 = Podman (rootful).
+        // QML target-selector dropdown writes here; `start_search` reads
+        // it to dispatch between grexa-core and grexa-containers.
+        #[qproperty(i32, target_kind)]
+        // When `target_kind != Local`, this is the container ID the
+        // user picked from the runtime's list. Empty otherwise.
+        #[qproperty(QString, selected_container_id)]
+        // 0 = Content (one row per match), 1 = Files (one row per file).
+        // The model deduplicates rows when `result_mode == 1`.
+        #[qproperty(i32, result_mode)]
+        // Search-within-results filter. Empty disables the filter.
+        // When `within_regex` is true, treated as a regex pattern;
+        // otherwise plain substring match.
+        #[qproperty(QString, within_filter)]
+        #[qproperty(bool, within_regex)]
+        // Replace pipeline state. `replacing` is the analogue of
+        // `busy` for replace operations.
+        #[qproperty(QString, replace_term)]
+        #[qproperty(bool, replacing)]
+        #[qproperty(QString, last_replace_summary)]
+        // True once the user has clicked Search at least this session —
+        // lets the empty state distinguish "haven't searched yet"
+        // (false) from "searched, no matches" (true && match_count==0).
+        #[qproperty(bool, has_searched)]
         type SearchController = super::SearchControllerRust;
 
         /// Start an asynchronous search. The current results are cleared
@@ -135,6 +159,17 @@ pub mod ffi {
         #[qinvokable]
         fn recent_paths_json(self: &SearchController) -> QString;
 
+        /// Add `path` to the recent-paths store. Idempotent; the store
+        /// dedupes. Used by the folder-picker dialog to remember
+        /// browsed locations without requiring a successful search.
+        #[qinvokable]
+        fn add_recent_path(self: Pin<&mut SearchController>, path: &QString);
+
+        /// Remove `path` from the recent-paths store. Used by the
+        /// combobox's per-entry × affordance.
+        #[qinvokable]
+        fn remove_recent_path(self: Pin<&mut SearchController>, path: &QString);
+
         /// Read a single property of a row from QML — used by context
         /// menus / dialogs that need a value outside the delegate.
         #[qinvokable]
@@ -147,6 +182,54 @@ pub mod ffi {
         #[qinvokable]
         fn preview_at(self: &SearchController, path: &QString, line: i32) -> QString;
 
+        // ---- Result row context menu actions --------------------
+
+        /// Open the file in the configured editor. Falls back to
+        /// `xdg-open` when no preset is configured. Non-blocking — the
+        /// editor process is detached from grexa.
+        #[qinvokable]
+        fn open_in_editor(self: &SearchController, path: &QString, line: i32);
+
+        /// Highlight the file in the user's file manager via the
+        /// FileManager1 D-Bus interface, falling back to `xdg-open`
+        /// on the parent directory.
+        #[qinvokable]
+        fn reveal_in_file_manager(self: &SearchController, path: &QString);
+
+        /// Copy arbitrary text to the system clipboard. Implementation
+        /// shells to `wl-copy` (Wayland) or `xclip` (X11) — both are
+        /// commonly available on KDE/GNOME hosts and ship in Flatpak
+        /// base runtimes.
+        #[qinvokable]
+        fn copy_to_clipboard(self: &SearchController, text: &QString);
+
+        // ---- Container search dispatch --------------------------
+
+        /// Detect available container runtimes (Docker, Podman
+        /// rootless, Podman rootful) and list containers for each.
+        /// Returns a JSON object: `{ "runtimes": [...], "containers": [...] }`.
+        /// Used by the target-selector dropdown.
+        #[qinvokable]
+        fn containers_json(self: &SearchController) -> QString;
+
+        // ---- Replace pipeline -----------------------------------
+
+        /// Run the replace flow on the current path + term + filters
+        /// (mirrors the last search). Streams the replace summary back
+        /// via `replace_completed` and sets `result_mode = Files` on
+        /// success (matching Grex's behavior). Refuses for container
+        /// targets and when no search has run.
+        #[qinvokable]
+        fn start_replace(self: Pin<&mut SearchController>, replacement: &QString);
+
+        // ---- View refinement ------------------------------------
+
+        /// Re-apply `within_filter` + `result_mode` against the
+        /// current row set and notify QML via a model reset. Cheap
+        /// because filtering operates on already-decoded rows.
+        #[qinvokable]
+        fn refresh_view(self: Pin<&mut SearchController>);
+
         /// Fired when the recent-paths list grows or shrinks.
         #[qsignal]
         fn history_changed(self: Pin<&mut SearchController>);
@@ -155,6 +238,13 @@ pub mod ffi {
         /// indicates whether the search was stopped before completing.
         #[qsignal]
         fn search_completed(self: Pin<&mut SearchController>, cancelled: bool);
+
+        /// Fired exactly once when a replace operation ends.
+        /// `success` is false when the engine returned an error;
+        /// otherwise `last_replace_summary` holds the JSON-encoded
+        /// `ReplaceSummary`.
+        #[qsignal]
+        fn replace_completed(self: Pin<&mut SearchController>, success: bool);
     }
 
     // QAbstractListModel overrides.
@@ -223,7 +313,29 @@ pub struct SearchControllerRust {
     files_scanned: i32,
     busy: bool,
     recent_path_count: i32,
+    target_kind: i32,
+    selected_container_id: QString,
+    result_mode: i32,
+    within_filter: QString,
+    within_regex: bool,
+    replace_term: QString,
+    replacing: bool,
+    last_replace_summary: QString,
+    has_searched: bool,
+    /// All rows the search emitted, before any view-level filtering
+    /// or files-mode deduplication.
     rows: Vec<ResultRow>,
+    /// Indices into `rows` that survive the current `within_filter`
+    /// and `result_mode` view rules. The QAbstractListModel layer
+    /// projects through this — `row_count` returns `visible.len()`,
+    /// `row_data(i)` reads `rows[visible[i]]`.
+    visible: Vec<usize>,
+    /// The last successful search's path + term + flags. Replace and
+    /// "refresh view" both replay against these.
+    last_path: String,
+    last_term: String,
+    last_regex: bool,
+    last_case_sensitive: bool,
     cancel_token: Option<CancelToken>,
     /// Monotonic counter incremented on every `start_search`. Late
     /// `thread.queue` hops from a prior worker compare their captured
@@ -234,25 +346,42 @@ pub struct SearchControllerRust {
 impl SearchControllerRust {
     /// Append a batch of rows to the model. Returns the (first_idx, last_idx)
     /// pair the caller should pass to `beginInsertRows` / `endInsertRows`.
+    /// Indices are *visible* indices — when files-mode dedup or
+    /// within-filter is active, the returned pair already accounts
+    /// for which of the appended rows are actually visible.
     pub fn append_batch(&mut self, batch: Vec<ResultRow>) -> Option<(i32, i32)> {
         if batch.is_empty() {
             return None;
         }
-        let first = self.rows.len() as i32;
-        let last = first + batch.len() as i32 - 1;
+        let visible_before = self.visible.len();
+        let new_start = self.rows.len();
+        let mut keep: Vec<usize> = Vec::new();
+        for (i, row) in batch.iter().enumerate() {
+            if self.row_passes_view(row) {
+                keep.push(new_start + i);
+            }
+        }
         self.rows.extend(batch);
+        if keep.is_empty() {
+            return None;
+        }
+        let first = visible_before as i32;
+        let last = first + keep.len() as i32 - 1;
+        self.visible.extend(keep);
         Some((first, last))
     }
 
-    /// Row count for `QAbstractListModel::rowCount`.
+    /// Row count for `QAbstractListModel::rowCount`. Reflects the
+    /// view (within-filter + files-mode dedup), not raw `rows.len()`.
     pub fn row_count(&self) -> i32 {
-        self.rows.len() as i32
+        self.visible.len() as i32
     }
 
     /// Read a row's data for a given role. Returns `None` for out-of-range
     /// indices or unknown roles.
     pub fn row_data(&self, row: usize, role: i32) -> Option<String> {
-        let r = self.rows.get(row)?;
+        let idx = *self.visible.get(row)?;
+        let r = self.rows.get(idx)?;
         Some(match role {
             role::PATH => r.full_path.to_string_lossy().into_owned(),
             role::RELATIVE_PATH => r.relative_path.to_string_lossy().into_owned(),
@@ -263,6 +392,60 @@ impl SearchControllerRust {
             role::PREVIEW_AFTER => r.preview_after.clone(),
             _ => return None,
         })
+    }
+
+    /// True when the given row should appear in the visible list
+    /// given the current `result_mode` and `within_filter`. Files
+    /// mode drops the row if a prior row with the same `full_path`
+    /// is already in `visible`.
+    fn row_passes_view(&self, row: &ResultRow) -> bool {
+        // Within-filter: substring or regex against the preview line.
+        let within = self.within_filter.to_string();
+        let trimmed = within.trim();
+        if !trimmed.is_empty() {
+            let line = format!("{}{}{}", row.preview_before, row.preview_match, row.preview_after);
+            let matched = if self.within_regex {
+                match regex::Regex::new(trimmed) {
+                    Ok(re) => re.is_match(&line),
+                    Err(_) => false,
+                }
+            } else {
+                let needle = trimmed.to_lowercase();
+                line.to_lowercase().contains(&needle)
+            };
+            if !matched {
+                return false;
+            }
+        }
+
+        // Files mode: keep only the first row per file.
+        if self.result_mode == 1 {
+            let already_visible = self.visible.iter().any(|&i| {
+                self.rows.get(i).map(|r| r.full_path == row.full_path).unwrap_or(false)
+            });
+            if already_visible {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Recompute `visible` from scratch. O(rows.len()). Called when
+    /// `within_filter`, `within_regex`, or `result_mode` changes.
+    pub fn rebuild_visible(&mut self) {
+        self.visible.clear();
+        // Take ownership of rows briefly so we can borrow `self` for
+        // `row_passes_view` against an empty `visible`. Files-mode
+        // dedup needs to look at `visible`-so-far, so we push as we
+        // go rather than collecting first.
+        let rows = std::mem::take(&mut self.rows);
+        for (i, row) in rows.iter().enumerate() {
+            if self.row_passes_view(row) {
+                self.visible.push(i);
+            }
+        }
+        self.rows = rows;
     }
 
     /// Recent paths as a JSON array string.
@@ -303,19 +486,66 @@ impl ffi::SearchController {
         // Clear the model up-front so QML sees the reset before rows
         // start streaming in.
         unsafe { self.as_mut().begin_reset_model() };
-        self.as_mut().rust_mut().rows.clear();
+        {
+            let mut s = self.as_mut().rust_mut();
+            s.rows.clear();
+            s.visible.clear();
+        }
         unsafe { self.as_mut().end_reset_model() };
 
         let path_str = expand_tilde(&path.to_string());
         let term_str = term.to_string();
         let cancel = CancelToken::new();
-        self.as_mut().rust_mut().cancel_token = Some(cancel.clone());
+        {
+            let mut s = self.as_mut().rust_mut();
+            s.cancel_token = Some(cancel.clone());
+            // Remember the search shape so `start_replace` can replay
+            // it against the same scope without the QML having to
+            // re-supply every field.
+            s.last_path = path_str.clone();
+            s.last_term = term_str.clone();
+            s.last_regex = regex;
+            s.last_case_sensitive = case_sensitive;
+        }
 
         self.as_mut().set_match_count(0);
         self.as_mut().set_files_matched(0);
         self.as_mut().set_files_scanned(0);
         self.as_mut().set_busy(true);
+        self.as_mut().set_has_searched(true);
         self.as_mut().set_status_text(QString::from("Searching…"));
+
+        // Container target — dispatch to grexa-containers and skip the
+        // local search-engine path entirely.
+        let target_kind = self.as_ref().rust().target_kind;
+        if target_kind != 0 {
+            let container_id = self.as_ref().rust().selected_container_id.to_string();
+            if container_id.trim().is_empty() {
+                self.as_mut().set_busy(false);
+                self.as_mut().set_status_text(QString::from(
+                    "Pick a container in the target selector before searching.",
+                ));
+                self.as_mut().search_completed(false);
+                return;
+            }
+            let thread = self.qt_thread();
+            let path_for_container = path_str.clone();
+            let term_for_container = term_str.clone();
+            std::thread::spawn(move || {
+                let summary = run_container_search(
+                    target_kind,
+                    &container_id,
+                    &path_for_container,
+                    &term_for_container,
+                    regex,
+                    case_sensitive,
+                );
+                let _ = thread.queue(move |pin| {
+                    finish_container_search(pin, generation, summary);
+                });
+            });
+            return;
+        }
 
         // Forward the persisted Settings into the SearchOptions so
         // toggles like `Respect .gitignore`, `Include hidden`, the
@@ -399,22 +629,62 @@ impl ffi::SearchController {
 
     fn clear_results(mut self: Pin<&mut Self>) {
         unsafe { self.as_mut().begin_reset_model() };
-        self.as_mut().rust_mut().rows.clear();
+        {
+            let mut s = self.as_mut().rust_mut();
+            s.rows.clear();
+            s.visible.clear();
+        }
         unsafe { self.as_mut().end_reset_model() };
         self.as_mut().set_match_count(0);
         self.as_mut().set_files_matched(0);
         self.as_mut().set_files_scanned(0);
+        self.as_mut().set_has_searched(false);
     }
 
     fn recent_paths_json(&self) -> QString {
         QString::from(&self.rust().recent_paths_json_string())
     }
 
+    fn add_recent_path(mut self: Pin<&mut Self>, path: &QString) {
+        let path_str = expand_tilde(&path.to_string());
+        let trimmed = path_str.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+        let added = with_workspace(|w| w.recent_paths.add(PathBuf::from(trimmed)).is_ok());
+        if !added {
+            return;
+        }
+        let count = with_workspace(|w| w.recent_paths.load().unwrap_or_default().len() as i32);
+        self.as_mut().set_recent_path_count(count);
+        self.as_mut().history_changed();
+    }
+
+    fn remove_recent_path(mut self: Pin<&mut Self>, path: &QString) {
+        let path_str = path.to_string();
+        let trimmed = path_str.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+        let removed =
+            with_workspace(|w| w.recent_paths.remove(&PathBuf::from(trimmed)).is_ok());
+        if !removed {
+            return;
+        }
+        let count = with_workspace(|w| w.recent_paths.load().unwrap_or_default().len() as i32);
+        self.as_mut().set_recent_path_count(count);
+        self.as_mut().history_changed();
+    }
+
     fn row_full_path(&self, row: i32) -> QString {
         if row < 0 {
             return QString::default();
         }
-        match self.rust().rows.get(row as usize) {
+        let idx = match self.rust().visible.get(row as usize) {
+            Some(&i) => i,
+            None => return QString::default(),
+        };
+        match self.rust().rows.get(idx) {
             Some(r) => QString::from(r.full_path.to_string_lossy().as_ref()),
             None => QString::default(),
         }
@@ -445,6 +715,107 @@ impl ffi::SearchController {
             }
             Err(err) => QString::from(&format!("(preview failed: {err})")),
         }
+    }
+
+    fn open_in_editor(&self, path: &QString, line: i32) {
+        let path_str = path.to_string();
+        if path_str.trim().is_empty() {
+            return;
+        }
+        let preset = with_workspace(|w| {
+            w.settings
+                .load()
+                .map(|s| editor_preset_from_settings(&s))
+                .unwrap_or(grexa_core::EditorPreset::XdgOpen)
+        });
+        let line_opt = if line >= 1 { Some(line as usize) } else { None };
+        let argv =
+            grexa_core::open_in_editor_command(preset, std::path::Path::new(&path_str), line_opt);
+        spawn_detached(argv);
+    }
+
+    fn reveal_in_file_manager(&self, path: &QString) {
+        let path_str = path.to_string();
+        if path_str.trim().is_empty() {
+            return;
+        }
+        let p = std::path::PathBuf::from(&path_str);
+        // Try FileManager1 D-Bus first — KDE Dolphin / Nautilus / nemo
+        // implement it. Fall back to xdg-open on the parent directory.
+        if try_filemanager1_reveal(&p).is_ok() {
+            return;
+        }
+        let argv = grexa_core::reveal_with_xdg_open(&p);
+        spawn_detached(argv);
+    }
+
+    fn copy_to_clipboard(&self, text: &QString) {
+        let s = text.to_string();
+        if s.is_empty() {
+            return;
+        }
+        copy_to_system_clipboard(&s);
+    }
+
+    fn containers_json(&self) -> QString {
+        QString::from(&build_containers_json())
+    }
+
+    fn start_replace(mut self: Pin<&mut Self>, replacement: &QString) {
+        if self.as_ref().rust().target_kind != 0 {
+            self.as_mut()
+                .set_status_text(QString::from("Replace is disabled for container targets."));
+            self.as_mut().replace_completed(false);
+            return;
+        }
+        let path = self.as_ref().rust().last_path.clone();
+        let term = self.as_ref().rust().last_term.clone();
+        if path.is_empty() || term.is_empty() {
+            self.as_mut()
+                .set_status_text(QString::from("Run a search first, then replace."));
+            self.as_mut().replace_completed(false);
+            return;
+        }
+        let replacement_str = replacement.to_string();
+        self.as_mut().set_replacing(true);
+        self.as_mut().set_replace_term(replacement.clone());
+
+        // Build the same SearchOptions the last search used.
+        let regex = self.as_ref().rust().last_regex;
+        let case_sensitive = self.as_ref().rust().last_case_sensitive;
+        let mut options = grexa_core::SearchOptions::new(PathBuf::from(&path), &term);
+        options.regex = regex;
+        options.case_sensitive = case_sensitive;
+        let settings = with_workspace(|w| w.settings.load().unwrap_or_default());
+        options.respect_gitignore = settings.respect_gitignore;
+        options.include_hidden = settings.include_hidden_items;
+        options.include_binary = settings.include_binary_files;
+        options.include_system = settings.include_system_files;
+        options.include_subfolders = settings.include_subfolders;
+        options.include_symlinks = settings.include_symbolic_links;
+        options.match_file_names = settings.default_match_files.clone();
+        options.exclude_dirs = settings.default_exclude_dirs.clone();
+
+        let cancel = CancelToken::new();
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            let opts = grexa_core::ReplaceOptions {
+                search: options,
+                replacement: replacement_str,
+            };
+            let outcome = grexa_core::replace_with(&opts, &cancel, None);
+            let _ = thread.queue(move |pin| {
+                finish_replace(pin, outcome);
+            });
+        });
+    }
+
+    fn refresh_view(mut self: Pin<&mut Self>) {
+        unsafe { self.as_mut().begin_reset_model() };
+        self.as_mut().rust_mut().rebuild_visible();
+        unsafe { self.as_mut().end_reset_model() };
+        // match_count reflects raw match count, files_matched
+        // reflects file count — those don't change on view refresh.
     }
 
     fn row_count(&self, parent: &QModelIndex) -> i32 {
@@ -512,6 +883,290 @@ fn push_rows(
     pin.as_mut().set_match_count(new_count);
     pin.as_mut().set_files_scanned(files_scanned);
     pin.as_mut().set_files_matched(files_matched);
+}
+
+/// Worker-thread entry point for container searches. Runs the
+/// grexa-containers pipeline synchronously and returns the formatted
+/// summary so the GUI-thread hop can populate the model in one shot.
+fn run_container_search(
+    target_kind: i32,
+    container_id: &str,
+    container_path: &str,
+    pattern: &str,
+    regex: bool,
+    case_sensitive: bool,
+) -> Result<Vec<ResultRow>, String> {
+    use grexa_containers::{
+        ContainerRuntimeKind, ContainerSearchOptions, LiveProbe, detect_runtimes,
+        runtime::{CliRuntime, RuntimeOperations, SystemCommandRunner},
+        search_container,
+    };
+
+    let runtimes = detect_runtimes(&LiveProbe);
+    let kind_match: ContainerRuntimeKind = match target_kind {
+        1 => ContainerRuntimeKind::Docker,
+        2 | 3 => ContainerRuntimeKind::Podman,
+        _ => return Err("unknown runtime kind".into()),
+    };
+    let want_rootless = target_kind == 2;
+    let runtime = runtimes
+        .into_iter()
+        .find(|r| {
+            r.kind == kind_match
+                && (kind_match == ContainerRuntimeKind::Docker || r.rootless == want_rootless)
+        })
+        .ok_or_else(|| format!("{:?} runtime not available", kind_match))?;
+
+    let cli = CliRuntime::new(runtime, SystemCommandRunner);
+    let containers = cli
+        .list_containers()
+        .map_err(|e| format!("list_containers failed: {e}"))?;
+    let info = containers
+        .into_iter()
+        .find(|c| c.id == container_id || c.id.starts_with(container_id))
+        .ok_or_else(|| format!("container {container_id} not found"))?;
+
+    let options = ContainerSearchOptions {
+        container_path: container_path.to_string(),
+        pattern: pattern.to_string(),
+        case_sensitive,
+        regex,
+    };
+    let summary = search_container(&cli, &info, &options)
+        .map_err(|e| format!("container search failed: {e}"))?;
+
+    let mut rows = Vec::with_capacity(summary.hits.len());
+    for hit in summary.hits {
+        let path_buf = std::path::PathBuf::from(&hit.container_path);
+        rows.push(ResultRow {
+            full_path: path_buf.clone(),
+            relative_path: path_buf,
+            line: hit.line_number as u32,
+            column: hit.column_number as u32,
+            preview_before: String::new(),
+            preview_match: hit.line_content.clone(),
+            preview_after: String::new(),
+        });
+        let _ = &info; // ContainerInfo retained only for borrow scoping.
+    }
+    Ok(rows)
+}
+
+fn finish_container_search(
+    mut pin: Pin<&mut ffi::SearchController>,
+    generation: u64,
+    outcome: Result<Vec<ResultRow>, String>,
+) {
+    if pin.as_ref().rust().active_generation != generation {
+        return;
+    }
+    pin.as_mut().set_busy(false);
+    match outcome {
+        Ok(rows) => {
+            let added = rows.len() as i32;
+            // Reset model + reinstall the rows in one go.
+            let parent = QModelIndex::default();
+            unsafe { pin.as_mut().begin_reset_model() };
+            {
+                let mut s = pin.as_mut().rust_mut();
+                s.rows = rows;
+                s.visible.clear();
+            }
+            // Filter through view rules.
+            pin.as_mut().rust_mut().rebuild_visible();
+            unsafe { pin.as_mut().end_reset_model() };
+            let _ = parent;
+
+            pin.as_mut().set_match_count(added);
+            // Files matched is the unique file count in the result set.
+            let unique_files: i32 = {
+                let mut seen: std::collections::HashSet<std::path::PathBuf> =
+                    std::collections::HashSet::new();
+                for r in &pin.as_ref().rust().rows {
+                    seen.insert(r.full_path.clone());
+                }
+                seen.len() as i32
+            };
+            pin.as_mut().set_files_matched(unique_files);
+            pin.as_mut().set_status_text(QString::from(&format!(
+                "Found {added} matches in container ({unique_files} files)"
+            )));
+        }
+        Err(err) => {
+            pin.as_mut()
+                .set_status_text(QString::from(&format!("Container error: {err}")));
+        }
+    }
+    pin.as_mut().rust_mut().cancel_token = None;
+    pin.as_mut().search_completed(false);
+}
+
+fn finish_replace(
+    mut pin: Pin<&mut ffi::SearchController>,
+    outcome: Result<grexa_core::ReplaceSummary, grexa_core::ReplaceError>,
+) {
+    pin.as_mut().set_replacing(false);
+    match outcome {
+        Ok(summary) => {
+            // ReplaceSummary doesn't impl Serialize, so build the JSON
+            // by hand. The QML side reads `files_modified` +
+            // `matches_replaced` + `cancelled` to render the dialog.
+            let json = format!(
+                "{{\"files_modified\":{},\"files_unchanged\":{},\"matches_replaced\":{},\"cancelled\":{},\"elapsed_ms\":{},\"failure_count\":{}}}",
+                summary.files_modified,
+                summary.files_unchanged,
+                summary.matches_replaced,
+                summary.cancelled,
+                summary.elapsed_ms,
+                summary.failures.len()
+            );
+            pin.as_mut().set_last_replace_summary(QString::from(&json));
+            // Flip the result-mode toggle to Files so the user sees
+            // per-file counts (matching Grex's behavior).
+            pin.as_mut().set_result_mode(1);
+            unsafe { pin.as_mut().begin_reset_model() };
+            pin.as_mut().rust_mut().rebuild_visible();
+            unsafe { pin.as_mut().end_reset_model() };
+            pin.as_mut().set_status_text(QString::from(&format!(
+                "Replaced {} matches in {} files",
+                summary.matches_replaced, summary.files_modified
+            )));
+            pin.as_mut().replace_completed(true);
+        }
+        Err(err) => {
+            pin.as_mut()
+                .set_status_text(QString::from(&format!("Replace error: {err}")));
+            pin.as_mut().replace_completed(false);
+        }
+    }
+}
+
+/// Pick the editor preset to use from the persisted settings.
+/// Today the settings file doesn't expose `editor_preset` yet — this
+/// is a deliberate v0.1.1 follow-up. Until then we default to
+/// `XdgOpen` which gives users their system default editor for the
+/// file's MIME type.
+fn editor_preset_from_settings(_s: &grexa_core::DefaultSettings) -> grexa_core::EditorPreset {
+    grexa_core::EditorPreset::XdgOpen
+}
+
+/// Spawn a process detached from grexa so the editor or file manager
+/// keeps running after we drop the `Child`. We intentionally don't
+/// capture stdout/stderr — any failure is the user's to debug.
+fn spawn_detached(argv: Vec<std::ffi::OsString>) {
+    if argv.is_empty() {
+        return;
+    }
+    let mut iter = argv.into_iter();
+    let program = iter.next().unwrap();
+    let args: Vec<std::ffi::OsString> = iter.collect();
+    let _ = std::process::Command::new(&program).args(&args).spawn();
+}
+
+/// Best-effort `org.freedesktop.FileManager1.ShowItems` call via
+/// `gdbus`. Returns `Ok(())` only on success. Falls back to the
+/// xdg-open helper when this errors.
+fn try_filemanager1_reveal(path: &std::path::Path) -> Result<(), ()> {
+    let abs = path.canonicalize().map_err(|_| ())?;
+    let uri = format!("file://{}", abs.display());
+    let status = std::process::Command::new("gdbus")
+        .args([
+            "call",
+            "--session",
+            "--dest",
+            "org.freedesktop.FileManager1",
+            "--object-path",
+            "/org/freedesktop/FileManager1",
+            "--method",
+            "org.freedesktop.FileManager1.ShowItems",
+        ])
+        .arg(format!("['{uri}']"))
+        .arg("''")
+        .status()
+        .map_err(|_| ())?;
+    if status.success() { Ok(()) } else { Err(()) }
+}
+
+/// Push `text` to the system clipboard. Uses `wl-copy` (Wayland) when
+/// `$WAYLAND_DISPLAY` is set; falls back to `xclip -selection clipboard`
+/// otherwise. Both are commonly available on KDE/GNOME hosts and ship
+/// in the Flatpak base runtimes Grexa targets.
+fn copy_to_system_clipboard(text: &str) {
+    let (program, args): (&str, Vec<&str>) = if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+        ("wl-copy", vec![])
+    } else {
+        ("xclip", vec!["-selection", "clipboard"])
+    };
+    let mut child = match std::process::Command::new(program)
+        .args(&args)
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        let _ = stdin.write_all(text.as_bytes());
+    }
+    let _ = child.wait();
+}
+
+/// Detect runtimes + list containers, return as a JSON string suitable
+/// for the QML target-selector dropdown. Shape:
+/// `{ "runtimes": [...], "containers": [{ "kind": 1, "rootless": true, "id": "...", "name": "...", "image": "...", "status": "..." }] }`.
+/// `kind` is the same i32 mapping the qproperty uses: 1=Docker,
+/// 2=Podman rootless, 3=Podman rootful.
+fn build_containers_json() -> String {
+    use grexa_containers::{
+        ContainerRuntimeKind, LiveProbe, detect_runtimes,
+        runtime::{CliRuntime, RuntimeOperations, SystemCommandRunner},
+    };
+    use serde_json::json;
+
+    let runtimes = detect_runtimes(&LiveProbe);
+    let mut runtime_descs: Vec<serde_json::Value> = Vec::new();
+    let mut container_descs: Vec<serde_json::Value> = Vec::new();
+
+    for runtime in runtimes {
+        let kind = match (runtime.kind, runtime.rootless) {
+            (ContainerRuntimeKind::Docker, _) => 1,
+            (ContainerRuntimeKind::Podman, true) => 2,
+            (ContainerRuntimeKind::Podman, false) => 3,
+        };
+        let label = match (runtime.kind, runtime.rootless) {
+            (ContainerRuntimeKind::Docker, _) => "Docker".to_string(),
+            (ContainerRuntimeKind::Podman, true) => "Podman (rootless)".to_string(),
+            (ContainerRuntimeKind::Podman, false) => "Podman (rootful)".to_string(),
+        };
+        runtime_descs.push(json!({
+            "kind": kind,
+            "label": label,
+            "available": runtime.is_available(),
+        }));
+
+        if !runtime.is_available() {
+            continue;
+        }
+        let cli = CliRuntime::new(runtime, SystemCommandRunner);
+        let listed = cli.list_containers().unwrap_or_default();
+        for c in listed {
+            container_descs.push(json!({
+                "kind": kind,
+                "id": c.id,
+                "name": c.name,
+                "image": c.image,
+                "status": c.status,
+                "state": c.state,
+            }));
+        }
+    }
+
+    serde_json::to_string(&json!({
+        "runtimes": runtime_descs,
+        "containers": container_descs,
+    }))
+    .unwrap_or_else(|_| "{\"runtimes\":[],\"containers\":[]}".into())
 }
 
 fn finish_search(

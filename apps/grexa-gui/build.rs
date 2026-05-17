@@ -26,13 +26,20 @@ fn main() {
                 "qml/FlagChip.qml",
             ]),
     )
-    // Bundle SVG assets at qrc:/qt/qml/com/visorcraft/Grexa/resources/*.svg
-    // so QML can `Image { source: "resources/grexa.svg" }` regardless of
-    // whether the host has the freedesktop theme installed.
+    // Bundle brand + illustration assets at
+    // qrc:/qt/qml/com/visorcraft/Grexa/resources/* so QML can reference
+    // them regardless of whether the host has the freedesktop theme
+    // installed. grexa.png is the pink-gecko brand mark (female
+    // counterpart to Grex's green male gecko); empty-search.svg is the
+    // empty-state illustration.
     .qrc_resources(
         QResources::new().resource(
             QResource::new()
-                .file(QResourceFile::new("resources/grexa.svg").alias("resources/grexa.svg"))
+                .file(QResourceFile::new("resources/grexa.png").alias("resources/grexa.png"))
+                .file(
+                    QResourceFile::new("resources/grex-mark.png")
+                        .alias("resources/grex-mark.png"),
+                )
                 .file(
                     QResourceFile::new("resources/empty-search.svg")
                         .alias("resources/empty-search.svg"),

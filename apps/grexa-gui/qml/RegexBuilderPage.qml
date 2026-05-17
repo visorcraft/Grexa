@@ -31,6 +31,7 @@ Kirigami.Page {
 
     function refreshHighlight() {
         const sample = sampleArea.text
+        matchesModel.clear()
         if (patternField.text.length === 0 || controller.error.length > 0) {
             sampleHighlight.text = ""
             return
@@ -50,6 +51,9 @@ Kirigami.Page {
             sampleHighlight.text = ""
             return
         }
+        // Populate the side-panel match list and the highlight overlay
+        // in a single pass. The matches list trims each entry to a
+        // reasonable preview so a giant match doesn't blow up the panel.
         let html = ""
         let last = 0
         const tint = app.rgbaCss(app.tokens.matchTint)
@@ -63,10 +67,20 @@ Kirigami.Page {
                 + escapeHtml(sample.substring(start, end))
                 + "</span>"
             last = end
+            const captured = sample.substring(start, end)
+            matchesModel.append({
+                index: i + 1,
+                start: start,
+                end: end,
+                text: captured.length > 64 ? captured.substring(0, 64) + "…" : captured
+            })
         }
         html += escapeHtml(sample.substring(last))
         sampleHighlight.text = "<pre style='font-family:monospace;'>" + html + "</pre>"
     }
+
+    // Side-panel match list — populated by refreshHighlight().
+    ListModel { id: matchesModel }
 
     function escapeHtml(s) {
         return String(s)
@@ -262,68 +276,233 @@ Kirigami.Page {
             text: page.controller.error
         }
 
-        // -- Sample text
-        ColumnLayout {
+        // -- Sample text + live match list (Mailspring-class
+        // two-column layout — input on the left, the list of what
+        // the pattern matched on the right).
+        RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.leftMargin: app.tokens.spaceXL
             Layout.rightMargin: app.tokens.spaceXL
             Layout.topMargin: app.tokens.spaceL
             Layout.bottomMargin: app.tokens.spaceL
-            spacing: app.tokens.spaceXS
+            spacing: app.tokens.spaceL
 
-            Controls.Label {
-                text: qsTr("Sample text")
-                font.pixelSize: app.tokens.textCaption
-                opacity: 0.65
-            }
-            Rectangle {
+            // -- Sample text card
+            ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                radius: app.tokens.radiusCard
-                color: app.tokens.surface1
-                border.color: app.tokens.separator
-                border.width: 1
+                spacing: app.tokens.spaceS
 
-                Controls.ScrollView {
-                    id: sampleScroll
-                    anchors.fill: parent
-                    anchors.margins: app.tokens.spaceS
-                    visible: patternField.text.length === 0 || sampleHighlight.text.length === 0
-                    Controls.TextArea {
-                        id: sampleArea
-                        placeholderText: qsTr("Paste sample text and watch the matches light up.")
-                        font.family: app.tokens.monoFamily
-                        font.pixelSize: app.tokens.textBody
-                        wrapMode: TextEdit.Wrap
-                        background: null
-                        onTextChanged: page.evaluate()
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: app.tokens.spaceS
+                    Controls.Label {
+                        text: qsTr("SAMPLE TEXT")
+                        font.pixelSize: 10
+                        font.weight: app.tokens.weightSemibold
+                        font.letterSpacing: 1.6
+                        opacity: 0.5
+                    }
+                    Item { Layout.fillWidth: true }
+                    Controls.Button {
+                        visible: sampleArea.text.length > 0
+                        flat: true
+                        icon.name: "edit-clear-symbolic"
+                        text: qsTr("Clear")
+                        display: Controls.AbstractButton.TextBesideIcon
+                        font.pixelSize: app.tokens.textCaption
+                        onClicked: { sampleArea.text = ""; page.evaluate() }
                     }
                 }
-                // Read-only highlight overlay: when a pattern is active
-                // we show this RichText-rendered version with <mark>
-                // spans. Click anywhere to put focus back into the
-                // editable area underneath.
-                Flickable {
-                    anchors.fill: parent
-                    anchors.margins: app.tokens.spaceS
-                    visible: !sampleScroll.visible
-                    contentWidth: width
-                    contentHeight: sampleHighlight.implicitHeight
-                    clip: true
-                    Controls.Label {
-                        id: sampleHighlight
-                        width: parent.width
-                        textFormat: Text.RichText
-                        wrapMode: Text.Wrap
-                        font.family: app.tokens.monoFamily
-                        font.pixelSize: app.tokens.textBody
-                    }
-                    MouseArea {
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    radius: app.tokens.radiusCard
+                    color: app.tokens.surface1
+                    border.color: sampleArea.activeFocus ? app.tokens.accent : app.tokens.separatorStrong
+                    border.width: 1
+                    Behavior on border.color { ColorAnimation { duration: app.tokens.durationSnap } }
+
+                    Controls.ScrollView {
+                        id: sampleScroll
                         anchors.fill: parent
-                        onClicked: {
-                            sampleHighlight.text = ""   // hand back the editor
-                            sampleArea.forceActiveFocus()
+                        anchors.margins: app.tokens.spaceL
+                        visible: patternField.text.length === 0 || sampleHighlight.text.length === 0
+                        Controls.TextArea {
+                            id: sampleArea
+                            placeholderText: qsTr("Paste sample text and watch the matches light up…")
+                            font.family: app.tokens.monoFamily
+                            font.pixelSize: app.tokens.textBody + 1
+                            wrapMode: TextEdit.Wrap
+                            background: null
+                            onTextChanged: page.evaluate()
+                        }
+                    }
+                    // Read-only highlight overlay: when a pattern is
+                    // active and matched, we render the RichText
+                    // version. Click anywhere to put focus back into
+                    // the editable area underneath.
+                    Flickable {
+                        anchors.fill: parent
+                        anchors.margins: app.tokens.spaceL
+                        visible: !sampleScroll.visible
+                        contentWidth: width
+                        contentHeight: sampleHighlight.implicitHeight
+                        clip: true
+                        Controls.Label {
+                            id: sampleHighlight
+                            width: parent.width
+                            textFormat: Text.RichText
+                            wrapMode: Text.Wrap
+                            font.family: app.tokens.monoFamily
+                            font.pixelSize: app.tokens.textBody + 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                sampleHighlight.text = ""
+                                sampleArea.forceActiveFocus()
+                            }
+                        }
+                    }
+                }
+            }
+
+            // -- Matches side-panel
+            ColumnLayout {
+                Layout.preferredWidth: 320
+                Layout.minimumWidth: 240
+                Layout.fillHeight: true
+                spacing: app.tokens.spaceS
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Controls.Label {
+                        text: qsTr("MATCHES")
+                        font.pixelSize: 10
+                        font.weight: app.tokens.weightSemibold
+                        font.letterSpacing: 1.6
+                        opacity: 0.5
+                    }
+                    Item { Layout.fillWidth: true }
+                    Rectangle {
+                        visible: matchesModel.count > 0
+                        radius: app.tokens.radiusPill
+                        color: app.tokens.accentMute
+                        border.color: app.tokens.accent
+                        border.width: 1
+                        implicitHeight: 20
+                        implicitWidth: matchTotal.implicitWidth + app.tokens.spaceM * 2
+                        Controls.Label {
+                            id: matchTotal
+                            anchors.centerIn: parent
+                            text: matchesModel.count + ""
+                            font.pixelSize: app.tokens.textCaption
+                            font.weight: app.tokens.weightSemibold
+                            font.family: app.tokens.monoFamily
+                            color: app.tokens.accent
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    radius: app.tokens.radiusCard
+                    color: app.tokens.surface1
+                    border.color: app.tokens.separator
+                    border.width: 1
+
+                    Controls.ScrollView {
+                        anchors.fill: parent
+                        anchors.margins: app.tokens.spaceXS
+                        visible: matchesModel.count > 0
+                        ListView {
+                            anchors.fill: parent
+                            model: matchesModel
+                            spacing: 0
+                            clip: true
+                            delegate: Rectangle {
+                                width: ListView.view.width
+                                height: 38
+                                color: matchMouse.containsMouse ? app.tokens.surface2 : "transparent"
+                                Behavior on color { ColorAnimation { duration: app.tokens.durationSnap } }
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    height: 1
+                                    color: app.tokens.separator
+                                    opacity: 0.6
+                                }
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: app.tokens.spaceM
+                                    anchors.rightMargin: app.tokens.spaceM
+                                    spacing: app.tokens.spaceS
+                                    Controls.Label {
+                                        text: "#" + model.index
+                                        font.family: app.tokens.monoFamily
+                                        font.pixelSize: app.tokens.textCaption
+                                        color: app.tokens.accent
+                                        opacity: 0.8
+                                        Layout.preferredWidth: 28
+                                    }
+                                    Controls.Label {
+                                        Layout.fillWidth: true
+                                        text: model.text
+                                        font.family: app.tokens.monoFamily
+                                        font.pixelSize: app.tokens.textBody
+                                        elide: Text.ElideRight
+                                    }
+                                    Controls.Label {
+                                        text: model.start + "‥" + model.end
+                                        font.family: app.tokens.monoFamily
+                                        font.pixelSize: app.tokens.textCaption
+                                        opacity: 0.5
+                                    }
+                                }
+                                MouseArea {
+                                    id: matchMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                }
+                            }
+                        }
+                    }
+
+                    // Empty side-panel state.
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        width: parent.width - app.tokens.spaceXL * 2
+                        spacing: app.tokens.spaceS
+                        visible: matchesModel.count === 0
+                        Kirigami.Icon {
+                            source: "edit-find-symbolic"
+                            implicitWidth: 32
+                            implicitHeight: 32
+                            opacity: 0.32
+                            Layout.alignment: Qt.AlignHCenter
+                            isMask: true
+                            color: Kirigami.Theme.textColor
+                        }
+                        Controls.Label {
+                            text: page.controller.error.length > 0
+                                ? qsTr("Invalid pattern")
+                                : patternField.text.length === 0
+                                    ? qsTr("Enter a pattern")
+                                    : sampleArea.text.length === 0
+                                        ? qsTr("Add sample text")
+                                        : qsTr("No matches")
+                            font.pixelSize: app.tokens.textCaption + 1
+                            font.weight: app.tokens.weightMedium
+                            font.family: app.tokens.sansFamily
+                            opacity: 0.55
+                            horizontalAlignment: Text.AlignHCenter
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                         }
                     }
                 }

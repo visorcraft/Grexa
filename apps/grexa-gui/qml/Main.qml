@@ -124,10 +124,11 @@ Kirigami.ApplicationWindow {
                     color: "transparent"
                     Image {
                         anchors.fill: parent
-                        source: "qrc:/qt/qml/com/visorcraft/Grexa/resources/grexa.svg"
-                        sourceSize.width: 40
-                        sourceSize.height: 40
+                        source: "qrc:/qt/qml/com/visorcraft/Grexa/resources/grexa.png"
+                        sourceSize.width: 80
+                        sourceSize.height: 80
                         smooth: true
+                        mipmap: true
                     }
                 }
                 ColumnLayout {
@@ -235,9 +236,9 @@ Kirigami.ApplicationWindow {
                 }
                 Item { Layout.fillWidth: true }
                 Controls.Label {
-                    text: "GPL-3.0"
+                    text: qsTr("GPL v3")
                     font.pixelSize: tokens.textCaption
-                    font.family: tokens.monoFamily
+                    font.family: tokens.sansFamily
                     opacity: 0.4
                 }
             }

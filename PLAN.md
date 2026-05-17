@@ -549,21 +549,32 @@ The first draft was reviewed as if it were an implementation design document. Th
 - [x] Spike Baloo candidate seeding to confirm it is worth implementing. (`docs/baloo-spike.md` — defer for v1.0)
 - [x] Spike editor open-to-line behavior across Kate, VS Code, and JetBrains. (`grexa_core::desktop::open_in_editor_command` covers Kate / KWrite / VS Code / VSCodium / Sublime / JetBrains / GNOME / Neovim / xdg-open with the right argv per editor)
 
-## Status Snapshot (2026-05-16, final)
+## Status Snapshot (2026-05-17, re-audit)
 
-Progress through PLAN.md: **433 of 433 checkboxes ticked (100%)**.
-Workspace passes **~280 tests** across 8 crates plus
-`cargo clippy --workspace --all-targets -- -D warnings` clean.
+> **Correction to the 2026-05-16 "100%" claim.** A live audit on
+> 2026-05-17 against a running build of `grexa` (cxx-qt bridge merged,
+> binary launches under Wayland/KDE) found that the "lands with the
+> cxx-qt PR" rows in Phases 4–8, 14, 18 had been ticked on the
+> *contract* level — controller methods, settings fields, and audit
+> docs exist — but the *QML wiring* for a substantial number of those
+> surfaces was never finished. The 100% figure should be read as
+> "Rust core + controller surface is shipped"; the GUI bridge sits at
+> roughly **40–50% wired**. See "Phase 20 — GUI Bridge Wiring Gaps"
+> below for the live inventory.
+
+Rust core + controller test surface: **~291 tests passing** across 8
+crates; `cargo clippy --workspace --all-targets -- -D warnings`,
+`cargo fmt`, and `cargo deny check` all clean.
 
 Every PLAN row falls into one of four resolutions:
 
 1. **Shipped end-to-end** — the code, doc, or test is in the
-   repository and verified by `just ci`. Most rows are here.
-2. **Documented contract** — the controller / data shape is in
-   place; the live QML binding lands in a dedicated cxx-qt PR. The
-   contract is captured in `docs/gui-design.md` and the relevant
-   audit so the next engineer can implement against it without
-   re-deriving the design.
+   repository and verified by `just ci`. Most Phase 2/3/6/7/8/15/16
+   rows are here.
+2. **Documented contract, not wired** — the controller / data shape
+   is in place but the QML binding never landed. These were ticked
+   under the assumption the cxx-qt PR would do it; many didn't make
+   it. **These are now tracked under Phase 20.**
 3. **Release-time verification** — manual run that has to happen on
    a real KDE box / Docker daemon / OpenAI account before the
    version tag fires. Each row points at the under-test entry
@@ -693,6 +704,225 @@ All four v1.0 "nice-to-haves" have shipped:
   binary that registers the QObjects, loads the QML, and runs the
   Qt event loop (verified with `QT_QPA_PLATFORM=offscreen`). The
   qmetaobject crate is no longer pulled in by `apps/grexa-gui`.
+
+## Phase 20 - GUI Bridge Wiring Gaps (2026-05-17 re-audit)
+
+A live audit against the running `grexa` binary found these surfaces
+ticked in earlier phases but never actually wired through QML. They
+are the real remaining work before Grexa is at functional parity with
+Grex. Citations point at the *current stub or absence* so future work
+can find them.
+
+Order is roughly "blocks daily use" → "polish". Each row is a single
+implementation task; sub-bullets list the concrete bridge work.
+
+### Critical (blocks daily use)
+
+- [ ] **Folder picker — make the path "Browse" button open a real
+      directory chooser and write back to the search controller.**
+      Today `apps/grexa-gui/qml/SearchPage.qml:320-329` shows a
+      Cancel-only `Controls.Dialog` with the literal placeholder text
+      *"The Portal file picker lands in Phase 5. Type the path
+      directly for now."*
+  - Use `Qt.labs.platform FolderDialog` (XDG portal under the hood
+    on Wayland; Breeze dialog on KDE).
+  - On accept, set `searchBar.path = folder` and call
+    `searchController.addRecentPath(path)` (new invokable).
+  - Remove the placeholder dialog.
+
+- [ ] **Container search target selector — surface the Local /
+      Docker / Podman dropdown and route searches through the
+      container runtime when selected.** Today there is no target
+      selector in any QML file; `apps/grexa-gui/src/controller.rs:31`
+      constructs a `SystemCommandRunner` but it's `dead_code`. The
+      Settings "Enable container search" checkbox at
+      `SettingsPage.qml:226-235` flips a bit that nothing reads.
+  - Add `target: TargetKind` qproperty to `SearchController`
+    (`Local`, `Docker`, `Podman`).
+  - Add `availableContainers()` invokable that calls
+    `grexa_containers::detect_runtimes()` + `list_containers()`.
+  - Build a target selector control in `SearchPage.qml` (gated by
+    `settingsController.enableContainerSearch`).
+  - Branch `search.rs::start_search` on `target` — call
+    `grexa_containers::search_container` for non-Local targets.
+  - Show runtime badge (Docker / Podman rootless / Podman rootful)
+    next to each container in the dropdown.
+
+- [ ] **Filter pane — expose the 7+ filters that ship in
+      `SearchOptions` but have no UI.** Today
+      `SearchPage.qml` has only a regex + case toggle on the
+      `SearchBar`. Everything else is read from the persisted
+      `DefaultSettings` at search time; users can't change them
+      per-search.
+  - Add a collapsible filter pane (`Kirigami.FormLayout` inside
+    a `Kirigami.OverlayDrawer` on the right, or under the search
+    bar). Persistence: per-tab, fall back to Settings defaults.
+  - Wire each filter to a `SearchController` qproperty: hidden
+    files, binary, system files, symlinks, subfolder depth,
+    gitignore respect, size limits, encoding, match-files glob,
+    exclude-dirs glob.
+  - `include_system_files`, `include_symbolic_links`, and
+    `whole_word` are currently forwarded into `SearchOptions` from
+    settings (`search.rs:332,334,340`) but have no qproperty in
+    `SettingsController` (`settings.rs:30-46`). Add them.
+
+- [ ] **Result mode toggle (Content vs Files) on the Search page.**
+      Today the Settings field `files_search_mode`
+      (`settings.rs:36`, `SettingsPage.qml:134-138`) toggles the
+      *default* but there is no per-search switch, and
+      `search.rs:283-389` ignores `files_search_mode` entirely —
+      it always returns content rows. Add a Content/Files segmented
+      control to the search bar; have the controller emit one row
+      per file when `Files` is active.
+
+- [ ] **Replace flow — Replace button, confirmation dialog,
+      progress, switch to Files mode.** No "Replace" button exists
+      in any QML file. `workspace.rs:147-185` has
+      `run_replace_blocking` but no QML invokable surfaces it.
+      The replace journal (`replace_journal.json`) and
+      `ReplaceSummary` are wired in the core; only the GUI is
+      missing.
+  - Add Replace field + button next to the Search button (mirror
+    Grex's two-input layout).
+  - Show a confirmation dialog with file count, match count,
+    irreversible warning.
+  - Stream `ReplaceSummary` back via cxx-qt signal.
+  - On success, flip the result list to Files mode (matching
+    Grex).
+  - Surface residual journal on next startup if present (already
+    exposed by `grexa_core::load_residual_journal`).
+
+- [ ] **Result row context menu — Reveal in File Manager, Open in
+      Editor, Copy Path, Copy File Name, Copy Line, Copy Runtime
+      Command, Preview.** Today `ResultRow.qml` has only a left-click
+      handler that opens the preview dialog
+      (`ResultRow.qml:198`). All the Rust side (FileManager1 D-Bus,
+      `open_in_editor_command`, editor presets) exists and is unused.
+  - Wire `MouseArea { acceptedButtons: Qt.RightButton }`.
+  - Build a `Controls.Menu` with the eight actions.
+  - Expose invokables on `SearchController`: `revealInFileManager`,
+    `openInEditor`, `copyPath`, `copyFileName`, `copyLine`,
+    `copyRuntimeCommand`.
+  - Bind `clipboard` via cxx-qt's `QClipboard` or a small invokable
+    that pushes the string.
+
+- [ ] **Search-within-results filter.** No textbox or property
+      anywhere. The Rust side (`TabState::set_within_filter`) is
+      pinned by tests but unreachable. Add a small filter field
+      above the result list bound to a new
+      `SearchController::withinFilter` qproperty (plain + regex
+      toggle).
+
+### High priority
+
+- [ ] **Tab management UI — open / close / rename / per-tab
+      isolation.** `workspace.rs:69-110` and `tab.rs` ship the tab
+      model and `Workspace::open_tab` / `close_tab` / `active_tab`
+      are implemented. `Main.qml` uses `pageStack.replace` for
+      top-level navigation and there is no tab bar.
+  - Build a Kirigami tab bar above the search page (Mailspring-style
+    pill tabs).
+  - Expose `openTab`, `closeTab`, `renameTab`, `setActiveTab`
+    invokables; expose the tab list as a QML-readable model.
+  - Per-tab state isolation already lives in `TabState`; the QML
+    side just needs to bind to the active tab's view.
+
+- [ ] **Recent path AutoSuggest — explicit add + remove.** Today
+      paths auto-grow on successful search
+      (`search.rs:533-542`), but there is no UI to clear an entry
+      or to add one without searching. Add a small "×" affordance
+      next to each combobox entry and an `addRecentPath` invokable.
+
+- [ ] **Context preview triggers — right-click menu + Space key.**
+      Today the preview opens only on left-click of a row
+      (`ResultRow.qml:198`). Add Space-key handler on the focused
+      row and a "Preview" entry to the new right-click menu.
+
+- [ ] **Sortable result columns.** Today the ListView is a single
+      delegate row. `TabState::apply_sort` is implemented and
+      tested but no UI calls it. Add a Mailspring-style column
+      header row (Path · Line · Snippet) with click-to-sort and
+      sort indicator chevrons.
+
+- [ ] **Apply theme preference live.** Today
+      `DefaultSettings::theme_preference` persists but nothing
+      reads it back into the running app. Bind it to Kirigami's
+      color-scheme override via a small Rust helper, or invoke
+      `Application::set_palette` from the bridge on change.
+
+- [ ] **KNotification / Freedesktop notifications for completed
+      searches, replace operations, and endpoint tests.** Plan
+      cited `Phase 5` but no D-Bus emit exists in
+      `apps/grexa-gui/`. Add via cxx-qt-lib's existing D-Bus types
+      or a small `notify-rust` integration.
+
+- [ ] **Single-instance + DBus activation — "open path/search in
+      existing window".** `main.rs` has no DBus registration. Use
+      `kdbusaddons` (via `cxx-qt`) or a fallback `notify-rust` /
+      lockfile pattern. Honor the `StartupWMClass=grexa` already
+      declared in the desktop file.
+
+### Medium priority
+
+- [ ] **Keyboard shortcuts — F1 → About, Ctrl+T new tab,
+      Ctrl+W close tab, Ctrl+L focus search, Ctrl+F focus within
+      filter, Esc cancel running search, Space preview.** Today
+      only Enter-to-search is bound (`SearchBar.qml:98, 141`).
+      Wire `Shortcut { sequence: ... }` blocks in `Main.qml`.
+
+- [ ] **Settings — Editor preset section.** `EditorPreset` enum
+      is implemented in `grexa-core::desktop` with 8 presets, but
+      `SettingsPage.qml` has no editor section. Add a dropdown +
+      "custom command template" field.
+
+- [ ] **Settings — Accessibility section.** `theme_preference`
+      reserves the 9 high-contrast variants and `docs/accessibility.md`
+      records the contract, but the UI doesn't expose
+      "reduced motion" / "high contrast" / "screen reader hints".
+
+- [ ] **Settings — Replace section.** "Confirm before replace",
+      "Show journal on startup if present", "Default to Files mode
+      after replace" — none of these are settable.
+
+- [ ] **Distinct empty states for "searched, no matches" vs
+      "haven't searched yet".** Today
+      `SearchPage.qml:209` collapses both into the initial
+      EmptyState. Add a second variant after a completed search
+      that returned zero rows.
+
+- [ ] **Path-redaction toggle in diagnostics.** `docs/security.md`
+      records the privacy-mode contract; the running app has no UI
+      to enable it.
+
+### Low priority / polish
+
+- [ ] **Profiles UI.** `DefaultSettings` and history both support
+      named profiles; no QML page exists.
+
+- [ ] **History UI.** Search history is persisted; no page lists
+      it or lets the user re-run a past search.
+
+- [ ] **Export UI.** Result export (CSV / JSON / Markdown) is in
+      the CLI but not the GUI.
+
+- [ ] **Drawer-style filter pane animations.** The plan claims
+      "Kirigami's default transitions cover" but the filter pane
+      doesn't exist to animate yet.
+
+### Verification gate for Phase 20
+
+Each completed Phase 20 row must:
+
+1. Build clean (`cargo build --release -p grexa`).
+2. Offscreen-smoke clean (`QT_QPA_PLATFORM=offscreen timeout 6 grexa`).
+3. Live-verified on KDE Plasma Wayland (the audit method documented
+   in `docs/build-and-test.md`).
+4. Have a Rust-side unit test for the controller invokable + a QML
+   smoke that exercises the binding.
+
+Re-run the audit (`Agent` "Audit Grexa GUI parity gaps") after each
+round to keep this list honest. **Never re-tick a row without live
+verification.**
 
 ## Non-Goals
 

@@ -542,6 +542,203 @@ Kirigami.Page {
         id: contextPreview
     }
 
+    // Filter drawer — bound to SettingsController. Every toggle here
+    // changes the *default* the next search will use; SearchOptions
+    // is built from Settings at start_search time. The user can
+    // hit Apply to persist, or Cancel to discard the changes (the
+    // store auto-saves on toggle via `apply()`).
+    Controls.Drawer {
+        id: filterDrawer
+        edge: Qt.RightEdge
+        modal: false
+        interactive: true
+        dim: false
+        width: Math.min(page.width * 0.4, 460)
+        height: page.height
+
+        Rectangle {
+            anchors.fill: parent
+            color: app.tokens.surface1
+            border.color: app.tokens.separator
+            border.width: 1
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: app.tokens.spaceL
+                spacing: app.tokens.spaceM
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Controls.Label {
+                        text: qsTr("Filters")
+                        font.pixelSize: app.tokens.textSubheading
+                        font.weight: app.tokens.weightBold
+                        Layout.fillWidth: true
+                    }
+                    Controls.Button {
+                        flat: true
+                        icon.name: "window-close-symbolic"
+                        display: Controls.AbstractButton.IconOnly
+                        onClicked: filterDrawer.close()
+                    }
+                }
+                Controls.Label {
+                    Layout.fillWidth: true
+                    text: qsTr("These are the defaults for every new search. They persist on Apply.")
+                    font.pixelSize: app.tokens.textCaption
+                    opacity: 0.6
+                    wrapMode: Text.WordWrap
+                }
+
+                Controls.CheckBox {
+                    text: qsTr("Respect .gitignore")
+                    checked: app.settingsController.respectGitignore
+                    onToggled: app.settingsController.respectGitignore = checked
+                }
+                Controls.CheckBox {
+                    text: qsTr("Case sensitive (default)")
+                    checked: app.settingsController.caseSensitive
+                    onToggled: app.settingsController.caseSensitive = checked
+                }
+                Controls.CheckBox {
+                    text: qsTr("Include hidden files")
+                    checked: app.settingsController.includeHidden
+                    onToggled: app.settingsController.includeHidden = checked
+                }
+                Controls.CheckBox {
+                    text: qsTr("Include binary / archive content")
+                    checked: app.settingsController.includeBinary
+                    onToggled: app.settingsController.includeBinary = checked
+                }
+                Controls.CheckBox {
+                    text: qsTr("Include system files (/proc, /sys, /dev)")
+                    checked: app.settingsController.includeSystemFiles
+                    onToggled: app.settingsController.includeSystemFiles = checked
+                }
+                Controls.CheckBox {
+                    text: qsTr("Follow symbolic links")
+                    checked: app.settingsController.includeSymbolicLinks
+                    onToggled: app.settingsController.includeSymbolicLinks = checked
+                }
+                Controls.CheckBox {
+                    text: qsTr("Recurse into subfolders")
+                    checked: app.settingsController.includeSubfolders
+                    onToggled: app.settingsController.includeSubfolders = checked
+                }
+
+                Controls.Label {
+                    text: qsTr("Match files (glob)")
+                    font.pixelSize: app.tokens.textCaption
+                    opacity: 0.65
+                    Layout.topMargin: app.tokens.spaceM
+                }
+                Controls.TextField {
+                    Layout.fillWidth: true
+                    placeholderText: "*.rs|*.toml|-target*"
+                    text: app.settingsController.defaultMatchFiles
+                    onTextEdited: app.settingsController.defaultMatchFiles = text
+                }
+                Controls.Label {
+                    text: qsTr("Exclude dirs (comma-separated)")
+                    font.pixelSize: app.tokens.textCaption
+                    opacity: 0.65
+                }
+                Controls.TextField {
+                    Layout.fillWidth: true
+                    placeholderText: "node_modules, target, .venv"
+                    text: app.settingsController.defaultExcludeDirs
+                    onTextEdited: app.settingsController.defaultExcludeDirs = text
+                }
+
+                Item { Layout.fillHeight: true }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: app.tokens.spaceS
+                    Item { Layout.fillWidth: true }
+                    Controls.Button {
+                        flat: true
+                        text: qsTr("Close")
+                        onClicked: filterDrawer.close()
+                    }
+                    PrimaryButton {
+                        text: qsTr("Apply")
+                        icon.name: "dialog-ok-apply"
+                        onClicked: {
+                            app.settingsController.apply()
+                            filterDrawer.close()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Replace confirmation dialog. Builds a search summary on open
+    // and lets the user enter the replacement text. Confirm triggers
+    // the worker; the controller streams a summary back via
+    // `replace_completed` (caught below).
+    Controls.Dialog {
+        id: replaceDialog
+        modal: true
+        title: qsTr("Replace matches")
+        width: Math.min(page.width * 0.6, 520)
+        standardButtons: Controls.Dialog.Cancel | Controls.Dialog.Ok
+        property string replacement: ""
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: app.tokens.spaceM
+
+            Controls.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: qsTr("Replace every match of <b>%1</b> in <b>%2</b> with the text below. This rewrites files atomically and is not undoable — Grexa journals the rewritten files so you can audit afterwards.")
+                    .arg(searchBar.termText.length > 0 ? searchBar.termText : qsTr("(empty)"))
+                    .arg(searchBar.pathText.length > 0 ? searchBar.pathText : qsTr("(no path)"))
+                textFormat: Text.RichText
+                font.pixelSize: app.tokens.textBody
+            }
+            Controls.TextField {
+                id: replaceField
+                Layout.fillWidth: true
+                placeholderText: qsTr("Replacement text — supports $1, $2, ${name} for regex captures")
+                font.family: app.tokens.monoFamily
+                onTextChanged: replaceDialog.replacement = text
+            }
+            Kirigami.InlineMessage {
+                Layout.fillWidth: true
+                visible: page.controller.replacing
+                type: Kirigami.MessageType.Information
+                text: qsTr("Running replace…")
+            }
+            Kirigami.InlineMessage {
+                Layout.fillWidth: true
+                visible: page.controller.lastReplaceSummary.length > 0 && !page.controller.replacing
+                type: Kirigami.MessageType.Positive
+                text: page.controller.lastReplaceSummary
+                onLinkActivated: link => Qt.openUrlExternally(link)
+            }
+        }
+
+        onAccepted: {
+            if (replaceField.text.length === 0) {
+                replaceDialog.open()
+                return
+            }
+            page.controller.startReplace(replaceField.text)
+        }
+
+        Connections {
+            target: page.controller
+            function onReplaceCompleted(success) {
+                if (success) {
+                    replaceDialog.close()
+                }
+            }
+        }
+    }
+
     // AI assist drawer — slides in from the right when the user
     // clicks the "AI assist" toolbar button. Disabled (and the
     // button greyed out) when ai_search_enabled is false; that

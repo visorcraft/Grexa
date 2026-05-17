@@ -20,6 +20,13 @@ override_dh_auto_install:
 		$$(pwd)/debian/grexa/usr/share/metainfo/io.visorcraft.Grexa.metainfo.xml
 	install -Dm644 packaging/icons/scalable/io.visorcraft.Grexa.svg \
 		$$(pwd)/debian/grexa/usr/share/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg
+	# Sized PNG icons for taskbars / HiDPI panels that don't render the
+	# scalable SVG. Each line installs from packaging/icons/{N}x{N}/apps/
+	# into the corresponding hicolor directory under the package root.
+	for sz in 16 24 32 48 64 96 128 192 256 512; do \
+		install -Dm644 packaging/icons/$${sz}x$${sz}/apps/io.visorcraft.Grexa.png \
+			$$(pwd)/debian/grexa/usr/share/icons/hicolor/$${sz}x$${sz}/apps/io.visorcraft.Grexa.png; \
+	done
 	target/release/grexa-cli manpage \
 		> $$(pwd)/debian/grexa-cli/usr/share/man/man1/grexa-cli.1
 	target/release/grexa-cli completions bash \
