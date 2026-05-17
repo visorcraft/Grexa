@@ -21,10 +21,17 @@ use tempfile::tempdir;
 /// (see `BINARY_EXTENSIONS` in `crates/grexa-core/src/search.rs`). The
 /// property test below filters its random extensions against this set so a
 /// regression in binary-skip isn't conflated with a glob-matching failure.
+// Mirror of `BINARY_EXTENSIONS` + `SEARCHABLE_BINARY_EXTENSIONS` from
+// `crates/grexa-core/src/search.rs`. Plain-text content in a test file with
+// one of these extensions will be either skipped outright (binary blocklist)
+// or routed through document extraction that then fails on the bogus
+// contents — either way the file won't appear in results, which would
+// confuse the glob-matching invariant this test is trying to pin.
 const BINARY_EXTS: &[&str] = &[
     "exe", "dll", "obj", "bin", "zip", "tar", "gz", "7z", "rar", "png", "jpg", "jpeg", "gif",
     "bmp", "ico", "svg", "webp", "mp3", "mp4", "avi", "mkv", "wav", "flac", "ogg", "pdf", "doc",
-    "docx", "xls", "xlsx", "ppt", "pptx", "pdb", "cache", "lock", "pack", "idx", "rtf",
+    "docx", "xls", "xlsx", "ppt", "pptx", "pdb", "cache", "lock", "pack", "idx", "rtf", "odt",
+    "ods", "odp",
 ];
 
 proptest! {

@@ -45,14 +45,6 @@ Kirigami.ApplicationWindow {
 
     pageStack.initialPage: searchPage
 
-    function startDemoSearch() {
-        // Helper available from QML console / dev tools. Production
-        // users hit the Search button instead.
-        searchController.startSearch(
-            "/work/repos/visorcraft/grexa/crates", "TODO",
-            false, false, false
-        )
-    }
 
     globalDrawer: Kirigami.GlobalDrawer {
         title: qsTr("Grexa")
