@@ -1,31 +1,20 @@
 // SPDX-FileCopyrightText: 2026 VisorCraft LLC
 // SPDX-License-Identifier: GPL-3.0-only
 
-// Grexa GUI shell — Phase 1/4 placeholder.
+// Grexa GUI shell.
 //
-// This file is loaded by the Rust host (apps/grexa-gui/src/main.rs)
-// via `qml6 Main.qml`. The structure here is the contract the future
-// cxx-qt iteration will inhabit: Kirigami ApplicationWindow with a
-// compact navigation rail, tab strip, command strip, two-pane search
-// layout, and per-tab result tables.
-//
-// Today every page is a static stub that lists what data it expects
-// from the Rust side. The expected wiring is:
-//
-//   - SearchPage receives: SearchOptions + ProgressEvent stream +
-//     SearchSummary
-//   - RegexBuilderPage receives: a writable regex pattern + sample
-//     text + live match list
-//   - SettingsPage receives: DefaultSettings (round-trippable JSON)
-//   - AboutPage receives: app-version + commit-sha + locale list
-//
-// All strings flow through the Fluent bundle exposed by Rust as the
-// `tr(key)` JS function. For the placeholder we inline English.
+// Kirigami `ApplicationWindow` with a global drawer and a page stack.
+// The Rust-side controllers (`SearchController`, `SettingsController`,
+// `RegexBuilderController`, `AiController`) are instantiated here so
+// every page can reference them through the `app.*` ids — keeps each
+// controller a singleton without having to register a QML singleton
+// type.
 
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import com.visorcraft.Grexa 1.0
 
 Kirigami.ApplicationWindow {
     id: app
@@ -35,8 +24,22 @@ Kirigami.ApplicationWindow {
     minimumWidth: 760
     minimumHeight: 480
 
-    function tr(key) {
-        return key
+    // Cross-page controllers. Each holds Rust-side state; QML reads
+    // them via `app.searchController.busy` etc.
+    property alias searchController: searchController
+    property alias settingsController: settingsController
+    property alias regexController: regexController
+    property alias aiController: aiController
+
+    SearchController { id: searchController }
+    SettingsController {
+        id: settingsController
+        Component.onCompleted: reload()
+    }
+    RegexBuilderController { id: regexController }
+    AiController {
+        id: aiController
+        Component.onCompleted: refreshKeyState()
     }
 
     pageStack.initialPage: searchPage

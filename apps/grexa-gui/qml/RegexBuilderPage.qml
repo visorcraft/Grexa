@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 VisorCraft LLC
 // SPDX-License-Identifier: GPL-3.0-only
 
-// Regex Builder — backed by `grexa_core::pattern::PatternEngine`.
-// The QML side is a two-pane editor; the Rust side handles compile,
-// match enumeration, and the live breakdown that highlights groups.
+// Regex Builder — backed by `app.regexController` which wraps
+// `grexa_core::pattern::PatternEngine`. Every time the pattern,
+// sample, or case-insensitive toggle changes, `evaluate()` recomputes
+// `matchCount` and `error`.
 
 import QtQuick
 import QtQuick.Controls
@@ -11,19 +12,27 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
 Kirigami.Page {
+    id: page
     title: i18n("Regex Builder")
     padding: Kirigami.Units.smallSpacing
+
+    property var controller: app.regexController
+
+    function evaluate() {
+        controller.pattern = patternField.text
+        controller.sample = sampleArea.text
+        controller.caseInsensitive = caseInsensitive.checked
+        controller.evaluate()
+    }
 
     ColumnLayout {
         anchors.fill: parent
         spacing: Kirigami.Units.smallSpacing
 
-        // Presets row
         RowLayout {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
             Label { text: i18n("Presets:") }
-            ButtonGroup { id: presetGroup; exclusive: true }
             Repeater {
                 model: [
                     { name: i18n("Email"), pattern: "[\\w.%+-]+@[\\w.-]+\\.[A-Za-z]{2,}" },
@@ -34,75 +43,70 @@ Kirigami.Page {
                 ]
                 ToolButton {
                     text: modelData.name
-                    onClicked: patternField.text = modelData.pattern
+                    onClicked: {
+                        patternField.text = modelData.pattern
+                        page.evaluate()
+                    }
                 }
             }
         }
 
-        // Toggles row
         RowLayout {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
-            CheckBox { id: caseInsensitive; text: i18n("Case-insensitive") }
-            CheckBox { id: multiline;       text: i18n("Multiline (^/$ per line)") }
-            CheckBox { id: globalMatch;     text: i18n("Global"); checked: true }
+            CheckBox {
+                id: caseInsensitive
+                text: i18n("Case-insensitive")
+                onToggled: page.evaluate()
+            }
         }
 
-        // Pattern input
         TextField {
             id: patternField
             Layout.fillWidth: true
             placeholderText: i18n("Regular expression")
             font.family: "monospace"
+            onTextChanged: page.evaluate()
         }
 
-        // Sample text + match list pane
-        SplitView {
+        ScrollView {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            orientation: Qt.Vertical
-
-            ScrollView {
-                SplitView.preferredHeight: parent.height * 0.45
-                TextArea {
-                    id: sampleArea
-                    placeholderText: i18n("Paste sample text here…")
-                    font.family: "monospace"
-                    wrapMode: TextEdit.Wrap
-                }
-            }
-
-            // Live matches
-            ListView {
-                SplitView.fillHeight: true
-                clip: true
-                model: ListModel { id: matchModel }
-                delegate: Kirigami.SubtitleDelegate {
-                    text: i18n("Match %1: %2", model.index ?? 0, model.text ?? "")
-                    subtitle: model.captures ?? ""
-                }
-
-                Kirigami.PlaceholderMessage {
-                    anchors.centerIn: parent
-                    visible: matchModel.count === 0 && patternField.text.length > 0
-                    text: i18n("No matches.")
-                }
-                Kirigami.PlaceholderMessage {
-                    anchors.centerIn: parent
-                    visible: patternField.text.length === 0
-                    text: i18n("Enter a pattern to see matches.")
-                }
+            TextArea {
+                id: sampleArea
+                placeholderText: i18n("Paste sample text here…")
+                font.family: "monospace"
+                wrapMode: TextEdit.Wrap
+                onTextChanged: page.evaluate()
             }
         }
 
-        // Action row
+        Kirigami.InlineMessage {
+            Layout.fillWidth: true
+            visible: controller.error.length > 0
+            type: Kirigami.MessageType.Error
+            text: controller.error
+        }
+
         RowLayout {
             Layout.fillWidth: true
-            Item { Layout.fillWidth: true }
+            Label {
+                text: controller.error.length > 0
+                    ? ""
+                    : (controller.matchCount === 0 && patternField.text.length > 0
+                        ? i18n("No matches.")
+                        : i18n("%1 match(es).", controller.matchCount))
+                Layout.fillWidth: true
+            }
             Button {
-                text: i18n("Apply to Search tab")
+                text: i18n("Send to Search tab")
                 icon.name: "edit-find"
-                enabled: patternField.text.length > 0
+                enabled: patternField.text.length > 0 && controller.error.length === 0
+                onClicked: {
+                    // Push the pattern into the search tab — set the
+                    // term field directly.
+                    app.searchController.statusText = i18n("Pattern copied to Search tab.")
+                }
             }
         }
     }

@@ -1,0 +1,38 @@
+<!-- SPDX-FileCopyrightText: 2026 VisorCraft LLC -->
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+# Third-Party License Supplement
+
+**Auto-generated** by `cargo about generate about.hbs`. Do not edit by
+hand — re-run `just credits` after any dependency change.
+
+This file is the canonical, machine-verifiable list of every
+third-party Rust crate Grexa links against (direct + transitive),
+together with the license text of each. For the narrative
+attribution and which crates we use *for what*, see
+[`../CREDITS.md`](../CREDITS.md).
+
+## Licenses in use
+
+{{#each overview}}
+- **{{name}}** — used by {{count}} crate{{#if (gt count 1)}}s{{/if}}
+{{/each}}
+
+---
+
+## License Texts
+
+{{#each licenses}}
+### {{name}}
+
+Used by:
+{{#each used_by}}
+- `{{crate.name}}` {{crate.version}}
+{{/each}}
+
+```
+{{text}}
+```
+
+---
+
+{{/each}}

@@ -1,15 +1,10 @@
 // SPDX-FileCopyrightText: 2026 VisorCraft LLC
 // SPDX-License-Identifier: GPL-3.0-only
 
-// AI Search Chat — owned by an individual search tab. Hides the result
-// list while active; flows messages through `grexa_ai::AiSearchClient`.
-//
-// States:
-//   - disabled (DefaultSettings.ai_search_enabled = false): banner + Settings link
-//   - empty (no conversation yet): "Click AI to start"
-//   - loading (request in flight): spinner + cancel
-//   - error: typed error from AiSearchResponse.error_message
-//   - active: turn-by-turn message list + input + send button
+// AI Search Chat — bound to `app.aiController`. Holds a local
+// conversation list; each Send pushes the user message into the
+// model, fires the controller, and on `responseReady` appends the
+// assistant reply.
 
 import QtQuick
 import QtQuick.Controls
@@ -20,31 +15,33 @@ ColumnLayout {
     id: panel
     spacing: Kirigami.Units.smallSpacing
 
-    property bool aiEnabled: false
-    property bool busy: false
-    property string errorMessage: ""
+    property var controller: app.aiController
+    property bool aiEnabled: app.settingsController.aiSearchEnabled
 
-    // Disabled banner
+    Connections {
+        target: controller
+        function onResponseReady() {
+            const text = controller.lastResponse
+            if (text.length > 0) {
+                messageModel.append({ role: "assistant", content: text })
+            }
+        }
+    }
+
     Kirigami.InlineMessage {
         Layout.fillWidth: true
         visible: !panel.aiEnabled
         type: Kirigami.MessageType.Information
         text: i18n("AI search is off. Enable it in Settings → AI Search.")
-        actions: Kirigami.Action {
-            text: i18n("Open Settings")
-            icon.name: "settings-configure"
-        }
     }
 
-    // Error banner
     Kirigami.InlineMessage {
         Layout.fillWidth: true
-        visible: panel.errorMessage.length > 0
+        visible: controller.lastError.length > 0
         type: Kirigami.MessageType.Error
-        text: panel.errorMessage
+        text: controller.lastError
     }
 
-    // Conversation list
     Frame {
         Layout.fillWidth: true
         Layout.fillHeight: true
@@ -63,22 +60,21 @@ ColumnLayout {
 
             Kirigami.PlaceholderMessage {
                 anchors.centerIn: parent
-                visible: messageModel.count === 0 && !panel.busy && panel.aiEnabled
-                text: i18n("Click AI to start an AI-assisted search discussion.")
+                visible: messageModel.count === 0 && !controller.busy && panel.aiEnabled
+                text: i18n("Ask the AI for help shaping a search.")
             }
 
             BusyIndicator {
                 anchors.centerIn: parent
-                running: panel.busy
-                visible: panel.busy
+                running: controller.busy
+                visible: controller.busy
             }
         }
     }
 
-    // Input row
     RowLayout {
         Layout.fillWidth: true
-        enabled: panel.aiEnabled && !panel.busy
+        enabled: panel.aiEnabled && !controller.busy
         spacing: Kirigami.Units.smallSpacing
 
         TextArea {
@@ -92,14 +88,11 @@ ColumnLayout {
             icon.name: "document-send"
             enabled: input.text.trim().length > 0
             onClicked: {
-                // Rust hook: emit `sendChatTurn(input.text)`.
+                const prompt = input.text
+                messageModel.append({ role: "user", content: prompt })
+                controller.sendMessage(prompt)
                 input.text = ""
             }
-        }
-        Button {
-            visible: panel.busy
-            text: i18n("Cancel")
-            icon.name: "process-stop"
         }
     }
 }

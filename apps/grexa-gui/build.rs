@@ -18,6 +18,9 @@ fn main() {
                 "qml/DesignTokens.qml",
             ]),
     )
-    .file("src/qobjects.rs")
+    .file("src/qobjects/search.rs")
+    .file("src/qobjects/settings.rs")
+    .file("src/qobjects/regex_builder.rs")
+    .file("src/qobjects/ai.rs")
     .build();
 }

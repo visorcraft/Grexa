@@ -30,10 +30,12 @@ packagers (Flatpak, AppImage, distro repos) handle redistribution.
 ## Rust crate dependencies
 
 Grexa pulls in the following directly-used crates from crates.io.
-Every transitive dependency is listed in `Cargo.lock`; full license
-texts ship in each crate's `LICENSE-*` file inside the registry
-cache. `cargo deny check` (configured in `deny.toml`) verifies
-license compatibility on every CI run.
+The full machine-generated transitive supplement — every crate, its
+exact version, and the full text of every distinct license — lives
+at [`docs/credits-third-party.md`](docs/credits-third-party.md),
+regenerated via `just credits` (which runs `cargo-about` over
+`Cargo.lock`). `cargo deny check` (configured in `deny.toml`)
+enforces license compatibility on every CI run.
 
 ### Qt / GUI bridge
 

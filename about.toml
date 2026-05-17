@@ -1,0 +1,32 @@
+# cargo-about license aggregation policy.
+#
+# `accepted` lists every license SPDX expression we are willing to
+# accept in the dependency tree. The list mirrors `deny.toml` —
+# changes here should land in both files in the same change.
+#
+# Generate the supplement: `just credits`.
+# Output: docs/credits-third-party.md (auto-regenerated, do not edit).
+
+accepted = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "CDLA-Permissive-2.0",
+    "GPL-3.0-only",
+    "ISC",
+    "LGPL-2.1-or-later",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+
+# Skip workspace members in the auto-generated supplement — they're
+# our own code, credited in CREDITS.md's narrative.
+[grexa]
+[grexa-core]
+[grexa-cli]
+[grexa-containers]
+[grexa-ai]
+[grexa-i18n]
