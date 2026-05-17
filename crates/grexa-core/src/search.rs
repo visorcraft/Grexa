@@ -27,16 +27,10 @@ use crate::pattern::PatternEngine;
 pub enum ProgressEvent {
     /// A file was visited and skipped before scanning. Always paired with a
     /// reason so the UI can surface filtered-file counts.
-    FileSkipped {
-        path: PathBuf,
-        reason: SkipReason,
-    },
+    FileSkipped { path: PathBuf, reason: SkipReason },
     /// A file was scanned. `matches` is the number of matched *lines* inside
     /// the file, not match occurrences.
-    FileScanned {
-        path: PathBuf,
-        matches: usize,
-    },
+    FileScanned { path: PathBuf, matches: usize },
     /// A new match was produced. Sent eagerly so the GUI can stream rows into
     /// the table without waiting for the final summary.
     Match(SearchResult),
@@ -262,13 +256,7 @@ pub fn search_with(
         }
 
         files_scanned += 1;
-        let scan = search_file(
-            entry.path(),
-            &options.path,
-            options,
-            regex.as_ref(),
-            cancel,
-        )?;
+        let scan = search_file(entry.path(), &options.path, options, regex.as_ref(), cancel)?;
         if let Some(encoding) = scan.encoding {
             file_encodings.insert(entry.path().to_path_buf(), encoding);
         }
@@ -302,7 +290,10 @@ pub fn search_with(
         }
     }
 
-    let matches = results.iter().map(|result| result.match_count).sum::<usize>();
+    let matches = results
+        .iter()
+        .map(|result| result.match_count)
+        .sum::<usize>();
     let file_results = aggregate_file_results(&results, &file_encodings);
     let elapsed_ms = started.elapsed().as_millis();
     tracing::info!(
@@ -326,7 +317,6 @@ pub fn search_with(
         cancelled,
     })
 }
-
 
 pub fn aggregate_file_results(
     results: &[SearchResult],
@@ -623,9 +613,7 @@ fn culture_aware_lowercase(value: &str, options: &SearchOptions) -> String {
             let locale = options
                 .culture
                 .as_deref()
-                .and_then(|tag| {
-                    icu_locale_core::LanguageIdentifier::try_from_str(tag).ok()
-                })
+                .and_then(|tag| icu_locale_core::LanguageIdentifier::try_from_str(tag).ok())
                 .unwrap_or_else(|| {
                     icu_locale_core::LanguageIdentifier::try_from_str("en").unwrap()
                 });
@@ -642,11 +630,7 @@ fn preview_segments(line: &str, start: usize, end: usize) -> (String, String, St
     let matched = line.get(start..end).unwrap_or_default();
     let after = line.get(end..).unwrap_or_default();
 
-    (
-        truncate_chars(before, 120),
-        matched.to_string(),
-        truncate_chars(after, 120),
-    )
+    (truncate_chars(before, 120), matched.to_string(), truncate_chars(after, 120))
 }
 
 fn truncate_chars(input: &str, max_chars: usize) -> String {
@@ -848,11 +832,7 @@ mod tests {
     #[test]
     fn finds_plain_text_matches() {
         let dir = tempdir().unwrap();
-        fs::write(
-            dir.path().join("app.rs"),
-            "fn main() {\n    // TODO fix\n}\n",
-        )
-        .unwrap();
+        fs::write(dir.path().join("app.rs"), "fn main() {\n    // TODO fix\n}\n").unwrap();
 
         let options = SearchOptions::new(dir.path(), "TODO");
         let summary = search(&options).unwrap();

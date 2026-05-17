@@ -227,9 +227,7 @@ impl<T: HttpTransport> AiSearchClient<T> {
             timeout: self.timeout,
         };
         match self.transport.send(request) {
-            Ok(resp) if resp.is_success() => {
-                AiSearchResponse::ok("Endpoint reachable.")
-            }
+            Ok(resp) if resp.is_success() => AiSearchResponse::ok("Endpoint reachable."),
             Ok(resp) => AiSearchResponse::fail(format!(
                 "AI endpoint returned HTTP {}: {}",
                 resp.status,
@@ -253,8 +251,9 @@ impl<T: HttpTransport> AiSearchClient<T> {
             timeout: self.timeout,
         };
         match self.transport.send(request) {
-            Ok(resp) if resp.is_success() => parse_first_model_id(&resp.body)
-                .unwrap_or_else(|| DEFAULT_MODEL.to_string()),
+            Ok(resp) if resp.is_success() => {
+                parse_first_model_id(&resp.body).unwrap_or_else(|| DEFAULT_MODEL.to_string())
+            }
             _ => DEFAULT_MODEL.to_string(),
         }
     }
@@ -288,19 +287,13 @@ impl<T: HttpTransport> AiSearchClient<T> {
         });
 
         let mut headers = auth_headers(config.api_key.as_deref());
-        headers.insert(
-            "Content-Type".to_string(),
-            "application/json; charset=utf-8".to_string(),
-        );
+        headers.insert("Content-Type".to_string(), "application/json; charset=utf-8".to_string());
 
         let request = HttpRequest {
             method: HttpMethod::Post,
             url: chat_completions_endpoint(&config.endpoint),
             headers,
-            body: Some(
-                serde_json::to_vec(&payload)
-                    .unwrap_or_else(|_| b"{}".to_vec()),
-            ),
+            body: Some(serde_json::to_vec(&payload).unwrap_or_else(|_| b"{}".to_vec())),
             timeout: self.timeout,
         };
 
@@ -359,7 +352,11 @@ fn build_context_prompt(context: &AiSearchContext) -> String {
     prompt.push_str(&format!("- query: {}\n", context.search_query));
     prompt.push_str(&format!(
         "- search type: {}\n",
-        if context.regex_search { "Regex" } else { "Text" }
+        if context.regex_search {
+            "Regex"
+        } else {
+            "Text"
+        }
     ));
     prompt.push_str(&format!(
         "- result mode: {}\n",
@@ -383,8 +380,7 @@ fn build_context_prompt(context: &AiSearchContext) -> String {
             prompt.push_str(&format!("- {suggestion}\n"));
         }
     }
-    prompt
-        .push_str("Treat filters as suggestions and explain reasoning with concrete next steps.");
+    prompt.push_str("Treat filters as suggestions and explain reasoning with concrete next steps.");
     prompt
 }
 
@@ -497,10 +493,7 @@ pub fn linux_suggestions_for(options: &SearchOptions) -> Vec<String> {
         hints.push("seed candidates from the Linux file index (Baloo, KDE)".to_string());
     }
     if !options.match_file_names.trim().is_empty() {
-        hints.push(format!(
-            "match file names: {}",
-            options.match_file_names.trim()
-        ));
+        hints.push(format!("match file names: {}", options.match_file_names.trim()));
     }
     if !options.exclude_dirs.trim().is_empty() {
         hints.push(format!("exclude dirs: {}", options.exclude_dirs.trim()));
@@ -556,7 +549,10 @@ pub fn normalize_endpoint_base(endpoint: &str) -> String {
         value = stripped.trim_end_matches('/').to_string();
     }
 
-    value.trim_end_matches("/v1").trim_end_matches('/').to_string()
+    value
+        .trim_end_matches("/v1")
+        .trim_end_matches('/')
+        .to_string()
 }
 
 pub fn chat_completions_endpoint(endpoint: &str) -> String {
@@ -641,10 +637,7 @@ mod tests {
         let captured = transport.captured();
         assert_eq!(captured.len(), 1);
         assert_eq!(captured[0].url, "https://api.example.com/v1/models");
-        assert_eq!(
-            captured[0].headers.get("Authorization"),
-            Some(&"Bearer sk-test".to_string())
-        );
+        assert_eq!(captured[0].headers.get("Authorization"), Some(&"Bearer sk-test".to_string()));
     }
 
     #[test]
@@ -732,10 +725,12 @@ mod tests {
         assert!(messages.len() >= 3);
         assert_eq!(messages[0]["role"], "system");
         assert_eq!(messages[1]["role"], "system");
-        assert!(messages[1]["content"]
-            .as_str()
-            .unwrap()
-            .contains("respect gitignore"));
+        assert!(
+            messages[1]["content"]
+                .as_str()
+                .unwrap()
+                .contains("respect gitignore")
+        );
     }
 
     #[test]
@@ -842,10 +837,7 @@ mod tests {
             // Discovery
             response(200, "{\"data\":[{\"id\":\"discovered-model\"}]}"),
             // Chat
-            response(
-                200,
-                "{\"choices\":[{\"message\":{\"content\":\"hi\"}}]}",
-            ),
+            response(200, "{\"choices\":[{\"message\":{\"content\":\"hi\"}}]}"),
         ]);
         let client = AiSearchClient::with_transport(transport.clone());
         let result = client.send_chat(

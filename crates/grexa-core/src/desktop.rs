@@ -120,7 +120,9 @@ pub fn classify_user_path(input: &str) -> UserPathKind {
     if trimmed.is_empty() {
         return UserPathKind::Empty;
     }
-    for scheme in &["smb://", "fish://", "mtp://", "ftp://", "sftp://", "obex://"] {
+    for scheme in &[
+        "smb://", "fish://", "mtp://", "ftp://", "sftp://", "obex://",
+    ] {
         if let Some(stripped) = trimmed.strip_prefix(scheme) {
             return UserPathKind::AbstractUrl {
                 scheme: scheme.trim_end_matches("://").to_string(),
@@ -159,7 +161,10 @@ pub enum UserPathKind {
 /// `org.freedesktop.FileManager1.ShowItems` D-Bus call when available; this
 /// builder is for the dispatch shim.
 pub fn reveal_with_xdg_open(path: &Path) -> Vec<OsString> {
-    let parent = path.parent().map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
+    let parent = path
+        .parent()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
     vec!["xdg-open".into(), parent.into_os_string()]
 }
 
@@ -195,58 +200,35 @@ mod tests {
     use super::*;
 
     fn into_strings(argv: Vec<OsString>) -> Vec<String> {
-        argv.into_iter()
-            .map(|v| v.into_string().unwrap())
-            .collect()
+        argv.into_iter().map(|v| v.into_string().unwrap()).collect()
     }
 
     #[test]
     fn kate_open_at_line() {
-        let argv = open_in_editor_command(
-            EditorPreset::Kate,
-            &PathBuf::from("/tmp/a.rs"),
-            Some(42),
-        );
-        assert_eq!(
-            into_strings(argv),
-            vec!["kate", "/tmp/a.rs", "--line", "42"]
-        );
+        let argv =
+            open_in_editor_command(EditorPreset::Kate, &PathBuf::from("/tmp/a.rs"), Some(42));
+        assert_eq!(into_strings(argv), vec!["kate", "/tmp/a.rs", "--line", "42"]);
     }
 
     #[test]
     fn vscode_open_at_line() {
-        let argv = open_in_editor_command(
-            EditorPreset::VsCode,
-            &PathBuf::from("/tmp/a.rs"),
-            Some(7),
-        );
-        assert_eq!(
-            into_strings(argv),
-            vec!["code", "--goto", "/tmp/a.rs:7"]
-        );
+        let argv =
+            open_in_editor_command(EditorPreset::VsCode, &PathBuf::from("/tmp/a.rs"), Some(7));
+        assert_eq!(into_strings(argv), vec!["code", "--goto", "/tmp/a.rs:7"]);
     }
 
     #[test]
     fn neovim_open_at_line() {
-        let argv = open_in_editor_command(
-            EditorPreset::Neovim,
-            &PathBuf::from("/tmp/a.rs"),
-            Some(3),
-        );
+        let argv =
+            open_in_editor_command(EditorPreset::Neovim, &PathBuf::from("/tmp/a.rs"), Some(3));
         assert_eq!(into_strings(argv), vec!["nvim", "+3", "/tmp/a.rs"]);
     }
 
     #[test]
     fn jetbrains_open_at_line_prefixes_line_flag() {
-        let argv = open_in_editor_command(
-            EditorPreset::JetBrains,
-            &PathBuf::from("/tmp/a.rs"),
-            Some(15),
-        );
-        assert_eq!(
-            into_strings(argv),
-            vec!["idea", "--line", "15", "/tmp/a.rs"]
-        );
+        let argv =
+            open_in_editor_command(EditorPreset::JetBrains, &PathBuf::from("/tmp/a.rs"), Some(15));
+        assert_eq!(into_strings(argv), vec!["idea", "--line", "15", "/tmp/a.rs"]);
     }
 
     #[test]

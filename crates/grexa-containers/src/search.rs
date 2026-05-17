@@ -369,10 +369,7 @@ pub fn prune_mirrors(max_age_secs: u64) -> std::io::Result<()> {
             for stamp_entry in std::fs::read_dir(container_entry.path())? {
                 let stamp_entry = stamp_entry?;
                 let stamp_name = stamp_entry.file_name();
-                let stamp: u64 = stamp_name
-                    .to_string_lossy()
-                    .parse()
-                    .unwrap_or(u64::MAX);
+                let stamp: u64 = stamp_name.to_string_lossy().parse().unwrap_or(u64::MAX);
                 if stamp < cutoff {
                     let _ = std::fs::remove_dir_all(stamp_entry.path());
                 }
@@ -500,9 +497,8 @@ mod tests {
     fn direct_grep_invocation_uses_argv_array() {
         let runner = MockCommandRunner::default();
         runner.push(CommandResult::success("/usr/bin/grep\n"));
-        runner.push(CommandResult::success(
-            "/etc/hostname:1:my-host\n/etc/hosts:5:another match\n",
-        ));
+        runner
+            .push(CommandResult::success("/etc/hostname:1:my-host\n/etc/hosts:5:another match\n"));
         let runtime = cli_runtime(runner.clone());
 
         let opts = ContainerSearchOptions::new("/etc", "host");
@@ -584,10 +580,7 @@ mod tests {
             rewrite_path(Path::new("/tmp/cache/mirror/abc/123/foo.txt"), local, "/data"),
             "/data/foo.txt"
         );
-        assert_eq!(
-            rewrite_path(Path::new("/tmp/cache/mirror/abc/123"), local, "/data"),
-            "/data"
-        );
+        assert_eq!(rewrite_path(Path::new("/tmp/cache/mirror/abc/123"), local, "/data"), "/data");
         assert_eq!(
             rewrite_path(Path::new("/tmp/cache/mirror/abc/123/a/b"), local, "/data/"),
             "/data/a/b"

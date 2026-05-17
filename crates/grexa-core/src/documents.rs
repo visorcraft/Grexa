@@ -53,10 +53,7 @@ pub fn extract_text(path: &Path) -> Result<Option<String>, ExtractError> {
     };
     match ext.as_str() {
         "docx" => extract_ooxml(path, &["word/document.xml"]).map(Some),
-        "xlsx" => extract_ooxml(path, &[
-            "xl/sharedStrings.xml",
-            "xl/comments1.xml",
-        ]).map(Some),
+        "xlsx" => extract_ooxml(path, &["xl/sharedStrings.xml", "xl/comments1.xml"]).map(Some),
         "pptx" => extract_ooxml_glob(path, "ppt/slides/").map(Some),
         "odt" | "ods" | "odp" => extract_ooxml(path, &["content.xml"]).map(Some),
         "zip" => extract_zip(path).map(Some),
@@ -154,7 +151,35 @@ fn is_textual_name(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
     matches!(
         Path::new(&lower).extension().and_then(OsStr::to_str),
-        Some("txt") | Some("md") | Some("xml") | Some("json") | Some("yaml") | Some("yml") | Some("html") | Some("htm") | Some("css") | Some("js") | Some("ts") | Some("rs") | Some("py") | Some("go") | Some("java") | Some("c") | Some("h") | Some("cpp") | Some("hpp") | Some("toml") | Some("ini") | Some("conf") | Some("csv") | Some("tsv") | Some("log") | Some("sh") | Some("bash") | Some("zsh") | Some("fish")
+        Some("txt")
+            | Some("md")
+            | Some("xml")
+            | Some("json")
+            | Some("yaml")
+            | Some("yml")
+            | Some("html")
+            | Some("htm")
+            | Some("css")
+            | Some("js")
+            | Some("ts")
+            | Some("rs")
+            | Some("py")
+            | Some("go")
+            | Some("java")
+            | Some("c")
+            | Some("h")
+            | Some("cpp")
+            | Some("hpp")
+            | Some("toml")
+            | Some("ini")
+            | Some("conf")
+            | Some("csv")
+            | Some("tsv")
+            | Some("log")
+            | Some("sh")
+            | Some("bash")
+            | Some("zsh")
+            | Some("fish")
     )
 }
 
@@ -166,9 +191,10 @@ fn push_xml_text<R: Read>(reader: R, out: &mut String) -> Result<(), ExtractErro
         match reader.read_event_into(&mut buf) {
             Ok(Event::Text(e)) => {
                 let bytes = e.into_inner();
-                let unescaped = quick_xml::escape::unescape(std::str::from_utf8(&bytes).unwrap_or(""))
-                    .unwrap_or_default()
-                    .into_owned();
+                let unescaped =
+                    quick_xml::escape::unescape(std::str::from_utf8(&bytes).unwrap_or(""))
+                        .unwrap_or_default()
+                        .into_owned();
                 out.push_str(&unescaped);
                 out.push(' ');
             }
@@ -263,8 +289,8 @@ fn extract_rtf(path: &Path) -> Result<String, ExtractError> {
 
                 match word.as_str() {
                     // Skip the whole containing group for these "destinations".
-                    "fonttbl" | "stylesheet" | "colortbl" | "info" | "pict"
-                    | "header" | "footer" | "object" => {
+                    "fonttbl" | "stylesheet" | "colortbl" | "info" | "pict" | "header"
+                    | "footer" | "object" => {
                         skip_group_until = Some(group_depth);
                     }
                     // `\*` introduces a destination control; skip its group.
@@ -305,11 +331,10 @@ fn extract_pdf(path: &Path) -> Result<String, ExtractError> {
         .output();
 
     match result {
-        Ok(output) if output.status.success() => Ok(String::from_utf8_lossy(&output.stdout).into_owned()),
-        Ok(output) => Err(ExtractError::Pdf(format!(
-            "pdftotext exit status {}",
-            output.status
-        ))),
+        Ok(output) if output.status.success() => {
+            Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+        }
+        Ok(output) => Err(ExtractError::Pdf(format!("pdftotext exit status {}", output.status))),
         Err(err) => Err(ExtractError::Pdf(err.to_string())),
     }
 }

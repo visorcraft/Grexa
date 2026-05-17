@@ -685,11 +685,7 @@ fn unix_now() -> u64 {
 }
 
 fn path_is_blank(path: &Path) -> bool {
-    path.as_os_str().is_empty()
-        || path
-            .to_str()
-            .map(|s| s.trim().is_empty())
-            .unwrap_or(false)
+    path.as_os_str().is_empty() || path.to_str().map(|s| s.trim().is_empty()).unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -960,10 +956,7 @@ mod tests {
         store.add("/tmp/a").unwrap();
         store.add("/tmp/b").unwrap();
         let after_add = store.add("/tmp/a").unwrap();
-        assert_eq!(
-            after_add,
-            vec![PathBuf::from("/tmp/a"), PathBuf::from("/tmp/b")]
-        );
+        assert_eq!(after_add, vec![PathBuf::from("/tmp/a"), PathBuf::from("/tmp/b")]);
 
         let after_remove = store.remove(Path::new("/tmp/a")).unwrap();
         assert_eq!(after_remove, vec![PathBuf::from("/tmp/b")]);
@@ -1132,9 +1125,7 @@ mod tests {
             .add(make_search("search for foo", "/projects/app"))
             .unwrap();
         store.add(make_search("bar query", "/other")).unwrap();
-        store
-            .add(make_search("another foo", "/other"))
-            .unwrap();
+        store.add(make_search("another foo", "/other")).unwrap();
         store.add(make_search("xyz", "/projects/code")).unwrap();
 
         assert_eq!(store.filter("foo").unwrap().len(), 2);
@@ -1161,8 +1152,12 @@ mod tests {
     fn profile_upsert_inserts_at_top() {
         let (_dir, paths) = make_paths();
         let store = SearchProfileStore::new(&paths);
-        store.upsert(make_profile("alpha", "/tmp/a", "TODO")).unwrap();
-        store.upsert(make_profile("beta", "/tmp/b", "FIXME")).unwrap();
+        store
+            .upsert(make_profile("alpha", "/tmp/a", "TODO"))
+            .unwrap();
+        store
+            .upsert(make_profile("beta", "/tmp/b", "FIXME"))
+            .unwrap();
         let profiles = store.load().unwrap();
         assert_eq!(profiles[0].name, "beta");
         assert_eq!(profiles[1].name, "alpha");
@@ -1172,10 +1167,16 @@ mod tests {
     fn profile_upsert_updates_existing_case_insensitive_and_moves_to_top() {
         let (_dir, paths) = make_paths();
         let store = SearchProfileStore::new(&paths);
-        store.upsert(make_profile("Profile", "/tmp/first", "alpha")).unwrap();
+        store
+            .upsert(make_profile("Profile", "/tmp/first", "alpha"))
+            .unwrap();
         std::thread::sleep(std::time::Duration::from_millis(10));
-        store.upsert(make_profile("OTHER", "/tmp/other", "needle")).unwrap();
-        store.upsert(make_profile("profile", "/tmp/second", "beta")).unwrap();
+        store
+            .upsert(make_profile("OTHER", "/tmp/other", "needle"))
+            .unwrap();
+        store
+            .upsert(make_profile("profile", "/tmp/second", "beta"))
+            .unwrap();
 
         let profiles = store.load().unwrap();
         assert_eq!(profiles.len(), 2);

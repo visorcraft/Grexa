@@ -7,8 +7,8 @@ pub mod runtime;
 pub mod search;
 
 pub use runtime::{
-    CliRuntime, CommandInvocation, CommandResult, CommandRunner, MockCommandRunner,
-    RuntimeError, RuntimeOperations, SystemCommandRunner,
+    CliRuntime, CommandInvocation, CommandResult, CommandRunner, MockCommandRunner, RuntimeError,
+    RuntimeOperations, SystemCommandRunner,
 };
 
 pub use search::{
@@ -144,7 +144,9 @@ fn docker_socket_from_env(probe: &dyn FsProbe) -> Option<PathBuf> {
 
 fn detect_podman_rootless(probe: &dyn FsProbe) -> Option<ContainerRuntime> {
     let runtime_dir = probe.env_var("XDG_RUNTIME_DIR")?;
-    let socket_path = PathBuf::from(runtime_dir).join("podman").join("podman.sock");
+    let socket_path = PathBuf::from(runtime_dir)
+        .join("podman")
+        .join("podman.sock");
     if !probe.path_exists(&socket_path) {
         return None;
     }
@@ -260,10 +262,7 @@ mod tests {
             .iter()
             .find(|runtime| runtime.kind == ContainerRuntimeKind::Docker)
             .expect("docker detected");
-        assert_eq!(
-            docker.socket_path,
-            Some(PathBuf::from("/run/user/1000/docker.sock"))
-        );
+        assert_eq!(docker.socket_path, Some(PathBuf::from("/run/user/1000/docker.sock")));
     }
 
     #[test]
@@ -289,10 +288,7 @@ mod tests {
             .iter()
             .find(|runtime| runtime.kind == ContainerRuntimeKind::Podman && runtime.rootless)
             .expect("rootless podman detected");
-        assert_eq!(
-            rootless.socket_path,
-            Some(PathBuf::from("/run/user/1000/podman/podman.sock"))
-        );
+        assert_eq!(rootless.socket_path, Some(PathBuf::from("/run/user/1000/podman/podman.sock")));
         assert!(rootless.cli_path.is_some());
     }
 
@@ -302,14 +298,9 @@ mod tests {
         let runtimes = detect_runtimes(&probe);
         let rootful = runtimes
             .iter()
-            .find(|runtime| {
-                runtime.kind == ContainerRuntimeKind::Podman && !runtime.rootless
-            })
+            .find(|runtime| runtime.kind == ContainerRuntimeKind::Podman && !runtime.rootless)
             .expect("rootful podman detected");
-        assert_eq!(
-            rootful.socket_path,
-            Some(PathBuf::from("/run/podman/podman.sock"))
-        );
+        assert_eq!(rootful.socket_path, Some(PathBuf::from("/run/podman/podman.sock")));
     }
 
     #[test]
@@ -318,9 +309,7 @@ mod tests {
         let runtimes = detect_runtimes(&probe);
         let rootful = runtimes
             .iter()
-            .find(|runtime| {
-                runtime.kind == ContainerRuntimeKind::Podman && !runtime.rootless
-            })
+            .find(|runtime| runtime.kind == ContainerRuntimeKind::Podman && !runtime.rootless)
             .expect("cli-only podman detected");
         assert!(rootful.socket_path.is_none());
         assert_eq!(rootful.cli_path, Some(PathBuf::from("/usr/bin/podman")));

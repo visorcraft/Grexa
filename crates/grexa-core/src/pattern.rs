@@ -90,9 +90,7 @@ impl PatternEngine {
     pub fn replace_all(&self, haystack: &str, replacement: &str) -> String {
         match self {
             PatternEngine::Fast(re) => re.replace_all(haystack, replacement).into_owned(),
-            PatternEngine::Extended(re) => {
-                re.replace_all(haystack, replacement).into_owned()
-            }
+            PatternEngine::Extended(re) => re.replace_all(haystack, replacement).into_owned(),
         }
     }
 }

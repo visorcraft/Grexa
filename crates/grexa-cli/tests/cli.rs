@@ -173,11 +173,7 @@ fn ignore_diacritics_finds_match_when_haystack_has_accent() {
     write(&dir.path().join("a.txt"), "café\n");
 
     cmd()
-        .args([
-            dir.path().to_str().unwrap(),
-            "cafe",
-            "--ignore-diacritics",
-        ])
+        .args([dir.path().to_str().unwrap(), "cafe", "--ignore-diacritics"])
         .assert()
         .success()
         .stdout(predicate::str::contains("café"));

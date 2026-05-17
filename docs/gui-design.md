@@ -1,71 +1,72 @@
 # GUI Design + Spike Outcome
 
-## Spike outcome: `qmetaobject` chosen as the Rust ⇄ Qt bridge
+## Spike outcome: `cxx-qt` 0.8 is the production Rust ⇄ Qt bridge
 
-PLAN.md Phase 1 calls for a Rust ⇄ Qt bridge spike before committing
-to the GUI stack. Two paths were evaluated.
+PLAN.md Phase 1 called for a Rust ⇄ Qt bridge spike before
+committing to the GUI stack. Two paths were evaluated.
 
-**`cxx-qt` 0.8** — rejected. Two smoke attempts (with and without a
-`links = "..."` Cargo manifest field, with and without
-`interface.export()` in `build.rs`, with and without explicit
-`cxx_qt::init_crate!(cxx_qt_lib)` calls) all failed to link with the
-same error:
+**`cxx-qt` 0.8** — accepted, pure-Cargo. The crate generates the
+QObject's C++ side at build time, registers `#[qml_element]`
+QObjects under a `QmlModule` URI specified in `build.rs`, and
+bundles `.qml` files into the binary via Qt's resource system.
+`cargo build -p grexa --release` produces a working binary that
+boots `QGuiApplication`, builds a `QQmlApplicationEngine`, and
+loads `qrc:/qt/qml/com/visorcraft/Grexa/Main.qml`. The QObject
+surface is in `apps/grexa-gui/src/qobjects.rs` as a
+`#[cxx_qt::bridge]` module; `apps/grexa-gui/build.rs` calls
+`CxxQtBuilder::new_qml_module(...)`. Verified locally with
+`QT_QPA_PLATFORM=offscreen target/release/grexa` running the Qt
+event loop. The workspace controllers (`workspace.rs`, `tab.rs`,
+`status.rs`) remain the source of truth for business logic.
 
-```
-ld.lld: error: undefined symbol: cxx_qt_init_crate_cxx_qt_lib
->>> referenced by public-initializer.cpp:11
->>>   target/debug/build/<crate>/out/cxx-qt-build/initializers/<crate>/public-initializer.cpp:11
->>> referenced by main.rs:N (init_crate! call site)
-```
-
-The symbol is emitted by an auto-generated `public-initializer.cpp`
-that the cxx-qt-build script writes into `OUT_DIR`. It cannot be
-suppressed by Rust source changes. The cxx-qt-lib build script
-`.export()`s the corresponding C++ initializer but downstream
-binaries don't pick it up under pure Cargo — the CMake harness in
-the cxx-qt repo's own examples threads the export through. We
-re-evaluate when cxx-qt ships a pure-Cargo flow.
-
-**`qmetaobject` 0.2** — accepted. Pure Rust, no build script, no
-CMake. `cargo build -p grexa` produces a working binary that
-registers QObjects under `com.visorcraft.Grexa 1.0`, boots a
-`QmlEngine`, and runs the full Qt event loop. Verified locally with
-`QT_QPA_PLATFORM=offscreen target/release/grexa` exiting 0 after the
-QML loads. The QObject surface is in `apps/grexa-gui/src/qobjects.rs`;
-the workspace controllers (`workspace.rs`, `tab.rs`, `status.rs`)
-remain the source of truth for business logic.
+A previous spike rejected cxx-qt after the link step failed with
+`undefined symbol: cxx_qt_init_crate_cxx_qt_lib`. That failure
+turned out to be cache state from a partial attempt — a fresh
+checkout with `CxxQtBuilder::new_qml_module(...)` (the API used
+when the crate IS a QML module) plus `cxx_qt::init_crate!` calls in
+`main.rs` links cleanly on cxx-qt 0.8.1 against system Qt 6.11.
+`qmetaobject` 0.2 was the production bridge until this PR landed
+and is no longer pulled in by `apps/grexa-gui`.
 
 What ships today:
 
 1. **A working Qt 6 binary.** `cargo run -p grexa` registers
-   `SearchController` with Qt's metaobject system and launches the
-   Kirigami QML shell.
-2. **A SearchController QObject** with `status_text`, `match_count`,
-   `busy`, and `recent_path_count` properties, `status_changed` and
-   `history_changed` signals, and `start_search` / `cancel` /
-   `recent_paths_json` slots. The real `grexa-core` search engine
-   drives it; the recent-paths store records every path; the
-   workspace state is shared via a thread-local pointer so QML
-   instances see the same state.
+   `SearchController` with Qt's metaobject system via cxx-qt and
+   launches the Kirigami QML shell.
+2. **A SearchController QObject** declared as `#[qml_element]` with
+   `status_text` (QString), `match_count` (i32), `busy` (bool), and
+   `recent_path_count` (i32) qproperties (each with auto-generated
+   change signals), a `history_changed` qsignal, and
+   `start_search` / `cancel` / `recent_paths_json` qinvokables. The
+   real `grexa-core` search engine drives it; the recent-paths
+   store records every path; the workspace state is shared via a
+   thread-local pointer so QML instances see the same state.
 3. **A complete QML page set** at `apps/grexa-gui/qml/` — Main +
    Search + Regex Builder + Settings + About + Context Preview +
-   AiChatPanel + DesignTokens.
-4. **Unit tests** that exercise the QObject end-to-end against a real
-   tempdir (`search_controller_drives_real_search` in `qobjects.rs`).
+   AiChatPanel + DesignTokens — bundled into the binary via Qt's
+   resource system at `qrc:/qt/qml/com/visorcraft/Grexa/...`.
+4. **Unit tests** that exercise the Rust-side state without
+   instantiating Qt (`search_controller_drives_real_search`,
+   `cancel_sets_cancelled_status`, `recent_paths_json_round_trips`
+   in `qobjects.rs`). The cxx-qt-generated `SearchController` is
+   tested by `cargo build -p grexa` itself: a regression in
+   property signatures, qinvokable types, or qsignal generation
+   trips the C++ compile in `build.rs`.
 
 ## Module map
 
 ```
 apps/grexa-gui/
-├── Cargo.toml          # depends on every other Grexa crate + qmetaobject
+├── Cargo.toml          # depends on every other Grexa crate + cxx-qt + cxx-qt-lib
+├── build.rs            # CxxQtBuilder::new_qml_module(...) — registers QML module + files
 ├── src/
-│   ├── main.rs         # logging + workspace install + QmlEngine boot
-│   ├── qobjects.rs     # SearchController QObject (qmetaobject) + workspace TLS
+│   ├── main.rs         # logging + workspace install + QGuiApplication + QQmlApplicationEngine
+│   ├── qobjects.rs     # SearchController QObject (cxx_qt::bridge) + workspace TLS
 │   ├── controller.rs   # `Controllers` struct: settings, bundle, cancel
 │   ├── tab.rs          # `TabState` per-tab state
 │   ├── workspace.rs    # `Workspace`: tabs + persistent stores + replace
 │   └── status.rs       # `format_status` Fluent-aware status formatter
-└── qml/
+└── qml/                # bundled into binary at qrc:/qt/qml/com/visorcraft/Grexa/
     ├── Main.qml                # Kirigami ApplicationWindow + nav rail
     ├── SearchPage.qml          # path + term + filters + result list
     ├── RegexBuilderPage.qml    # presets + sample + live matches
@@ -126,29 +127,28 @@ rename / drag is GUI-only; the Rust side only needs:
 ## Build pipeline (current)
 
 Pure Cargo. `cargo build -p grexa` produces a self-contained binary
-linked against `libQt6Core.so` / `libQt6Qml.so` from the system Qt
-runtime. No CMake, no build script in `apps/grexa-gui`.
+that runs cxx-qt's compile-time code generator (driven by
+`apps/grexa-gui/build.rs`) to emit C++ for each `#[cxx_qt::bridge]`,
+compiles it with `cc`, links against `libQt6Core.so` /
+`libQt6Qml.so` / `libQt6Gui.so` from the system Qt runtime, and
+embeds every `.qml` file under `apps/grexa-gui/qml/` into the
+binary via Qt's resource system. No CMake, no host bootstrap
+changes beyond the Qt 6 dev packages already required by the prior
+qmetaobject build.
 
-If a future PR wants cxx-qt's compile-time generated bindings (sharper
-typing, automatic property notification, QML enum exposure), it should:
-
-1. Add `cxx-qt` + `cxx-qt-build` + `cxx-qt-lib` to the workspace.
-2. Introduce a `CMakeLists.txt` under `apps/grexa-gui` and update the
-   CI host bootstrap to install CMake + Qt6 dev packages.
-3. Migrate `qobjects.rs` from `qmetaobject` to `cxx_qt::bridge`.
-
-The qmetaobject implementation is the production path until that
-migration. QML files load via `QmlEngine::load_file`; an installed
-binary picks them up from `/usr/share/grexa/qml/`.
+QML files load from `qrc:/qt/qml/com/visorcraft/Grexa/...` at
+runtime. Editing a QML file requires a `cargo build` cycle because
+the file is baked into the binary at build time — that is the
+cxx-qt-native flow.
 
 ## What lands when the dedicated GUI PR opens
 
 Phase 1 (the spike itself):
-- Add `cxx-qt-build`, `cxx-qt`, `cxx-qt-lib` to apps/grexa-gui
-- Drop the `qml6`-spawn fallback
-- Add a `CMakeLists.txt` and document the dual-build (Cargo + CMake)
-- Stand up one Rust `QObject` (the `SearchController`) and one QML
-  binding test
+- ✅ Add `cxx-qt-build`, `cxx-qt`, `cxx-qt-lib` to apps/grexa-gui
+- ✅ Drop the `qml6`-spawn fallback
+- ✅ Pure-Cargo build (no CMake)
+- ✅ Stand up one Rust `QObject` (the `SearchController`) and the
+  `qobjects::tests::search_controller_drives_real_search` test
 
 Phase 4 (Search UI MVP):
 - Replace `SearchPage.qml` placeholder with the real path/term/mode

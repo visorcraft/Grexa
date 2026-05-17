@@ -351,13 +351,15 @@ fn encode_for_writeback(text: &str, encoding: &DetectedEncoding) -> Vec<u8> {
         // serialized as numeric character references — that's encoding_rs's
         // documented "encode with HTML escapes" behavior and it matches the
         // safest interpretation of "preserve original encoding".
-        DetectedEncoding::Heuristic(name) => match encoding_rs::Encoding::for_label(name.as_bytes()) {
-            Some(codec) => {
-                let (encoded, _, _) = codec.encode(text);
-                encoded.into_owned()
+        DetectedEncoding::Heuristic(name) => {
+            match encoding_rs::Encoding::for_label(name.as_bytes()) {
+                Some(codec) => {
+                    let (encoded, _, _) = codec.encode(text);
+                    encoded.into_owned()
+                }
+                None => text.as_bytes().to_vec(),
             }
-            None => text.as_bytes().to_vec(),
-        },
+        }
     }
 }
 
@@ -452,12 +454,9 @@ mod tests {
         let target = dir.path().join("a.txt");
         fs::write(&target, "TODO\ntodo\nTodo\n").unwrap();
 
-        let summary = replace_with(
-            &opts(dir.path(), "todo", "$1-NOEXPAND"),
-            &CancelToken::new(),
-            None,
-        )
-        .unwrap();
+        let summary =
+            replace_with(&opts(dir.path(), "todo", "$1-NOEXPAND"), &CancelToken::new(), None)
+                .unwrap();
         assert_eq!(summary.matches_replaced, 3);
         let rewritten = fs::read_to_string(&target).unwrap();
         // Dollar-sign capture references must not be expanded; verify the
@@ -517,10 +516,7 @@ mod tests {
 
         let raw = fs::read(&target).unwrap();
         let body = String::from_utf8(raw).unwrap();
-        assert!(
-            body.contains("DONE fix me\r\n"),
-            "CRLF should survive replace, got {body:?}"
-        );
+        assert!(body.contains("DONE fix me\r\n"), "CRLF should survive replace, got {body:?}");
         assert!(body.ends_with("last line\n"));
     }
 
@@ -591,12 +587,7 @@ mod tests {
 
         let cancel = CancelToken::new();
         cancel.cancel();
-        let summary = replace_with(
-            &opts(dir.path(), "TODO", "DONE"),
-            &cancel,
-            None,
-        )
-        .unwrap();
+        let summary = replace_with(&opts(dir.path(), "TODO", "DONE"), &cancel, None).unwrap();
         assert!(summary.cancelled);
     }
 }

@@ -30,15 +30,10 @@ pub fn format_status(bundle: &Bundle, tab: &TabState) -> String {
             .t("search-status-cancelled")
             .unwrap_or_else(|_| "Cancelled".into()),
         TabStatus::Error(message) => bundle
-            .format(
-                "search-status-error",
-                &[("message", message.clone().into())],
-            )
+            .format("search-status-error", &[("message", message.clone().into())])
             .unwrap_or_else(|_| format!("Error: {message}")),
         TabStatus::Completed => match &tab.summary {
-            Some(summary) if tab.view.is_filtered => {
-                format_filtered_summary(bundle, summary, tab)
-            }
+            Some(summary) if tab.view.is_filtered => format_filtered_summary(bundle, summary, tab),
             Some(summary) => format_completed_summary(bundle, summary),
             None => bundle
                 .t("search-status-ready")
@@ -59,10 +54,7 @@ fn format_completed_summary(bundle: &Bundle, summary: &SearchSummary) -> String 
             ],
         )
         .unwrap_or_else(|_| {
-            format!(
-                "Found {} matches in {} files",
-                summary.matches, summary.files_matched
-            )
+            format!("Found {} matches in {} files", summary.matches, summary.files_matched)
         })
 }
 
@@ -95,10 +87,7 @@ fn format_elapsed(bundle: &Bundle, elapsed_ms: u128) -> String {
     }
     if seconds_total < 60.0 {
         return bundle
-            .format(
-                "elapsed-seconds",
-                &[("seconds", count(seconds_total.round() as usize))],
-            )
+            .format("elapsed-seconds", &[("seconds", count(seconds_total.round() as usize))])
             .unwrap_or_else(|_| format!("{:.0} seconds", seconds_total));
     }
     let minutes = (seconds_total / 60.0) as usize;

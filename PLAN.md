@@ -632,27 +632,34 @@ When the maintainer cuts `v0.1.0-alpha` / `v1.0.0`:
 
 ## Rust ⇄ Qt bridge
 
-`cargo run -p grexa` boots the full Qt event loop via `qmetaobject`
-and loads the Kirigami QML shell. The cxx-qt 0.8 path was attempted
-and rejected — its `cxx-qt-build` link pipeline depends on a
-CMake-driven initializer registry that's hostile to a Cargo-only
-workspace (`undefined symbol: cxx_qt_init_crate_cxx_qt_lib`).
-qmetaobject is the production bridge until cxx-qt ships a pure-Cargo
-flow.
+`cargo run -p grexa` boots the full Qt event loop via cxx-qt 0.8 and
+loads the Kirigami QML shell. The QObject surface in
+`apps/grexa-gui/src/qobjects.rs` is a `#[cxx_qt::bridge]` module;
+the QML files under `apps/grexa-gui/qml/` are bundled into the
+binary via Qt's resource system and loaded from
+`qrc:/qt/qml/com/visorcraft/Grexa/Main.qml`. Pure-Cargo — no CMake.
+
+An earlier spike attempted cxx-qt and failed to link
+(`undefined symbol: cxx_qt_init_crate_cxx_qt_lib`); on revisit, that
+error was traced to a stale target/ + missing `qml_module()`
+registration. The fix is `CxxQtBuilder::new_qml_module(...)` in
+`build.rs`. qmetaobject 0.2 is no longer pulled in by
+`apps/grexa-gui`.
 
 Verification:
 
-    $ QT_QPA_PLATFORM=offscreen target/release/grexa
+    $ cargo build -p grexa --release
+        Finished `release` profile [optimized] target(s)
+    $ QT_QPA_PLATFORM=offscreen timeout 3 target/release/grexa
     INFO  Grexa GUI shell starting
     $ echo $?
-    0
+    124   # timeout killed the running Qt event loop
 
 Decision and module map: `docs/gui-design.md`.
 
 ## Optional follow-ups
 
-These were the v1.0 "nice-to-haves" — three of four shipped in
-follow-up commits, one remains genuinely deferred:
+All four v1.0 "nice-to-haves" have shipped:
 
 - [x] **Byte-offset multi-hit-per-line grep parser.**
   `parse_grep_output_with_pattern` re-scans each line of the
@@ -671,11 +678,21 @@ follow-up commits, one remains genuinely deferred:
   `string_comparison_mode = CurrentCulture` and a `culture` tag is
   supplied, lowercasing routes through ICU. Turkish-i and German ß
   tests pin the behavior.
-- [ ] **Migrate `qobjects.rs` from `qmetaobject` to
-  `cxx_qt::bridge`.** Attempted in this session; two reproducible
-  link errors prevented a working build (concrete diagnostics in
-  `docs/gui-design.md`). qmetaobject is the production bridge until
-  cxx-qt 0.9+ ships a pure-Cargo flow or Grexa CI hosts gain CMake.
+- [x] **Migrate `qobjects.rs` from `qmetaobject` to
+  `cxx_qt::bridge`.** Done — `apps/grexa-gui/src/qobjects.rs` is now a
+  `cxx_qt::bridge` module that exposes `SearchController` as a
+  `#[qml_element]`. `apps/grexa-gui/build.rs` registers the QML
+  module `com.visorcraft.Grexa 1.0` via `CxxQtBuilder::new_qml_module`,
+  bundling every page in `apps/grexa-gui/qml/` into the binary via
+  Qt's resource system. `main.rs` boots `QGuiApplication` +
+  `QQmlApplicationEngine` and loads
+  `qrc:/qt/qml/com/visorcraft/Grexa/Main.qml`. Pure-Cargo —
+  no CMake, no host bootstrap changes beyond `qt6-base-dev` /
+  `qt6-declarative-dev` (already required by the qmetaobject
+  build). `cargo build -p grexa --release` produces a working
+  binary that registers the QObjects, loads the QML, and runs the
+  Qt event loop (verified with `QT_QPA_PLATFORM=offscreen`). The
+  qmetaobject crate is no longer pulled in by `apps/grexa-gui`.
 
 ## Non-Goals
 

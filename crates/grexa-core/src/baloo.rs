@@ -32,11 +32,7 @@ pub enum BalooError {
 pub trait BalooAdapter: Send + Sync {
     fn is_available(&self) -> bool;
     fn is_path_indexed(&self, root: &Path) -> bool;
-    fn candidates_for(
-        &self,
-        query: &str,
-        root: &Path,
-    ) -> Result<Vec<PathBuf>, BalooError>;
+    fn candidates_for(&self, query: &str, root: &Path) -> Result<Vec<PathBuf>, BalooError>;
 }
 
 /// No-op adapter — used when KDE / Baloo isn't present, or when the user
@@ -50,11 +46,7 @@ impl BalooAdapter for NullBalooAdapter {
     fn is_path_indexed(&self, _root: &Path) -> bool {
         false
     }
-    fn candidates_for(
-        &self,
-        _query: &str,
-        _root: &Path,
-    ) -> Result<Vec<PathBuf>, BalooError> {
+    fn candidates_for(&self, _query: &str, _root: &Path) -> Result<Vec<PathBuf>, BalooError> {
         Ok(Vec::new())
     }
 }
@@ -110,11 +102,7 @@ impl BalooAdapter for BaloosearchCliAdapter {
             .unwrap_or(false)
     }
 
-    fn candidates_for(
-        &self,
-        query: &str,
-        root: &Path,
-    ) -> Result<Vec<PathBuf>, BalooError> {
+    fn candidates_for(&self, query: &str, root: &Path) -> Result<Vec<PathBuf>, BalooError> {
         let cli = Self::find_cli().ok_or(BalooError::NotInstalled)?;
         let output = Command::new(cli)
             .args(["-d"])
@@ -125,9 +113,7 @@ impl BalooAdapter for BaloosearchCliAdapter {
             .stdout(Stdio::piped())
             .output()?;
         if !output.status.success() {
-            return Err(BalooError::Cli(
-                String::from_utf8_lossy(&output.stderr).into_owned(),
-            ));
+            return Err(BalooError::Cli(String::from_utf8_lossy(&output.stderr).into_owned()));
         }
         let stdout = String::from_utf8_lossy(&output.stdout);
         Ok(stdout
@@ -164,11 +150,7 @@ impl BalooAdapter for StubBalooAdapter {
     fn is_path_indexed(&self, root: &Path) -> bool {
         self.indexed_roots.iter().any(|r| root.starts_with(r))
     }
-    fn candidates_for(
-        &self,
-        _query: &str,
-        _root: &Path,
-    ) -> Result<Vec<PathBuf>, BalooError> {
+    fn candidates_for(&self, _query: &str, _root: &Path) -> Result<Vec<PathBuf>, BalooError> {
         Ok(self.candidates.clone())
     }
 }
@@ -182,7 +164,12 @@ mod tests {
         let adapter = NullBalooAdapter;
         assert!(!adapter.is_available());
         assert!(!adapter.is_path_indexed(Path::new("/home/me")));
-        assert!(adapter.candidates_for("anything", Path::new("/")).unwrap().is_empty());
+        assert!(
+            adapter
+                .candidates_for("anything", Path::new("/"))
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]

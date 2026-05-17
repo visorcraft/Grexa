@@ -109,12 +109,7 @@ impl TabState {
     /// Rebuilds the sorted/filtered display.
     pub fn install_summary(&mut self, summary: SearchSummary) {
         self.summary = Some(summary);
-        self.status = if self
-            .summary
-            .as_ref()
-            .map(|s| s.cancelled)
-            .unwrap_or(false)
-        {
+        self.status = if self.summary.as_ref().map(|s| s.cancelled).unwrap_or(false) {
             TabStatus::Cancelled
         } else {
             TabStatus::Completed
@@ -154,11 +149,7 @@ impl TabState {
             let files: Vec<_> = summary
                 .file_results
                 .iter()
-                .filter(|f| {
-                    f.preview_matches
-                        .iter()
-                        .any(|r| predicate(&r.line_content))
-                })
+                .filter(|f| f.preview_matches.iter().any(|r| predicate(&r.line_content)))
                 .cloned()
                 .collect();
             (content, files)
@@ -276,10 +267,7 @@ mod tests {
 
     #[test]
     fn auto_title_collapses_long_paths() {
-        let state = tab(
-            "/very/deep/nested/path/with/many/segments/that/keeps/going/code",
-            "x",
-        );
+        let state = tab("/very/deep/nested/path/with/many/segments/that/keeps/going/code", "x");
         assert!(state.title.contains("/.../"));
     }
 

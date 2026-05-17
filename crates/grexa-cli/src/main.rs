@@ -221,7 +221,8 @@ fn main() {
 /// writable; otherwise only stderr logging stays on. The returned guard
 /// must live until `main` exits or the background writer flushes early.
 fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
-    let env_filter = EnvFilter::try_from_env("GREXA_LOG").unwrap_or_else(|_| EnvFilter::new("warn"));
+    let env_filter =
+        EnvFilter::try_from_env("GREXA_LOG").unwrap_or_else(|_| EnvFilter::new("warn"));
 
     let stderr_layer = tracing_subscriber::fmt::layer()
         .with_target(false)
@@ -255,7 +256,9 @@ fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
         }
     };
 
-    let registry = tracing_subscriber::registry().with(env_filter).with(stderr_layer);
+    let registry = tracing_subscriber::registry()
+        .with(env_filter)
+        .with(stderr_layer);
     if let Some(layer) = file_layer {
         registry.with(layer).init();
     } else {
@@ -425,10 +428,7 @@ fn run_container_search(args: SearchArgs) -> anyhow::Result<i32> {
         return Ok(if summary.hits.is_empty() { 1 } else { 0 });
     }
     for hit in &summary.hits {
-        println!(
-            "{}:{}:{}",
-            hit.container_path, hit.line_number, hit.line_content
-        );
+        println!("{}:{}:{}", hit.container_path, hit.line_number, hit.line_content);
     }
     Ok(if summary.hits.is_empty() { 1 } else { 0 })
 }

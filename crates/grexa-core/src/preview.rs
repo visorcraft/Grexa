@@ -232,11 +232,7 @@ mod tests {
 
         let result = context_preview(&path, 2, 1, 1).unwrap();
         assert_eq!(result.encoding, DetectedEncoding::Utf16Le);
-        let contents: Vec<_> = result
-            .lines
-            .iter()
-            .map(|l| l.content.clone())
-            .collect();
+        let contents: Vec<_> = result.lines.iter().map(|l| l.content.clone()).collect();
         assert_eq!(contents, vec!["first", "second", "third"]);
     }
 }

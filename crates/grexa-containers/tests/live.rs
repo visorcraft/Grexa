@@ -59,10 +59,7 @@ fn spawn_alpine_with_todo(
     ]);
     let output = cmd.output().ok()?;
     if !output.status.success() {
-        eprintln!(
-            "live: failed to start container: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        eprintln!("live: failed to start container: {}", String::from_utf8_lossy(&output.stderr));
         return None;
     }
     let id = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -132,18 +129,20 @@ fn direct_grep_against_live_alpine() {
     let kind = runtime.kind;
     let cli_runtime = CliRuntime::new(runtime.clone(), SystemCommandRunner);
 
-    let summary = search_container(
-        &cli_runtime,
-        &container,
-        &ContainerSearchOptions::new("/tmp", "TODO"),
-    );
+    let summary =
+        search_container(&cli_runtime, &container, &ContainerSearchOptions::new("/tmp", "TODO"));
 
     cleanup(&runtime, &container.id);
 
     let summary = summary.expect("search_container should succeed");
     assert!(!summary.used_mirror, "alpine has grep; mirror should not fire");
     assert!(summary.hits.iter().any(|h| h.line_content.contains("TODO")));
-    assert!(summary.hits.iter().any(|h| h.container_path == "/tmp/notes"));
+    assert!(
+        summary
+            .hits
+            .iter()
+            .any(|h| h.container_path == "/tmp/notes")
+    );
     let _ = kind;
 }
 

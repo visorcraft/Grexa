@@ -1,32 +1,30 @@
-//! QObjects exposed to QML via `qmetaobject`.
+//! QObjects exposed to QML via `cxx-qt` 0.8.
 //!
-//! qmetaobject is the pure-Rust Qt binding the cxx-qt spike
-//! recommended as the fallback path. It doesn't require CMake, does
-//! not require a custom build script, and lets the binary run as
-//! `cargo run -p grexa` on any Qt 6 host. The business logic is in
-//! the `workspace.rs` / `tab.rs` / `status.rs` controllers; this file
-//! is a thin facade that bridges Rust ⇄ QML.
+//! The Rust ⇄ Qt bridge is now cxx-qt's compile-time-generated
+//! bindings — pure Cargo, no CMake, no qmetaobject crate. The
+//! business logic still lives in the `workspace.rs` / `tab.rs` /
+//! `status.rs` controllers; this file is a thin facade that exposes
+//! the workspace state to QML.
 
 use std::cell::RefCell;
-use std::ffi::CString;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::rc::Rc;
 
+use cxx_qt::CxxQtType;
+use cxx_qt_lib::QString;
 use grexa_core::{CancelToken, SearchOptions, search_with};
-use qmetaobject::*;
 
 use crate::workspace::Workspace;
 
-// Workspace state shared between QObjects. Using a `thread_local` so
+// Workspace state shared between QObjects. Uses a `thread_local` so
 // QML callbacks have access without taking constructor arguments —
-// `qml_register_type` requires a `Default` impl and doesn't support
-// per-instance construction parameters.
+// cxx-qt registers the QObject with QML and needs `Default`.
 thread_local! {
     static WORKSPACE: RefCell<Option<Rc<RefCell<Workspace>>>> = const { RefCell::new(None) };
 }
 
-/// Install the shared workspace before registering QObjects. Must be
-/// called from the main thread before the QmlEngine is created.
+/// Install the shared workspace before booting the QML engine.
 pub fn install_workspace(workspace: Rc<RefCell<Workspace>>) {
     WORKSPACE.with(|cell| *cell.borrow_mut() = Some(workspace));
 }
@@ -42,53 +40,70 @@ fn with_workspace<R>(f: impl FnOnce(&mut Workspace) -> R) -> R {
     })
 }
 
-/// Singleton QObject that drives the active Search tab. QML imports
-/// it as `import com.visorcraft.Grexa 1.0` and instantiates a
-/// `SearchController` element.
-#[derive(QObject, Default)]
-pub struct SearchController {
-    base: qt_base_class!(trait QObject),
+#[cxx_qt::bridge]
+pub mod qobject {
+    unsafe extern "C++" {
+        include!("cxx-qt-lib/qstring.h");
+        type QString = cxx_qt_lib::QString;
+    }
 
-    /// Latest status string, updated after every search.
-    pub status_text: qt_property!(QString; NOTIFY status_changed),
-    /// Total matches in the current search.
-    pub match_count: qt_property!(i32; NOTIFY status_changed),
-    /// True while a search is running.
-    pub busy: qt_property!(bool; NOTIFY status_changed),
-    /// Number of stored recent paths (read at start_search end).
-    pub recent_path_count: qt_property!(i32; NOTIFY history_changed),
+    extern "RustQt" {
+        #[qobject]
+        #[qml_element]
+        #[qproperty(QString, status_text)]
+        #[qproperty(i32, match_count)]
+        #[qproperty(bool, busy)]
+        #[qproperty(i32, recent_path_count)]
+        type SearchController = super::SearchControllerRust;
 
-    /// Emitted when any status/match-count/busy property updates.
-    pub status_changed: qt_signal!(),
-    /// Emitted when the recent-paths list grows or shrinks.
-    pub history_changed: qt_signal!(),
+        /// Run a synchronous search. Returns the match count, or -1 on
+        /// error. Updates `status_text`, `match_count`, `busy`, and
+        /// `recent_path_count` along the way.
+        #[qinvokable]
+        fn start_search(
+            self: Pin<&mut SearchController>,
+            path: &QString,
+            term: &QString,
+            regex: bool,
+            case_sensitive: bool,
+        ) -> i32;
 
-    /// Start a new search synchronously. Returns the number of matches.
-    pub start_search: qt_method!(fn(&mut self, path: QString, term: QString, regex: bool, case_sensitive: bool) -> i32),
-    /// Cancel the in-flight search.
-    pub cancel: qt_method!(fn(&mut self)),
-    /// Read the recent-paths list as a JSON array.
-    pub recent_paths_json: qt_method!(fn(&self) -> QString),
+        /// Cancel the in-flight search. The current implementation runs
+        /// synchronously, so this just updates the status text.
+        #[qinvokable]
+        fn cancel(self: Pin<&mut SearchController>);
+
+        /// Read the recent-paths list as a JSON array.
+        #[qinvokable]
+        fn recent_paths_json(self: &SearchController) -> QString;
+
+        /// Fired when the recent-paths list grows or shrinks.
+        #[qsignal]
+        fn history_changed(self: Pin<&mut SearchController>);
+    }
 }
 
-impl SearchController {
-    fn start_search(
-        &mut self,
-        path: QString,
-        term: QString,
-        regex: bool,
-        case_sensitive: bool,
-    ) -> i32 {
-        let path_str: String = path.to_string();
-        let term_str: String = term.to_string();
-        let mut options = SearchOptions::new(PathBuf::from(&path_str), &term_str);
+/// Rust-side state for the `SearchController` QObject. Owned by the
+/// generated C++ class via `super::SearchControllerRust`.
+#[derive(Default)]
+pub struct SearchControllerRust {
+    status_text: QString,
+    match_count: i32,
+    busy: bool,
+    recent_path_count: i32,
+}
+
+impl SearchControllerRust {
+    /// Pure Rust core of the search invocation. Tests use this
+    /// directly to skip Qt object construction.
+    pub fn run_search(&mut self, path: &str, term: &str, regex: bool, case_sensitive: bool) -> i32 {
+        let mut options = SearchOptions::new(PathBuf::from(path), term);
         options.regex = regex;
         options.case_sensitive = case_sensitive;
 
         self.busy = true;
         self.match_count = 0;
         self.status_text = QString::from("Searching…");
-        self.status_changed();
 
         let cancel = CancelToken::new();
         let summary_result = search_with(&options, &cancel, None);
@@ -98,42 +113,31 @@ impl SearchController {
                 with_workspace(|w| {
                     w.recent_paths.add(options.path.clone()).ok();
                 });
-                self.recent_path_count = with_workspace(|w| {
-                    w.recent_paths.load().unwrap_or_default().len() as i32
-                });
-                self.history_changed();
-                let elapsed_ms = summary.elapsed_ms;
-                self.status_text = QString::from(
-                    format!(
-                        "Found {} matches in {} files in {} ms",
-                        summary.matches, summary.files_matched, elapsed_ms
-                    )
-                    .as_str(),
-                );
+                self.recent_path_count =
+                    with_workspace(|w| w.recent_paths.load().unwrap_or_default().len() as i32);
+                self.status_text = QString::from(&format!(
+                    "Found {} matches in {} files in {} ms",
+                    summary.matches, summary.files_matched, summary.elapsed_ms
+                ));
                 count
             }
             Err(err) => {
-                self.status_text = QString::from(format!("Error: {err}").as_str());
+                self.status_text = QString::from(&format!("Error: {err}"));
                 -1
             }
         };
 
         self.busy = false;
         self.match_count = total.max(0);
-        self.status_changed();
         total
     }
 
-    fn cancel(&mut self) {
-        // Cancellation flag-only for now; the synchronous search loop
-        // checks it before each walker entry, so a cancel between calls
-        // is effectively immediate.
+    pub fn run_cancel(&mut self) {
         self.busy = false;
         self.status_text = QString::from("Cancelled");
-        self.status_changed();
     }
 
-    fn recent_paths_json(&self) -> QString {
+    pub fn recent_paths_json_string(&self) -> String {
         let strings: Vec<String> = with_workspace(|w| {
             w.recent_paths
                 .load()
@@ -142,17 +146,53 @@ impl SearchController {
                 .map(|p| p.to_string_lossy().into_owned())
                 .collect()
         });
-        let json = serde_json::to_string(&strings).unwrap_or_else(|_| "[]".into());
-        QString::from(json.as_str())
+        serde_json::to_string(&strings).unwrap_or_else(|_| "[]".into())
     }
 }
 
-/// Register every Grexa QObject under the QML uri
-/// `com.visorcraft.Grexa 1.0`.
-pub fn register_qml_types() {
-    let uri = CString::new("com.visorcraft.Grexa").unwrap();
-    let controller_name = CString::new("SearchController").unwrap();
-    qml_register_type::<SearchController>(&uri, 1, 0, &controller_name);
+impl qobject::SearchController {
+    fn start_search(
+        mut self: Pin<&mut Self>,
+        path: &QString,
+        term: &QString,
+        regex: bool,
+        case_sensitive: bool,
+    ) -> i32 {
+        let path_str = path.to_string();
+        let term_str = term.to_string();
+        let history_before = self.as_ref().rust().recent_path_count;
+
+        let total =
+            self.as_mut()
+                .rust_mut()
+                .run_search(&path_str, &term_str, regex, case_sensitive);
+
+        let new_status = self.as_ref().rust().status_text.clone();
+        let new_match_count = self.as_ref().rust().match_count;
+        let new_busy = self.as_ref().rust().busy;
+        let new_recent_count = self.as_ref().rust().recent_path_count;
+
+        self.as_mut().set_status_text(new_status);
+        self.as_mut().set_match_count(new_match_count);
+        self.as_mut().set_busy(new_busy);
+        if new_recent_count != history_before {
+            self.as_mut().set_recent_path_count(new_recent_count);
+            self.history_changed();
+        }
+        total
+    }
+
+    fn cancel(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().run_cancel();
+        let new_status = self.as_ref().rust().status_text.clone();
+        let new_busy = self.as_ref().rust().busy;
+        self.as_mut().set_status_text(new_status);
+        self.as_mut().set_busy(new_busy);
+    }
+
+    fn recent_paths_json(&self) -> QString {
+        QString::from(&self.rust().recent_paths_json_string())
+    }
 }
 
 #[cfg(test)]
@@ -164,9 +204,6 @@ mod tests {
     fn fresh_workspace() -> Rc<RefCell<Workspace>> {
         let dir = tempdir().unwrap();
         let workspace = Rc::new(RefCell::new(Workspace::under(&dir.path().join("xdg"))));
-        // Leak the tempdir so the test's filesystem state outlives the
-        // borrow; we accept the leak in tests since the OS reclaims it
-        // when the process exits.
         std::mem::forget(dir);
         workspace
     }
@@ -187,18 +224,33 @@ mod tests {
         let ws = Rc::new(RefCell::new(Workspace::under(&dir.path().join("xdg"))));
         install_workspace(ws.clone());
 
-        let mut controller = SearchController::default();
-        let count = controller.start_search(
-            QString::from(dir.path().to_string_lossy().as_ref()),
-            QString::from("TODO"),
-            false,
-            false,
-        );
+        let mut state = SearchControllerRust::default();
+        let count = state.run_search(dir.path().to_string_lossy().as_ref(), "TODO", false, false);
         assert_eq!(count, 2);
-        assert_eq!(controller.match_count, 2);
-        assert!(!controller.busy);
-
-        // History was recorded.
+        assert_eq!(state.match_count, 2);
+        assert!(!state.busy);
         assert_eq!(ws.borrow().recent_paths.load().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn cancel_sets_cancelled_status() {
+        let mut state = SearchControllerRust {
+            busy: true,
+            ..Default::default()
+        };
+        state.run_cancel();
+        assert!(!state.busy);
+        assert_eq!(state.status_text.to_string(), "Cancelled");
+    }
+
+    #[test]
+    fn recent_paths_json_round_trips() {
+        let dir = tempdir().unwrap();
+        let ws = Rc::new(RefCell::new(Workspace::under(&dir.path().join("xdg"))));
+        install_workspace(ws.clone());
+
+        let state = SearchControllerRust::default();
+        let json = state.recent_paths_json_string();
+        assert_eq!(json, "[]");
     }
 }

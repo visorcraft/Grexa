@@ -129,10 +129,7 @@ impl Workspace {
         let _ = self.recent_paths.add(options.path.clone());
         let _ = self.history.add(RecentSearch::from_options(
             &options,
-            matches!(
-                self.tab(id).map(|t| t.result_mode),
-                Some(ResultMode::Files)
-            ),
+            matches!(self.tab(id).map(|t| t.result_mode), Some(ResultMode::Files)),
             summary.matches,
         ));
         if let Some(tab) = self.tab_mut(id) {

@@ -445,9 +445,7 @@ mod tests {
         let runner = MockCommandRunner::default();
         runner.push(CommandResult::success("/usr/bin/grep\n"));
         let runtime = CliRuntime::new(fake_runtime(), runner.clone());
-        runtime
-            .exec_capture("abc", &["which", "grep"])
-            .unwrap();
+        runtime.exec_capture("abc", &["which", "grep"]).unwrap();
         let inv = runner.invocations();
         assert_eq!(
             inv[0].args,

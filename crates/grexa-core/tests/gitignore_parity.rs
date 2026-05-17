@@ -53,10 +53,7 @@ fn assert_match(body: &str, relpath: &str, is_dir: bool, expected_ignored: bool)
             "expected `{relpath}` to be ignored under body=`{body}`, got {m:?}"
         );
     } else {
-        assert!(
-            !m.is_ignore(),
-            "expected `{relpath}` to be kept under body=`{body}`, got {m:?}"
-        );
+        assert!(!m.is_ignore(), "expected `{relpath}` to be kept under body=`{body}`, got {m:?}");
     }
 }
 
@@ -206,12 +203,7 @@ fn case_20_root_relative_matches_nested_descendant() {
 
 #[test]
 fn case_21_root_relative_dir_does_not_match_app_http_middleware() {
-    assert_match(
-        "/storage/app\n",
-        "app/Http/Middleware/Foo.php",
-        false,
-        false,
-    );
+    assert_match("/storage/app\n", "app/Http/Middleware/Foo.php", false, false);
 }
 
 #[test]
@@ -305,32 +297,17 @@ fn case_33_star_log_plus_negation_keeps_negated() {
 
 #[test]
 fn case_34_mixed_negation_still_ignores_matching() {
-    assert_match(
-        "test*.txt\n!test_backup.txt\n*.tmp\n*.bak\n",
-        "test.txt",
-        false,
-        true,
-    );
+    assert_match("test*.txt\n!test_backup.txt\n*.tmp\n*.bak\n", "test.txt", false, true);
 }
 
 #[test]
 fn case_35_mixed_negation_keeps_negated() {
-    assert_match(
-        "test*.txt\n!test_backup.txt\n*.tmp\n*.bak\n",
-        "test_backup.txt",
-        false,
-        false,
-    );
+    assert_match("test*.txt\n!test_backup.txt\n*.tmp\n*.bak\n", "test_backup.txt", false, false);
 }
 
 #[test]
 fn case_36_mixed_negation_ignores_other_categories() {
-    assert_match(
-        "test*.txt\n!test_backup.txt\n*.tmp\n*.bak\n",
-        "cache.tmp",
-        false,
-        true,
-    );
+    assert_match("test*.txt\n!test_backup.txt\n*.tmp\n*.bak\n", "cache.tmp", false, true);
 }
 
 // =========================================================================
@@ -478,22 +455,12 @@ fn case_55_escaped_bracket_is_literal_match() {
 
 #[test]
 fn case_56_malformed_line_does_not_poison_file() {
-    assert_match(
-        "[unterminated\n*.txt\n!keep.txt\n",
-        "app.txt",
-        false,
-        true,
-    );
+    assert_match("[unterminated\n*.txt\n!keep.txt\n", "app.txt", false, true);
 }
 
 #[test]
 fn case_57_malformed_followed_by_negation_keeps_negated() {
-    assert_match(
-        "[unterminated\n*.txt\n!keep.txt\n",
-        "keep.txt",
-        false,
-        false,
-    );
+    assert_match("[unterminated\n*.txt\n!keep.txt\n", "keep.txt", false, false);
 }
 
 // =========================================================================
@@ -548,10 +515,7 @@ fn case_62_search_without_respect_gitignore_keeps_match() {
     options.respect_gitignore = false;
     let summary = grexa_core::search(&options).unwrap();
     assert!(
-        summary
-            .results
-            .iter()
-            .any(|r| r.file_name == "alpha.log"),
+        summary.results.iter().any(|r| r.file_name == "alpha.log"),
         "expected alpha.log when gitignore is disabled"
     );
 }

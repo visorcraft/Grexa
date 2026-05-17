@@ -25,7 +25,11 @@ impl SortDirection {
 /// - Unsupported fields (Extension, Encoding, Matches) fall back to FileName.
 /// - Ties are broken by `(file_name, line_number, column_number, full_path)`
 ///   so large-result order is deterministic across parallel runs.
-pub fn sort_content(results: &mut [SearchResult], field: SearchResultSortField, dir: SortDirection) {
+pub fn sort_content(
+    results: &mut [SearchResult],
+    field: SearchResultSortField,
+    dir: SortDirection,
+) {
     if field == SearchResultSortField::None {
         return;
     }
@@ -87,20 +91,15 @@ pub fn sort_files(
 ///
 /// - Content mode: `FileName` ascending.
 /// - Files mode: `MatchCount` descending.
-pub fn apply_default_sort(
-    content: &mut [SearchResult],
-    files: &mut [FileSearchResult],
-) {
+pub fn apply_default_sort(content: &mut [SearchResult], files: &mut [FileSearchResult]) {
     sort_content(content, SearchResultSortField::Name, SortDirection::Ascending);
-    sort_files(
-        files,
-        SearchResultSortField::Matches,
-        SortDirection::Descending,
-    );
+    sort_files(files, SearchResultSortField::Matches, SortDirection::Descending);
 }
 
 fn name_cmp(a: &str, b: &str) -> Ordering {
-    a.to_lowercase().cmp(&b.to_lowercase()).then_with(|| a.cmp(b))
+    a.to_lowercase()
+        .cmp(&b.to_lowercase())
+        .then_with(|| a.cmp(b))
 }
 
 #[cfg(test)]
@@ -149,11 +148,7 @@ mod tests {
             result("apple.rs", 1, 1, "/a/apple.rs"),
             result("Banana.rs", 1, 1, "/a/Banana.rs"),
         ];
-        sort_content(
-            &mut results,
-            SearchResultSortField::Name,
-            SortDirection::Ascending,
-        );
+        sort_content(&mut results, SearchResultSortField::Name, SortDirection::Ascending);
         let names: Vec<_> = results.iter().map(|r| r.file_name.clone()).collect();
         assert_eq!(names, vec!["apple.rs", "Banana.rs", "Zebra.rs"]);
     }
@@ -165,11 +160,7 @@ mod tests {
             result("a.rs", 5, 1, "/x/a.rs"),
             result("a.rs", 1, 1, "/x/a.rs"),
         ];
-        sort_content(
-            &mut results,
-            SearchResultSortField::Line,
-            SortDirection::Ascending,
-        );
+        sort_content(&mut results, SearchResultSortField::Line, SortDirection::Ascending);
         assert_eq!(results[0].line_number, 1);
         assert_eq!(results[1].file_name, "a.rs");
         assert_eq!(results[2].file_name, "b.rs");
@@ -182,11 +173,7 @@ mod tests {
             result("b.rs", 1, 1, "/x/b.rs"),
             result("c.rs", 1, 1, "/x/c.rs"),
         ];
-        sort_content(
-            &mut results,
-            SearchResultSortField::Name,
-            SortDirection::Descending,
-        );
+        sort_content(&mut results, SearchResultSortField::Name, SortDirection::Descending);
         let names: Vec<_> = results.iter().map(|r| r.file_name.clone()).collect();
         assert_eq!(names, vec!["c.rs", "b.rs", "a.rs"]);
     }
@@ -197,11 +184,7 @@ mod tests {
             result("z.rs", 1, 1, "/x/z.rs"),
             result("a.rs", 1, 1, "/x/a.rs"),
         ];
-        sort_content(
-            &mut results,
-            SearchResultSortField::None,
-            SortDirection::Ascending,
-        );
+        sort_content(&mut results, SearchResultSortField::None, SortDirection::Ascending);
         assert_eq!(results[0].file_name, "z.rs");
     }
 
@@ -211,11 +194,7 @@ mod tests {
             result("b.rs", 1, 1, "/x/b.rs"),
             result("a.rs", 1, 1, "/x/a.rs"),
         ];
-        sort_content(
-            &mut results,
-            SearchResultSortField::Encoding,
-            SortDirection::Ascending,
-        );
+        sort_content(&mut results, SearchResultSortField::Encoding, SortDirection::Ascending);
         assert_eq!(results[0].file_name, "a.rs");
     }
 
@@ -226,11 +205,7 @@ mod tests {
             file("high.rs", 100, "rs"),
             file("mid.rs", 10, "rs"),
         ];
-        sort_files(
-            &mut files,
-            SearchResultSortField::Matches,
-            SortDirection::Descending,
-        );
+        sort_files(&mut files, SearchResultSortField::Matches, SortDirection::Descending);
         let counts: Vec<_> = files.iter().map(|f| f.match_count).collect();
         assert_eq!(counts, vec![100, 10, 1]);
     }
@@ -242,11 +217,7 @@ mod tests {
             file("b.rs", 1, "rs"),
             file("c.md", 1, "md"),
         ];
-        sort_files(
-            &mut files,
-            SearchResultSortField::Extension,
-            SortDirection::Ascending,
-        );
+        sort_files(&mut files, SearchResultSortField::Extension, SortDirection::Ascending);
         let exts: Vec<_> = files.iter().map(|f| f.extension.clone()).collect();
         assert_eq!(exts, vec!["md", "rs", "toml"]);
     }
@@ -257,10 +228,7 @@ mod tests {
             result("z.rs", 1, 1, "/x/z.rs"),
             result("a.rs", 1, 1, "/x/a.rs"),
         ];
-        let mut files = vec![
-            file("few.rs", 2, "rs"),
-            file("many.rs", 50, "rs"),
-        ];
+        let mut files = vec![file("few.rs", 2, "rs"), file("many.rs", 50, "rs")];
         apply_default_sort(&mut content, &mut files);
         assert_eq!(content[0].file_name, "a.rs");
         assert_eq!(files[0].file_name, "many.rs");

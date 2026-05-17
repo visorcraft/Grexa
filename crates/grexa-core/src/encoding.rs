@@ -152,17 +152,11 @@ pub fn read_text(path: &Path) -> io::Result<(String, DetectedEncoding)> {
         let label = heuristic_label(payload);
         if let Some(encoding) = Encoding::for_label(label.as_bytes()) {
             let (decoded, _, _) = encoding.decode(payload);
-            return Ok((
-                decoded.into_owned(),
-                DetectedEncoding::Heuristic(label.to_string()),
-            ));
+            return Ok((decoded.into_owned(), DetectedEncoding::Heuristic(label.to_string())));
         }
         // chardetng returned a label encoding_rs doesn't recognize — fall
         // back to lossy UTF-8 rather than failing the search.
-        return Ok((
-            String::from_utf8_lossy(payload).into_owned(),
-            DetectedEncoding::Utf8,
-        ));
+        return Ok((String::from_utf8_lossy(payload).into_owned(), DetectedEncoding::Utf8));
     }
 
     let text = match detected.encoding_rs() {
@@ -190,26 +184,17 @@ mod tests {
 
     #[test]
     fn detect_utf8_bom() {
-        assert_eq!(
-            detect_from_bytes(&[0xEF, 0xBB, 0xBF, b'h']),
-            DetectedEncoding::Utf8Bom
-        );
+        assert_eq!(detect_from_bytes(&[0xEF, 0xBB, 0xBF, b'h']), DetectedEncoding::Utf8Bom);
     }
 
     #[test]
     fn detect_utf16_le() {
-        assert_eq!(
-            detect_from_bytes(&[0xFF, 0xFE, b'h', 0]),
-            DetectedEncoding::Utf16Le
-        );
+        assert_eq!(detect_from_bytes(&[0xFF, 0xFE, b'h', 0]), DetectedEncoding::Utf16Le);
     }
 
     #[test]
     fn detect_utf16_be() {
-        assert_eq!(
-            detect_from_bytes(&[0xFE, 0xFF, 0, b'h']),
-            DetectedEncoding::Utf16Be
-        );
+        assert_eq!(detect_from_bytes(&[0xFE, 0xFF, 0, b'h']), DetectedEncoding::Utf16Be);
     }
 
     #[test]

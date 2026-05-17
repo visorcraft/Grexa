@@ -1,29 +1,27 @@
 //! Grexa GUI shell entry point.
 //!
-//! Uses `qmetaobject` for the Rust ⇄ Qt bridge. The cxx-qt spike
-//! (`docs/gui-design.md`) recommended this as the pure-Rust fallback
-//! when CMake isn't on the dev / CI host; cxx-qt 0.8 expects a
-//! CMake-driven Interface pipeline that's hostile to a Cargo-only
-//! workspace.
+//! Uses `cxx-qt` 0.8 for the Rust ⇄ Qt bridge. The QObjects defined in
+//! `qobjects.rs` are auto-registered with QML under
+//! `com.visorcraft.Grexa 1.0` by the `qml_module()` declaration in
+//! `build.rs`. The QML files in `apps/grexa-gui/qml/` are bundled into
+//! the binary via Qt's resource system and loaded from
+//! `qrc:/qt/qml/com/visorcraft/Grexa/Main.qml`.
 //!
 //! Runtime contract:
 //!
 //! 1. Initialize structured logging (mirrors `grexa-cli`).
 //! 2. Build the shared `Workspace` and install it via
 //!    `qobjects::install_workspace`.
-//! 3. Register the Grexa QObjects (`SearchController`) under the
-//!    `com.visorcraft.Grexa 1.0` QML module.
-//! 4. Boot a `QmlEngine`, load `qml/Main.qml` from
-//!    `CARGO_MANIFEST_DIR` during development or
-//!    `/usr/share/grexa/qml/` when installed.
-//! 5. Enter the Qt event loop.
+//! 3. Initialize cxx-qt's static initializers
+//!    (`cxx_qt::init_crate!` + `cxx_qt::init_qml_module!`).
+//! 4. Boot a `QGuiApplication` + `QQmlApplicationEngine`, load
+//!    `qrc:/qt/qml/com/visorcraft/Grexa/Main.qml`, run the event loop.
 
 use std::cell::RefCell;
-use std::path::PathBuf;
 use std::rc::Rc;
 
+use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QUrl};
 use grexa_core::AppPaths;
-use qmetaobject::*;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
@@ -37,53 +35,43 @@ fn main() {
     let _log_guard = init_tracing();
     tracing::info!("Grexa GUI shell starting");
 
+    // Trigger cxx-qt-lib's and our crate's static initializers so the
+    // QML module and QObject types are registered before the engine
+    // tries to resolve `import com.visorcraft.Grexa 1.0`.
+    cxx_qt::init_crate!(cxx_qt_lib);
+    cxx_qt::init_crate!(grexa);
+    cxx_qt::init_qml_module!("com.visorcraft.Grexa");
+
     let workspace = Rc::new(RefCell::new(workspace::Workspace::new()));
     qobjects::install_workspace(workspace);
-    qobjects::register_qml_types();
 
-    let mut engine = QmlEngine::new();
-    match locate_qml_main() {
-        Some(path) => {
-            engine.load_file(path.to_string_lossy().to_string().into());
-        }
-        None => {
-            // Inline smoke QML — used only when neither the dev path
-            // nor the installed path is reachable. Confirms the
-            // Rust→QML registration works.
-            engine.load_data(
-                r#"
-import QtQuick
-import com.visorcraft.Grexa 1.0
-Item {
-    SearchController { id: ctl }
-    Component.onCompleted: {
-        console.log("Grexa GUI smoke:", ctl.statusText)
-        Qt.quit()
+    let mut app = QGuiApplication::new();
+    if app.is_null() {
+        tracing::error!("could not construct QGuiApplication — exiting");
+        return;
     }
-}
-"#
-                .into(),
-            );
+    let mut engine = QQmlApplicationEngine::new();
+    if engine.is_null() {
+        tracing::error!("could not construct QQmlApplicationEngine — exiting");
+        return;
+    }
+
+    if let Some(engine) = engine.as_mut() {
+        let url = QUrl::from("qrc:/qt/qml/com/visorcraft/Grexa/Main.qml");
+        engine.load(&url);
+    }
+
+    if let Some(app) = app.as_mut() {
+        let code = app.exec();
+        if code != 0 {
+            tracing::warn!("Qt event loop exited with code {code}");
         }
     }
-    engine.exec();
-}
-
-fn locate_qml_main() -> Option<PathBuf> {
-    let cargo_manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let candidate = cargo_manifest.join("qml").join("Main.qml");
-    if candidate.is_file() {
-        return Some(candidate);
-    }
-    let installed = PathBuf::from("/usr/share/grexa/qml/Main.qml");
-    if installed.is_file() {
-        return Some(installed);
-    }
-    None
 }
 
 fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
-    let env_filter = EnvFilter::try_from_env("GREXA_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter =
+        EnvFilter::try_from_env("GREXA_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
     let stderr_layer = tracing_subscriber::fmt::layer()
         .with_target(false)
         .with_writer(std::io::stderr);
@@ -110,7 +98,9 @@ fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
         Err(_) => (None, None),
     };
 
-    let registry = tracing_subscriber::registry().with(env_filter).with(stderr_layer);
+    let registry = tracing_subscriber::registry()
+        .with(env_filter)
+        .with(stderr_layer);
     if let Some(layer) = file_layer {
         registry.with(layer).init();
     } else {
