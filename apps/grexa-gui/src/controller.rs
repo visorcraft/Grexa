@@ -1,9 +1,12 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! GUI controllers — the Rust-side state that the QML shell binds to.
 //!
-//! Each controller is a plain struct + free functions. The full QML
-//! integration (signals, models) lands in the cxx-qt iteration; this
-//! module is the contract the QML side targets and the place where the
-//! sidecar version exchanges JSON.
+//! Each controller is a plain struct + free functions. The QML shell
+//! reaches these via the cxx-qt-generated `SearchController` QObject in
+//! `qobjects.rs`; this module is the typed Rust contract the QObject
+//! wraps.
 
 use std::rc::Rc;
 

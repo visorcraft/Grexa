@@ -1,11 +1,12 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! Multi-tab workspace controller.
 //!
 //! Owns the `Vec<TabState>`, the active tab, the recent-paths /
 //! history / profiles stores, and the cross-tab "Open in editor" /
-//! "Reveal in file manager" plumbing. This is the type a future cxx-qt
-//! `QObject` wraps; the in-memory contract is identical regardless of
-//! whether the GUI is a real cxx-qt binding or the `qml6`-spawn
-//! fallback.
+//! "Reveal in file manager" plumbing. The cxx-qt `SearchController`
+//! QObject (`qobjects.rs`) borrows this via a thread-local pointer.
 
 use std::path::Path;
 

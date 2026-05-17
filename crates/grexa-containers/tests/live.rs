@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! Live-daemon integration tests for grexa-containers.
 //!
 //! Gated behind the `container-live` Cargo feature so CI without a

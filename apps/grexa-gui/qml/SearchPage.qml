@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 // Search workspace — the primary tab. The structure here matches the
 // Phase 4 Search UI MVP contract; the Rust side hands it real data via
 // the cxx-qt bindings landing in a follow-up PR. This file is

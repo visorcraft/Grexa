@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! Per-tab state.
 //!
 //! Grex's `TabViewModel` (audited in `docs/grex-tab-viewmodel-audit.md`)

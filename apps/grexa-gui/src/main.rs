@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! Grexa GUI shell entry point.
 //!
 //! Uses `cxx-qt` 0.8 for the Rust ⇄ Qt bridge. The QObjects defined in
@@ -20,7 +23,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QUrl};
+use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
 use grexa_core::AppPaths;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
@@ -49,6 +52,15 @@ fn main() {
     if app.is_null() {
         tracing::error!("could not construct QGuiApplication — exiting");
         return;
+    }
+    if let Some(mut app) = app.as_mut() {
+        app.as_mut().set_application_name(&QString::from("Grexa"));
+        app.as_mut()
+            .set_application_version(&QString::from(env!("CARGO_PKG_VERSION")));
+        app.as_mut()
+            .set_organization_name(&QString::from("VisorCraft"));
+        app.as_mut()
+            .set_organization_domain(&QString::from("visorcraft.io"));
     }
     let mut engine = QQmlApplicationEngine::new();
     if engine.is_null() {

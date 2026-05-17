@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! Gitignore parity test, ported from `docs/grex-gitignore-audit.md`.
 //!
 //! Each subtest writes a `.gitignore` body and a target file path into a

@@ -1,8 +1,11 @@
-// About page — Phase 4 destination.
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
+// About page.
 //
-// Displays: app version, license (GPL-3.0-only), upstream URL, third-
-// party credits (encoding_rs, ignore, ureq, keyring, fluent, …),
-// release notes for the current build.
+// Shows the app icon, name, tagline, version, license, Grex
+// upstream-link, attribution-link to CREDITS.md, and the
+// "Created by VisorCraft" line.
 
 import QtQuick
 import QtQuick.Controls
@@ -36,7 +39,7 @@ Kirigami.ScrollablePage {
         }
 
         Label {
-            text: i18n("Version 0.1.0-alpha")
+            text: i18n("Version %1", Qt.application.version)
             Layout.alignment: Qt.AlignHCenter
             font.pointSize: Kirigami.Theme.smallFont.pointSize
         }
@@ -44,6 +47,27 @@ Kirigami.ScrollablePage {
         Label {
             text: i18n("Licensed under GPL-3.0-only.")
             Layout.alignment: Qt.AlignHCenter
+        }
+
+        Label {
+            text: i18n("A Linux/Qt port of <a href=\"https://github.com/visorcraft/grex\">Grex</a> by VisorCraft.")
+            Layout.alignment: Qt.AlignHCenter
+            textFormat: Text.RichText
+            onLinkActivated: link => Qt.openUrlExternally(link)
+        }
+
+        Label {
+            text: i18n("Third-party attribution lives in <a href=\"https://github.com/visorcraft/grexa/blob/main/CREDITS.md\">CREDITS.md</a>.")
+            Layout.alignment: Qt.AlignHCenter
+            textFormat: Text.RichText
+            onLinkActivated: link => Qt.openUrlExternally(link)
+        }
+
+        Label {
+            text: i18n("Created by <strong>VisorCraft</strong>")
+            Layout.alignment: Qt.AlignHCenter
+            textFormat: Text.RichText
+            opacity: 0.7
         }
     }
 }

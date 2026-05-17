@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 // Context-preview dialog. The Rust side hands it a
 // `grexa_core::ContextPreviewResult`; the QML side renders gutter line
 // numbers + match-line highlight + match-substring underline.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 // Grexa GUI shell — Phase 1/4 placeholder.
 //
 // This file is loaded by the Rust host (apps/grexa-gui/src/main.rs)

@@ -6,7 +6,7 @@
 | ---------------------- | --------------- |
 | Arch / Manjaro         | `pacman -S rust qt6-base qt6-declarative kirigami extra-cmake-modules poppler` |
 | Fedora                 | `dnf install rust cargo qt6-qtbase-devel qt6-qtdeclarative-devel kf6-kirigami-devel poppler-utils` |
-| Debian / Ubuntu        | `apt install rustc cargo qt6-base-dev qt6-declarative-dev kirigami-2-dev poppler-utils` |
+| Debian / Ubuntu        | `apt install rustc cargo qt6-base-dev qt6-declarative-dev qt6-tools-dev qml6-module-org-kde-kirigami clang poppler-utils` |
 | openSUSE               | `zypper install rust cargo qt6-base-devel qt6-declarative-devel kirigami6-devel poppler-tools` |
 
 Notes:
@@ -27,7 +27,8 @@ cargo build --workspace --release
 Binaries land at:
 
 - `target/release/grexa-cli` — headless CLI
-- `target/release/grexa` — GUI placeholder (full shell lands Phase 4)
+- `target/release/grexa` — Qt 6 / Kirigami GUI built via cxx-qt 0.8.
+  Smoke-test with `QT_QPA_PLATFORM=offscreen target/release/grexa`.
 
 ## Tests
 

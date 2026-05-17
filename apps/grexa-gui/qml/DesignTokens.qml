@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 // Grexa design tokens. Single source of truth for spacing, radius,
 // colors, typography, animation duration, row density, and table
 // metrics. Every QML page imports this as a property to ensure visual

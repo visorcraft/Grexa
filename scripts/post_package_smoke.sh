@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 VisorCraft LLC
+# SPDX-License-Identifier: GPL-3.0-only
 # Post-package smoke test.
 #
 # Invoked after every packaging recipe (Flatpak, AppImage, distro RPM/deb)

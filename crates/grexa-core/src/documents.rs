@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! Searchable-document extractors.
 //!
 //! Grex declares the following extensions as "searchable binary" — i.e. files

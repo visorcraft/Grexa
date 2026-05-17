@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! QObjects exposed to QML via `cxx-qt` 0.8.
 //!
 //! The Rust ⇄ Qt bridge is now cxx-qt's compile-time-generated
@@ -101,13 +104,8 @@ impl SearchControllerRust {
         options.regex = regex;
         options.case_sensitive = case_sensitive;
 
-        self.busy = true;
-        self.match_count = 0;
-        self.status_text = QString::from("Searching…");
-
         let cancel = CancelToken::new();
-        let summary_result = search_with(&options, &cancel, None);
-        let total = match summary_result {
+        let total = match search_with(&options, &cancel, None) {
             Ok(summary) => {
                 let count = summary.matches as i32;
                 with_workspace(|w| {

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 // Settings — bound to `grexa_core::SettingsStore`. Instant-save: every
 // toggle invokes `store.save(...)` synchronously. The keyring portion
 // for the AI section calls into `grexa_ai::store_api_key` /

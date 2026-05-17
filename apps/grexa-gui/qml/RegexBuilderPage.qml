@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 // Regex Builder — backed by `grexa_core::pattern::PatternEngine`.
 // The QML side is a two-pane editor; the Rust side handles compile,
 // match enumeration, and the live breakdown that highlights groups.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! Property-based tests for the parts of `grexa-core` that have well-defined
 //! algebraic shape — globs, exclude-dir filters, size-limit math, snippet
 //! boundaries.

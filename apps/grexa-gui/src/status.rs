@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! Status-text formatter.
 //!
 //! Mirrors `docs/grex-status-text-audit.md`: every status string flows

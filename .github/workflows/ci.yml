@@ -9,6 +9,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # cxx-qt's build script picks Qt up via qmake6 on $PATH.
+  QMAKE: /usr/bin/qmake6
 
 jobs:
   fmt:
@@ -26,6 +28,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install Qt 6 + C++ toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            qt6-base-dev \
+            qt6-declarative-dev \
+            qt6-tools-dev \
+            libgl1-mesa-dev \
+            clang \
+            ninja-build
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -37,9 +49,58 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install Qt 6 + runtime + C++ toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            qt6-base-dev \
+            qt6-declarative-dev \
+            qt6-tools-dev \
+            libgl1-mesa-dev \
+            clang \
+            ninja-build \
+            poppler-utils
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --all-features
+
+  build-gui:
+    name: build + smoke GUI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt 6 + Kirigami
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            qt6-base-dev \
+            qt6-declarative-dev \
+            qt6-tools-dev \
+            qml6-module-qtquick \
+            qml6-module-qtquick-controls \
+            qml6-module-qtquick-layouts \
+            qml6-module-org-kde-kirigami \
+            libgl1-mesa-dev \
+            clang \
+            ninja-build
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p grexa --release
+      - name: Smoke-test GUI binary under offscreen Qt
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set +e
+          timeout --preserve-status 5 target/release/grexa
+          EXIT=$?
+          set -e
+          # 124 = timeout reached while Qt event loop was running
+          # 143 = SIGTERM from --preserve-status
+          # 0   = clean shutdown
+          if [ "$EXIT" -ne 124 ] && [ "$EXIT" -ne 143 ] && [ "$EXIT" -ne 0 ]; then
+            echo "GUI binary exited unexpectedly with $EXIT" >&2
+            exit "$EXIT"
+          fi
 
   deny:
     name: cargo-deny

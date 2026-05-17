@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! Baloo candidate-seeding adapter.
 //!
 //! Phase 13 ships Baloo as an **optional candidate source**, never the source

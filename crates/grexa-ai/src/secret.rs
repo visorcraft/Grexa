@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! Secret-Service-backed API key storage.
 //!
 //! Grexa never persists an OpenAI-style API key to settings.json. Instead

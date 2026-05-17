@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 VisorCraft LLC
+# SPDX-License-Identifier: GPL-3.0-only
 """Verify every Grexa Fluent locale defines the same key set as English.
 
 Run from the repo root:

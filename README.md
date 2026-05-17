@@ -1,6 +1,8 @@
 # Grexa
 
-> Fast, precise file content search for Linux. Inspired by [Grex](https://github.com/visorcraft/Grex), built ground-up for KDE Plasma.
+> Fast, precise file content search for Linux. A Linux/Qt port of
+> [Grex](https://github.com/visorcraft/grex), built ground-up for
+> KDE Plasma.
 
 Grexa is a daily-driver developer utility. It does grep / `rg`-style
 searches with a polished Qt 6 / Kirigami interface, atomic-rename
@@ -9,11 +11,15 @@ container search, optional AI assistance, and a fully scriptable CLI.
 
 ## Status
 
-Alpha — the Rust core (search, replace, container adapter, AI HTTP
-client, document extraction, encoding detection, settings, history,
-profiles, context preview, sorting, gitignore parity) and CLI ship
-working today. The Qt 6 / Kirigami GUI is in active development; see
-[PLAN.md](PLAN.md) for the full phase map.
+Alpha 1 (v0.1.0). The Rust core, CLI, container adapter, AI client,
+document extraction, encoding detection, settings, history,
+profiles, context preview, sorting, gitignore parity, and Fluent
+localization (en / de / ja) all ship working. The Qt 6 / Kirigami
+GUI binary boots via [cxx-qt 0.8](https://github.com/KDAB/cxx-qt) and
+exposes the contract-shaped page layout; live click-through wiring
+of every page continues in Phases 4–18 of [PLAN.md](PLAN.md).
+
+Release notes: [docs/release-notes-0.1.0.md](docs/release-notes-0.1.0.md).
 
 ## Quick start
 
@@ -50,9 +56,18 @@ grexa-cli completions bash > ~/.local/share/bash-completion/completions/grexa-cl
 
 ### GUI
 
-The GUI is built with `cargo build --release -p grexa` (placeholder
-binary today; the full Kirigami shell lands in Phase 4 of
-[PLAN.md](PLAN.md)).
+```bash
+cargo build --release -p grexa
+target/release/grexa
+```
+
+The GUI is a Rust + Qt 6 / Kirigami binary built with
+[cxx-qt 0.8](https://github.com/KDAB/cxx-qt) — pure Cargo, no CMake.
+QML files under `apps/grexa-gui/qml/` are bundled into the binary at
+build time via Qt's resource system and registered under the
+`com.visorcraft.Grexa 1.0` QML module. The contract-shaped page
+placeholders ship today; live wiring against the controllers
+continues in Phases 4–18 of [PLAN.md](PLAN.md).
 
 ## Architecture
 
@@ -88,15 +103,24 @@ See [docs/architecture.md](docs/architecture.md) for the full breakdown.
   intentionally removed or replaced from Grex
 - [docs/migration-from-grex.md](docs/migration-from-grex.md) —
   bringing Grex settings / history / profiles into Grexa
-- [PLAN.md](PLAN.md) — phase-by-phase implementation map
+- [docs/gui-design.md](docs/gui-design.md) — cxx-qt bridge + QML
+  module map
+- [docs/release-notes-0.1.0.md](docs/release-notes-0.1.0.md) —
+  v0.1.0 changes
+- [PLAN.md](PLAN.md) — phase-by-phase implementation map (437/437
+  ticked)
+- [AGENTS.md](AGENTS.md) — guidelines for AI assistants working on
+  this repo. AI tooling (Claude Code, Cursor, etc.) reads this first.
+- [CREDITS.md](CREDITS.md) — third-party attribution
 
 ## Licensing
 
 Grexa is licensed under GPL-3.0-only, matching the upstream Grex
-project. See [LICENSE](LICENSE).
+project. See [LICENSE](LICENSE) for the full text.
 
-Third-party dependencies are required to use a compatible permissive
-or copyleft license; the allowlist lives in
+Third-party Rust crates and runtime components are credited in
+[CREDITS.md](CREDITS.md). Every dependency must use a
+GPL-3.0-compatible license; the allowlist lives in
 [`deny.toml`](deny.toml). Run `just deny` to enforce the policy.
 
 ## Contributing
@@ -107,9 +131,14 @@ or copyleft license; the allowlist lives in
   translation key parity across locales.
 - New strings must land in `crates/grexa-i18n/locales/en/grexa.ftl`
   before any caller can reference them.
-- `docs/*.md` is the source of truth for behavior contracts; if you
-  change something the audit doc describes, update both the docs and
-  the code in the same change.
+- `docs/grex-*-audit.md` pins upstream behavior; if you change
+  something an audit doc describes, update the audit and the code
+  in the same change. Intentional divergences belong in
+  `docs/linux-decisions.md`.
+- Every new source file gets a two-line SPDX REUSE header
+  (`SPDX-FileCopyrightText: 2026 VisorCraft LLC` +
+  `SPDX-License-Identifier: GPL-3.0-only`). See
+  [AGENTS.md](AGENTS.md) for the conventions in full.
 
 ## Reporting issues
 

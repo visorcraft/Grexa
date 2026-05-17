@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! Two-engine regex strategy.
 //!
 //! Grex was written against .NET's regex engine, which supports lookaround,

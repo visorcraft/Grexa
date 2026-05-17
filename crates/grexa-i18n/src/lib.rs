@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! Grexa's localization runtime.
 //!
 //! The catalog format is Fluent (`.ftl`). The canonical English file at
