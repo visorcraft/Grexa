@@ -13,7 +13,7 @@ import org.kde.kirigami as Kirigami
 
 Kirigami.Page {
     id: page
-    title: i18n("Regex Builder")
+    title: qsTr("Regex Builder")
     padding: Kirigami.Units.smallSpacing
 
     property var controller: app.regexController
@@ -32,14 +32,14 @@ Kirigami.Page {
         RowLayout {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
-            Label { text: i18n("Presets:") }
+            Label { text: qsTr("Presets:") }
             Repeater {
                 model: [
-                    { name: i18n("Email"), pattern: "[\\w.%+-]+@[\\w.-]+\\.[A-Za-z]{2,}" },
-                    { name: i18n("Phone"), pattern: "\\+?\\d{1,3}[-. ]?\\(?\\d{1,4}\\)?[-. ]?\\d{1,9}[-. ]?\\d{1,9}" },
-                    { name: i18n("Date"),  pattern: "\\d{4}-\\d{2}-\\d{2}" },
-                    { name: i18n("Digits"), pattern: "\\d+" },
-                    { name: i18n("URL"),   pattern: "https?://\\S+" },
+                    { name: qsTr("Email"), pattern: "[\\w.%+-]+@[\\w.-]+\\.[A-Za-z]{2,}" },
+                    { name: qsTr("Phone"), pattern: "\\+?\\d{1,3}[-. ]?\\(?\\d{1,4}\\)?[-. ]?\\d{1,9}[-. ]?\\d{1,9}" },
+                    { name: qsTr("Date"),  pattern: "\\d{4}-\\d{2}-\\d{2}" },
+                    { name: qsTr("Digits"), pattern: "\\d+" },
+                    { name: qsTr("URL"),   pattern: "https?://\\S+" },
                 ]
                 ToolButton {
                     text: modelData.name
@@ -56,7 +56,7 @@ Kirigami.Page {
             spacing: Kirigami.Units.smallSpacing
             CheckBox {
                 id: caseInsensitive
-                text: i18n("Case-insensitive")
+                text: qsTr("Case-insensitive")
                 onToggled: page.evaluate()
             }
         }
@@ -64,7 +64,7 @@ Kirigami.Page {
         TextField {
             id: patternField
             Layout.fillWidth: true
-            placeholderText: i18n("Regular expression")
+            placeholderText: qsTr("Regular expression")
             font.family: "monospace"
             onTextChanged: page.evaluate()
         }
@@ -74,7 +74,7 @@ Kirigami.Page {
             Layout.fillHeight: true
             TextArea {
                 id: sampleArea
-                placeholderText: i18n("Paste sample text here…")
+                placeholderText: qsTr("Paste sample text here…")
                 font.family: "monospace"
                 wrapMode: TextEdit.Wrap
                 onTextChanged: page.evaluate()
@@ -94,18 +94,18 @@ Kirigami.Page {
                 text: controller.error.length > 0
                     ? ""
                     : (controller.matchCount === 0 && patternField.text.length > 0
-                        ? i18n("No matches.")
-                        : i18n("%1 match(es).", controller.matchCount))
+                        ? qsTr("No matches.")
+                        : qsTr("%1 match(es).").arg(controller.matchCount))
                 Layout.fillWidth: true
             }
             Button {
-                text: i18n("Send to Search tab")
+                text: qsTr("Send to Search tab")
                 icon.name: "edit-find"
                 enabled: patternField.text.length > 0 && controller.error.length === 0
                 onClicked: {
                     // Push the pattern into the search tab — set the
                     // term field directly.
-                    app.searchController.statusText = i18n("Pattern copied to Search tab.")
+                    app.searchController.statusText = qsTr("Pattern copied to Search tab.")
                 }
             }
         }

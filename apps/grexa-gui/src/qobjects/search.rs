@@ -73,6 +73,7 @@ pub mod ffi {
         type QAbstractListModel;
     }
 
+    #[auto_cxx_name]
     extern "RustQt" {
         #[qobject]
         #[qml_element]

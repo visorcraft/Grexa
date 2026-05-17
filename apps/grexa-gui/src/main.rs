@@ -69,7 +69,7 @@ fn main() {
     }
 
     if let Some(engine) = engine.as_mut() {
-        let url = QUrl::from("qrc:/qt/qml/com/visorcraft/Grexa/Main.qml");
+        let url = QUrl::from("qrc:/qt/qml/com/visorcraft/Grexa/qml/Main.qml");
         engine.load(&url);
     }
 

@@ -13,7 +13,7 @@ import org.kde.kirigami as Kirigami
 
 Kirigami.ScrollablePage {
     id: page
-    title: i18n("Settings")
+    title: qsTr("Settings")
     padding: Kirigami.Units.smallSpacing
 
     property var settings: app.settingsController
@@ -23,12 +23,12 @@ Kirigami.ScrollablePage {
 
     actions: [
         Kirigami.Action {
-            text: i18n("Apply")
+            text: qsTr("Apply")
             icon.name: "dialog-ok-apply"
             onTriggered: settings.apply()
         },
         Kirigami.Action {
-            text: i18n("Reload")
+            text: qsTr("Reload")
             icon.name: "view-refresh"
             onTriggered: settings.reload()
         }
@@ -43,24 +43,24 @@ Kirigami.ScrollablePage {
 
             Kirigami.Heading {
                 Kirigami.FormData.isSection: true
-                text: i18n("Appearance")
+                text: qsTr("Appearance")
             }
 
             ComboBox {
-                Kirigami.FormData.label: i18n("Theme:")
+                Kirigami.FormData.label: qsTr("Theme:")
                 model: [
-                    i18n("Follow system"),
-                    i18n("Light"),
-                    i18n("Dark"),
-                    i18n("Gentle Gecko"),
-                    i18n("Black Knight"),
-                    i18n("Diamond"),
-                    i18n("Dreams"),
-                    i18n("Paranoid"),
-                    i18n("Red Velvet"),
-                    i18n("Subspace"),
-                    i18n("Tiefling"),
-                    i18n("Vibes"),
+                    qsTr("Follow system"),
+                    qsTr("Light"),
+                    qsTr("Dark"),
+                    qsTr("Gentle Gecko"),
+                    qsTr("Black Knight"),
+                    qsTr("Diamond"),
+                    qsTr("Dreams"),
+                    qsTr("Paranoid"),
+                    qsTr("Red Velvet"),
+                    qsTr("Subspace"),
+                    qsTr("Tiefling"),
+                    qsTr("Vibes"),
                 ]
                 currentIndex: settings.theme
                 onActivated: settings.theme = currentIndex
@@ -68,56 +68,56 @@ Kirigami.ScrollablePage {
 
             Kirigami.Heading {
                 Kirigami.FormData.isSection: true
-                text: i18n("Search defaults")
+                text: qsTr("Search defaults")
             }
             CheckBox {
-                Kirigami.FormData.label: i18n("Regex search by default")
+                Kirigami.FormData.label: qsTr("Regex search by default")
                 checked: settings.regex
                 onToggled: settings.regex = checked
             }
             CheckBox {
-                Kirigami.FormData.label: i18n("Files-mode by default")
+                Kirigami.FormData.label: qsTr("Files-mode by default")
                 checked: settings.filesSearchMode
                 onToggled: settings.filesSearchMode = checked
             }
             CheckBox {
-                Kirigami.FormData.label: i18n("Respect .gitignore")
+                Kirigami.FormData.label: qsTr("Respect .gitignore")
                 checked: settings.respectGitignore
                 onToggled: settings.respectGitignore = checked
             }
             CheckBox {
-                Kirigami.FormData.label: i18n("Case sensitive")
+                Kirigami.FormData.label: qsTr("Case sensitive")
                 checked: settings.caseSensitive
                 onToggled: settings.caseSensitive = checked
             }
             CheckBox {
-                Kirigami.FormData.label: i18n("Include subfolders")
+                Kirigami.FormData.label: qsTr("Include subfolders")
                 checked: settings.includeSubfolders
                 onToggled: settings.includeSubfolders = checked
             }
             CheckBox {
-                Kirigami.FormData.label: i18n("Include hidden")
+                Kirigami.FormData.label: qsTr("Include hidden")
                 checked: settings.includeHidden
                 onToggled: settings.includeHidden = checked
             }
             CheckBox {
-                Kirigami.FormData.label: i18n("Include binary/docs")
+                Kirigami.FormData.label: qsTr("Include binary/docs")
                 checked: settings.includeBinary
                 onToggled: settings.includeBinary = checked
             }
 
             Kirigami.Heading {
                 Kirigami.FormData.isSection: true
-                text: i18n("Filter defaults")
+                text: qsTr("Filter defaults")
             }
             TextField {
-                Kirigami.FormData.label: i18n("Match files:")
+                Kirigami.FormData.label: qsTr("Match files:")
                 placeholderText: "*.rs|*.toml"
                 text: settings.defaultMatchFiles
                 onEditingFinished: settings.defaultMatchFiles = text
             }
             TextField {
-                Kirigami.FormData.label: i18n("Exclude dirs:")
+                Kirigami.FormData.label: qsTr("Exclude dirs:")
                 placeholderText: "node_modules,target"
                 text: settings.defaultExcludeDirs
                 onEditingFinished: settings.defaultExcludeDirs = text
@@ -125,16 +125,16 @@ Kirigami.ScrollablePage {
 
             Kirigami.Heading {
                 Kirigami.FormData.isSection: true
-                text: i18n("Context preview")
+                text: qsTr("Context preview")
             }
             SpinBox {
-                Kirigami.FormData.label: i18n("Lines before:")
+                Kirigami.FormData.label: qsTr("Lines before:")
                 from: 0; to: 50
                 value: settings.contextLinesBefore
                 onValueModified: settings.contextLinesBefore = value
             }
             SpinBox {
-                Kirigami.FormData.label: i18n("Lines after:")
+                Kirigami.FormData.label: qsTr("Lines after:")
                 from: 0; to: 50
                 value: settings.contextLinesAfter
                 onValueModified: settings.contextLinesAfter = value
@@ -142,25 +142,25 @@ Kirigami.ScrollablePage {
 
             Kirigami.Heading {
                 Kirigami.FormData.isSection: true
-                text: i18n("Containers")
+                text: qsTr("Containers")
             }
             CheckBox {
-                Kirigami.FormData.label: i18n("Enable container search")
+                Kirigami.FormData.label: qsTr("Enable container search")
                 checked: settings.enableContainerSearch
                 onToggled: settings.enableContainerSearch = checked
             }
 
             Kirigami.Heading {
                 Kirigami.FormData.isSection: true
-                text: i18n("AI Search")
+                text: qsTr("AI Search")
             }
             CheckBox {
-                Kirigami.FormData.label: i18n("Enable AI chat")
+                Kirigami.FormData.label: qsTr("Enable AI chat")
                 checked: settings.aiSearchEnabled
                 onToggled: settings.aiSearchEnabled = checked
             }
             TextField {
-                Kirigami.FormData.label: i18n("Endpoint:")
+                Kirigami.FormData.label: qsTr("Endpoint:")
                 placeholderText: "https://api.openai.com/v1"
                 text: settings.aiEndpoint
                 onEditingFinished: {
@@ -169,7 +169,7 @@ Kirigami.ScrollablePage {
                 }
             }
             TextField {
-                Kirigami.FormData.label: i18n("Model:")
+                Kirigami.FormData.label: qsTr("Model:")
                 placeholderText: "gpt-4o-mini"
                 text: settings.aiModel
                 onEditingFinished: {
@@ -178,15 +178,15 @@ Kirigami.ScrollablePage {
                 }
             }
             RowLayout {
-                Kirigami.FormData.label: i18n("API key:")
+                Kirigami.FormData.label: qsTr("API key:")
                 TextField {
                     id: keyField
                     Layout.fillWidth: true
                     echoMode: TextInput.Password
-                    placeholderText: ai.hasApiKey ? i18n("(stored)") : i18n("Enter API key")
+                    placeholderText: ai.hasApiKey ? qsTr("(stored)") : qsTr("Enter API key")
                 }
                 Button {
-                    text: i18n("Save")
+                    text: qsTr("Save")
                     icon.name: "kt-password-stored"
                     enabled: keyField.text.length > 0
                     onClicked: {
@@ -196,7 +196,7 @@ Kirigami.ScrollablePage {
                     }
                 }
                 Button {
-                    text: i18n("Delete")
+                    text: qsTr("Delete")
                     icon.name: "edit-delete"
                     enabled: ai.hasApiKey
                     onClicked: ai.clearApiKey()
@@ -204,14 +204,14 @@ Kirigami.ScrollablePage {
             }
             Label {
                 text: ai.hasApiKey
-                    ? i18n("Key stored in Secret Service.")
-                    : i18n("No key stored. Keys are saved via org.freedesktop.secrets (KWallet / GNOME Keyring).")
+                    ? qsTr("Key stored in Secret Service.")
+                    : qsTr("No key stored. Keys are saved via org.freedesktop.secrets (KWallet / GNOME Keyring).")
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 opacity: 0.7
             }
             Button {
-                text: i18n("Test endpoint")
+                text: qsTr("Test endpoint")
                 icon.name: "network-connect"
                 enabled: !ai.busy && settings.aiEndpoint.length > 0
                 onClicked: {
@@ -231,7 +231,7 @@ Kirigami.ScrollablePage {
         }
 
         Label {
-            text: i18n("Log file: $XDG_STATE_HOME/grexa/grexa-gui.log\nOverride verbosity with the GREXA_LOG environment variable.")
+            text: qsTr("Log file: $XDG_STATE_HOME/grexa/grexa-gui.log\nOverride verbosity with the GREXA_LOG environment variable.")
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
             opacity: 0.7

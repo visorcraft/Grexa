@@ -14,24 +14,19 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import com.visorcraft.Grexa 1.0
 
 Kirigami.Page {
     id: page
-    title: i18n("Search")
+    title: qsTr("Search")
     padding: Kirigami.Units.smallSpacing
 
-    property var controller: app.searchController
+    readonly property SearchController controller: app.searchController
 
     Connections {
-        target: controller
+        target: page.controller
         function onHistoryChanged() {
             page.refreshRecentPaths()
-        }
-        function onSearchCompleted(cancelled) {
-            // Re-enable stop button explicitly even though `busy` flips
-            // — QML's binding sees it but a fresh signal makes it
-            // obvious in event logs.
-            stopButton.enabled = false
         }
     }
 
@@ -60,15 +55,6 @@ Kirigami.Page {
     header: ColumnLayout {
         spacing: Kirigami.Units.smallSpacing
 
-        TabBar {
-            id: tabBar
-            Layout.fillWidth: true
-            TabButton {
-                text: i18n("Search")
-                width: Math.max(120, contentItem.implicitWidth + 16)
-            }
-        }
-
         RowLayout {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
@@ -83,7 +69,8 @@ Kirigami.Page {
             }
             Button {
                 icon.name: "folder-open"
-                text: i18n("Browse")
+                text: qsTr("Browse")
+                display: AbstractButton.TextBesideIcon
                 onClicked: browseDialog.open()
             }
         }
@@ -95,23 +82,25 @@ Kirigami.Page {
             TextField {
                 id: termInput
                 Layout.fillWidth: true
-                placeholderText: i18n("Search term")
+                placeholderText: qsTr("Search term")
                 Keys.onReturnPressed: page.launchSearch()
             }
             ToolButton {
                 id: regexToggle
                 checkable: true
                 icon.name: "code-context"
-                text: i18n("Regex")
-                ToolTip.text: i18n("Treat the search term as a regular expression (PCRE-style)")
+                text: qsTr("Regex")
+                display: AbstractButton.TextBesideIcon
+                ToolTip.text: qsTr("Treat the search term as a regular expression (PCRE-style)")
                 ToolTip.visible: hovered
             }
             ToolButton {
                 id: caseToggle
                 checkable: true
                 icon.name: "format-text-italic"
-                text: i18n("Aa")
-                ToolTip.text: i18n("Case-sensitive match")
+                text: qsTr("Aa")
+                display: AbstractButton.TextBesideIcon
+                ToolTip.text: qsTr("Case-sensitive match")
                 ToolTip.visible: hovered
             }
         }
@@ -123,26 +112,29 @@ Kirigami.Page {
             Button {
                 id: searchButton
                 icon.name: "edit-find"
-                text: i18n("Search")
+                text: qsTr("Search")
+                display: AbstractButton.TextBesideIcon
                 enabled: !controller.busy
                 onClicked: page.launchSearch()
             }
             Button {
                 id: stopButton
                 icon.name: "process-stop"
-                text: i18n("Stop")
+                text: qsTr("Stop")
+                display: AbstractButton.TextBesideIcon
                 enabled: controller.busy
                 onClicked: controller.cancel()
             }
             Button {
                 icon.name: "edit-clear"
-                text: i18n("Clear")
+                text: qsTr("Clear")
+                display: AbstractButton.TextBesideIcon
                 enabled: !controller.busy && controller.matchCount > 0
                 onClicked: controller.clearResults()
             }
             Item { Layout.fillWidth: true }
             Label {
-                text: i18n("%1 matches in %2 files", controller.matchCount, controller.filesMatched)
+                text: qsTr("%1 matches in %2 files").arg(controller.matchCount).arg(controller.filesMatched)
                 visible: controller.matchCount > 0
                 color: Kirigami.Theme.disabledTextColor
             }
@@ -152,7 +144,7 @@ Kirigami.Page {
             Layout.fillWidth: true
             Label {
                 id: statusLabel
-                text: controller.statusText.length > 0 ? controller.statusText : i18n("Ready")
+                text: controller.statusText.length > 0 ? controller.statusText : qsTr("Ready")
                 Layout.fillWidth: true
                 color: controller.busy ? Kirigami.Theme.activeTextColor : Kirigami.Theme.textColor
             }
@@ -212,9 +204,9 @@ Kirigami.Page {
 
             Kirigami.PlaceholderMessage {
                 anchors.centerIn: parent
-                visible: parent.count === 0 && !page.controller.busy
-                text: i18n("Run a search to see results.")
-                explanation: i18n("Type a path, type a term, press Enter.")
+                visible: resultList.count === 0 && !page.controller.busy
+                text: qsTr("Run a search to see results.")
+                explanation: qsTr("Type a path, type a term, press Enter.")
             }
         }
     }
@@ -222,10 +214,10 @@ Kirigami.Page {
     Dialog {
         id: browseDialog
         modal: true
-        title: i18n("Choose folder")
+        title: qsTr("Choose folder")
         standardButtons: Dialog.Cancel
         Label {
-            text: i18n("The portal file picker integration lands in Phase 5. Type the path directly for now.")
+            text: qsTr("The portal file picker integration lands in Phase 5. Type the path directly for now.")
             wrapMode: Text.WordWrap
         }
     }

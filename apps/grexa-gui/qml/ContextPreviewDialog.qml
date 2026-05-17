@@ -13,7 +13,7 @@ import org.kde.kirigami as Kirigami
 Dialog {
     id: dialog
     modal: true
-    title: dialog.path.length > 0 ? i18n("%1 — line %2", baseName(dialog.path), dialog.lineNumber) : i18n("Preview")
+    title: dialog.path.length > 0 ? qsTr("%1 — line %2").arg(baseName(dialog.path)).arg(dialog.lineNumber) : qsTr("Preview")
     standardButtons: Dialog.Close
     width: Math.min(parent.width * 0.8, 900)
     height: Math.min(parent.height * 0.7, 500)

@@ -18,11 +18,12 @@ import com.visorcraft.Grexa 1.0
 
 Kirigami.ApplicationWindow {
     id: app
-    title: i18n("Grexa")
+    title: qsTr("Grexa")
     width: 1100
     height: 700
     minimumWidth: 760
     minimumHeight: 480
+    visible: true
 
     // Cross-page controllers. Each holds Rust-side state; QML reads
     // them via `app.searchController.busy` etc.
@@ -44,29 +45,40 @@ Kirigami.ApplicationWindow {
 
     pageStack.initialPage: searchPage
 
+    function startDemoSearch() {
+        // Helper available from QML console / dev tools. Production
+        // users hit the Search button instead.
+        searchController.startSearch(
+            "/work/repos/visorcraft/grexa/crates", "TODO",
+            false, false, false
+        )
+    }
+
     globalDrawer: Kirigami.GlobalDrawer {
-        title: i18n("Grexa")
+        title: qsTr("Grexa")
         titleIcon: "io.visorcraft.Grexa"
         isMenu: false
         modal: false
+        collapsible: false
+        width: Kirigami.Units.gridUnit * 14
         actions: [
             Kirigami.Action {
-                text: i18n("Search")
+                text: qsTr("Search")
                 icon.name: "edit-find"
                 onTriggered: app.pageStack.replace(searchPage)
             },
             Kirigami.Action {
-                text: i18n("Regex Builder")
+                text: qsTr("Regex Builder")
                 icon.name: "code-context"
                 onTriggered: app.pageStack.replace(regexPage)
             },
             Kirigami.Action {
-                text: i18n("Settings")
+                text: qsTr("Settings")
                 icon.name: "settings-configure"
                 onTriggered: app.pageStack.replace(settingsPage)
             },
             Kirigami.Action {
-                text: i18n("About")
+                text: qsTr("About")
                 icon.name: "help-about"
                 onTriggered: app.pageStack.replace(aboutPage)
             }

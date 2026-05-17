@@ -32,7 +32,7 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: !panel.aiEnabled
         type: Kirigami.MessageType.Information
-        text: i18n("AI search is off. Enable it in Settings → AI Search.")
+        text: qsTr("AI search is off. Enable it in Settings → AI Search.")
     }
 
     Kirigami.InlineMessage {
@@ -54,14 +54,14 @@ ColumnLayout {
             model: ListModel { id: messageModel }
 
             delegate: Kirigami.SubtitleDelegate {
-                text: model.role === "user" ? i18n("You") : i18n("Assistant")
+                text: model.role === "user" ? qsTr("You") : qsTr("Assistant")
                 subtitle: model.content
             }
 
             Kirigami.PlaceholderMessage {
                 anchors.centerIn: parent
                 visible: messageModel.count === 0 && !controller.busy && panel.aiEnabled
-                text: i18n("Ask the AI for help shaping a search.")
+                text: qsTr("Ask the AI for help shaping a search.")
             }
 
             BusyIndicator {
@@ -80,11 +80,11 @@ ColumnLayout {
         TextArea {
             id: input
             Layout.fillWidth: true
-            placeholderText: i18n("Ask the AI…")
+            placeholderText: qsTr("Ask the AI…")
             wrapMode: TextEdit.Wrap
         }
         Button {
-            text: i18n("Send")
+            text: qsTr("Send")
             icon.name: "document-send"
             enabled: input.text.trim().length > 0
             onClicked: {

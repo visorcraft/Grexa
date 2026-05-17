@@ -23,6 +23,7 @@ pub mod ffi {
         type QString = cxx_qt_lib::QString;
     }
 
+    #[auto_cxx_name]
     extern "RustQt" {
         #[qobject]
         #[qml_element]
