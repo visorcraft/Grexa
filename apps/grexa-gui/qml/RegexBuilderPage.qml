@@ -1,111 +1,318 @@
 // SPDX-FileCopyrightText: 2026 VisorCraft LLC
 // SPDX-License-Identifier: GPL-3.0-only
 
-// Regex Builder — backed by `app.regexController` which wraps
-// `grexa_core::pattern::PatternEngine`. Every time the pattern,
-// sample, or case-insensitive toggle changes, `evaluate()` recomputes
-// `matchCount` and `error`.
+// Regex Builder. Preset chips + pattern editor + sample text with
+// inline match highlights + match-count badge. The match
+// highlighting is computed in QML JS (cheap enough for the test
+// strings users typically paste here) so we don't need a separate
+// "highlight pattern" invokable on the controller.
 
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls as Controls
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
 Kirigami.Page {
     id: page
-    title: qsTr("Regex Builder")
-    padding: Kirigami.Units.smallSpacing
+    padding: 0
+    titleDelegate: Item {}
+    globalToolBarStyle: Kirigami.ApplicationHeaderStyle.None
 
     property var controller: app.regexController
+    property int activePreset: -1
 
     function evaluate() {
         controller.pattern = patternField.text
         controller.sample = sampleArea.text
         controller.caseInsensitive = caseInsensitive.checked
         controller.evaluate()
+        refreshHighlight()
     }
+
+    function refreshHighlight() {
+        const pattern = patternField.text
+        const sample = sampleArea.text
+        if (pattern.length === 0 || controller.error.length > 0) {
+            sampleArea.markdownText = sample
+            sampleArea.text = sample
+            return
+        }
+        try {
+            const flags = caseInsensitive.checked ? "gi" : "g"
+            const re = new RegExp(pattern, flags)
+            // Build rich text with inline <mark> spans.
+            let html = ""
+            let last = 0
+            let m
+            while ((m = re.exec(sample)) !== null) {
+                if (m.index === re.lastIndex) re.lastIndex++
+                html += escapeHtml(sample.substring(last, m.index))
+                html += "<span style='background-color:"
+                    + app.tokens.matchTint.toString()
+                    + "; padding:0 2px;'>"
+                    + escapeHtml(m[0])
+                    + "</span>"
+                last = m.index + m[0].length
+            }
+            html += escapeHtml(sample.substring(last))
+            sampleArea.textFormat = TextEdit.RichText
+            sampleHighlight.text = "<pre style='font-family:monospace;'>" + html + "</pre>"
+        } catch (e) {
+            sampleHighlight.text = ""
+        }
+    }
+
+    function escapeHtml(s) {
+        return String(s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\n/g, "<br>")
+    }
+
+    readonly property var presets: [
+        { name: qsTr("Email"),  pattern: "[\\w.%+-]+@[\\w.-]+\\.[A-Za-z]{2,}" },
+        { name: qsTr("Phone"),  pattern: "\\+?\\d{1,3}[-. ]?\\(?\\d{1,4}\\)?[-. ]?\\d{1,9}[-. ]?\\d{1,9}" },
+        { name: qsTr("Date"),   pattern: "\\d{4}-\\d{2}-\\d{2}" },
+        { name: qsTr("Digits"), pattern: "\\d+" },
+        { name: qsTr("URL"),    pattern: "https?://\\S+" },
+        { name: qsTr("IPv4"),   pattern: "(\\d{1,3}\\.){3}\\d{1,3}" },
+        { name: qsTr("Hex"),    pattern: "0x[0-9a-fA-F]+" },
+        { name: qsTr("UUID"),   pattern: "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}" },
+    ]
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: Kirigami.Units.smallSpacing
+        spacing: 0
 
-        RowLayout {
+        // -- Header
+        Item {
             Layout.fillWidth: true
-            spacing: Kirigami.Units.smallSpacing
-            Label { text: qsTr("Presets:") }
-            Repeater {
-                model: [
-                    { name: qsTr("Email"), pattern: "[\\w.%+-]+@[\\w.-]+\\.[A-Za-z]{2,}" },
-                    { name: qsTr("Phone"), pattern: "\\+?\\d{1,3}[-. ]?\\(?\\d{1,4}\\)?[-. ]?\\d{1,9}[-. ]?\\d{1,9}" },
-                    { name: qsTr("Date"),  pattern: "\\d{4}-\\d{2}-\\d{2}" },
-                    { name: qsTr("Digits"), pattern: "\\d+" },
-                    { name: qsTr("URL"),   pattern: "https?://\\S+" },
-                ]
-                ToolButton {
-                    text: modelData.name
-                    onClicked: {
-                        patternField.text = modelData.pattern
-                        page.evaluate()
+            Layout.preferredHeight: 64
+            Rectangle {
+                anchors.fill: parent
+                color: app.tokens.surface0
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: 1
+                    color: app.tokens.separator
+                }
+            }
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: app.tokens.spaceXL
+                anchors.rightMargin: app.tokens.spaceXL
+                spacing: app.tokens.spaceM
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Controls.Label {
+                        text: qsTr("Regex Builder")
+                        font.pixelSize: app.tokens.textHeading
+                        font.weight: app.tokens.weightBold
+                    }
+                    Controls.Label {
+                        text: qsTr("Test patterns against sample text — same engine the search uses.")
+                        font.pixelSize: app.tokens.textCaption
+                        opacity: 0.6
+                    }
+                }
+                Rectangle {
+                    radius: app.tokens.radiusPill
+                    color: page.controller.error.length > 0
+                        ? Qt.rgba(0.75, 0.23, 0.17, 0.2)
+                        : page.controller.matchCount > 0
+                            ? app.tokens.accentMute
+                            : Qt.rgba(0, 0, 0, 0)
+                    border.color: page.controller.error.length > 0
+                        ? app.tokens.error
+                        : page.controller.matchCount > 0
+                            ? app.tokens.accent
+                            : "transparent"
+                    border.width: 1
+                    implicitHeight: 28
+                    implicitWidth: badgeLabel.implicitWidth + app.tokens.spaceL * 2
+                    visible: patternField.text.length > 0
+                    Controls.Label {
+                        id: badgeLabel
+                        anchors.centerIn: parent
+                        text: page.controller.error.length > 0
+                            ? qsTr("invalid")
+                            : qsTr("%1 match(es)").arg(page.controller.matchCount)
+                        font.pixelSize: app.tokens.textCaption
+                        font.weight: app.tokens.weightMedium
+                        color: page.controller.error.length > 0
+                            ? app.tokens.error
+                            : app.tokens.accent
                     }
                 }
             }
         }
 
-        RowLayout {
+        // -- Preset chips
+        ColumnLayout {
             Layout.fillWidth: true
-            spacing: Kirigami.Units.smallSpacing
-            CheckBox {
-                id: caseInsensitive
-                text: qsTr("Case-insensitive")
-                onToggled: page.evaluate()
+            Layout.leftMargin: app.tokens.spaceXL
+            Layout.rightMargin: app.tokens.spaceXL
+            Layout.topMargin: app.tokens.spaceL
+            spacing: app.tokens.spaceS
+
+            Controls.Label {
+                text: qsTr("Presets")
+                font.pixelSize: app.tokens.textCaption
+                opacity: 0.65
+            }
+            Flow {
+                Layout.fillWidth: true
+                spacing: app.tokens.spaceS
+                Repeater {
+                    model: page.presets
+                    delegate: Rectangle {
+                        radius: app.tokens.radiusPill
+                        property bool selected: page.activePreset === index
+                        color: selected ? app.tokens.accentMute
+                            : chipMouse.containsMouse ? app.tokens.surface2
+                            : app.tokens.surface1
+                        border.color: selected ? app.tokens.accent : app.tokens.separator
+                        border.width: 1
+                        implicitHeight: 28
+                        implicitWidth: presetLabel.implicitWidth + app.tokens.spaceL * 2
+                        Controls.Label {
+                            id: presetLabel
+                            anchors.centerIn: parent
+                            text: modelData.name
+                            font.pixelSize: app.tokens.textCaption
+                            font.weight: selected ? app.tokens.weightMedium : app.tokens.weightNormal
+                            color: selected ? app.tokens.accent : Kirigami.Theme.textColor
+                        }
+                        MouseArea {
+                            id: chipMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                page.activePreset = index
+                                patternField.text = modelData.pattern
+                                page.evaluate()
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        TextField {
-            id: patternField
+        // -- Pattern editor
+        ColumnLayout {
             Layout.fillWidth: true
-            placeholderText: qsTr("Regular expression")
-            font.family: "monospace"
-            onTextChanged: page.evaluate()
-        }
+            Layout.leftMargin: app.tokens.spaceXL
+            Layout.rightMargin: app.tokens.spaceXL
+            Layout.topMargin: app.tokens.spaceL
+            spacing: app.tokens.spaceXS
 
-        ScrollView {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            TextArea {
-                id: sampleArea
-                placeholderText: qsTr("Paste sample text here…")
-                font.family: "monospace"
-                wrapMode: TextEdit.Wrap
-                onTextChanged: page.evaluate()
+            Controls.Label {
+                text: qsTr("Pattern")
+                font.pixelSize: app.tokens.textCaption
+                opacity: 0.65
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: app.tokens.spaceS
+                Controls.TextField {
+                    id: patternField
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("e.g.  fn\\s+\\w+_test")
+                    font.family: app.tokens.monoFamily
+                    onTextChanged: page.evaluate()
+                }
+                Controls.ToolButton {
+                    id: caseInsensitive
+                    checkable: true
+                    text: "i"
+                    font.family: app.tokens.monoFamily
+                    Controls.ToolTip.text: qsTr("Case-insensitive")
+                    Controls.ToolTip.visible: hovered
+                    onToggled: page.evaluate()
+                }
             }
         }
 
+        // -- Error banner
         Kirigami.InlineMessage {
             Layout.fillWidth: true
-            visible: controller.error.length > 0
+            Layout.leftMargin: app.tokens.spaceXL
+            Layout.rightMargin: app.tokens.spaceXL
+            Layout.topMargin: app.tokens.spaceS
+            visible: page.controller.error.length > 0
             type: Kirigami.MessageType.Error
-            text: controller.error
+            text: page.controller.error
         }
 
-        RowLayout {
+        // -- Sample text
+        ColumnLayout {
             Layout.fillWidth: true
-            Label {
-                text: controller.error.length > 0
-                    ? ""
-                    : (controller.matchCount === 0 && patternField.text.length > 0
-                        ? qsTr("No matches.")
-                        : qsTr("%1 match(es).").arg(controller.matchCount))
-                Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.leftMargin: app.tokens.spaceXL
+            Layout.rightMargin: app.tokens.spaceXL
+            Layout.topMargin: app.tokens.spaceL
+            Layout.bottomMargin: app.tokens.spaceL
+            spacing: app.tokens.spaceXS
+
+            Controls.Label {
+                text: qsTr("Sample text")
+                font.pixelSize: app.tokens.textCaption
+                opacity: 0.65
             }
-            Button {
-                text: qsTr("Send to Search tab")
-                icon.name: "edit-find"
-                enabled: patternField.text.length > 0 && controller.error.length === 0
-                onClicked: {
-                    // Push the pattern into the search tab — set the
-                    // term field directly.
-                    app.searchController.statusText = qsTr("Pattern copied to Search tab.")
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                radius: app.tokens.radiusCard
+                color: app.tokens.surface1
+                border.color: app.tokens.separator
+                border.width: 1
+
+                Controls.ScrollView {
+                    id: sampleScroll
+                    anchors.fill: parent
+                    anchors.margins: app.tokens.spaceS
+                    visible: patternField.text.length === 0 || sampleHighlight.text.length === 0
+                    Controls.TextArea {
+                        id: sampleArea
+                        placeholderText: qsTr("Paste sample text and watch the matches light up.")
+                        font.family: app.tokens.monoFamily
+                        font.pixelSize: app.tokens.textBody
+                        wrapMode: TextEdit.Wrap
+                        background: null
+                        onTextChanged: page.evaluate()
+                    }
+                }
+                // Read-only highlight overlay: when a pattern is active
+                // we show this RichText-rendered version with <mark>
+                // spans. Click anywhere to put focus back into the
+                // editable area underneath.
+                Flickable {
+                    anchors.fill: parent
+                    anchors.margins: app.tokens.spaceS
+                    visible: !sampleScroll.visible
+                    contentWidth: width
+                    contentHeight: sampleHighlight.implicitHeight
+                    clip: true
+                    Controls.Label {
+                        id: sampleHighlight
+                        width: parent.width
+                        textFormat: Text.RichText
+                        wrapMode: Text.Wrap
+                        font.family: app.tokens.monoFamily
+                        font.pixelSize: app.tokens.textBody
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            sampleHighlight.text = ""   // hand back the editor
+                            sampleArea.forceActiveFocus()
+                        }
+                    }
                 }
             }
         }

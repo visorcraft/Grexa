@@ -23,7 +23,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
+use cxx_qt_lib::{QFont, QGuiApplication, QQmlApplicationEngine, QString, QUrl};
 use grexa_core::AppPaths;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
@@ -61,6 +61,15 @@ fn main() {
             .set_organization_name(&QString::from("VisorCraft"));
         app.as_mut()
             .set_organization_domain(&QString::from("visorcraft.io"));
+    }
+
+    // App-wide font. Inter first; fall through to Cantarell (GNOME),
+    // Noto Sans (most distros), then the platform default.
+    let mut font = QFont::default();
+    font.set_family(&QString::from("Inter, Cantarell, Noto Sans, Sans Serif"));
+    font.set_pixel_size(13);
+    if let Some(app) = app.as_mut() {
+        app.set_application_font(&font);
     }
     let mut engine = QQmlApplicationEngine::new();
     if engine.is_null() {

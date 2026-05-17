@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3daee9"/>
+      <stop offset="1" stop-color="#1d2952"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="20" fill="url(#bg)"/>
+  <!-- Magnifying glass -->
+  <circle cx="55" cy="55" r="22" fill="none" stroke="#ffffff" stroke-width="6"/>
+  <line x1="71" y1="71" x2="96" y2="96" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
+  <!-- Inner text marker representing the matched character -->
+  <text x="55" y="64" text-anchor="middle" fill="#ffffff" font-family="monospace" font-size="22" font-weight="700">x</text>
+</svg>

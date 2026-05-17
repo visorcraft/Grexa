@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- SPDX-FileCopyrightText: 2026 VisorCraft LLC -->
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+  <defs>
+    <linearGradient id="halo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3D8FE5" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#3D8FE5" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Soft accent halo behind the lens -->
+  <circle cx="68" cy="68" r="60" fill="url(#halo)"/>
+
+  <!-- Document slip behind the lens (paper outline + lines) -->
+  <g transform="translate(90 32) rotate(8)" fill="none" stroke="#8893A6" stroke-width="2">
+    <rect x="0" y="0" width="46" height="58" rx="4"/>
+    <line x1="6"  y1="14" x2="40" y2="14"/>
+    <line x1="6"  y1="24" x2="40" y2="24"/>
+    <line x1="6"  y1="34" x2="32" y2="34"/>
+    <line x1="6"  y1="44" x2="36" y2="44"/>
+  </g>
+
+  <!-- Lens body (outer ring) -->
+  <circle cx="68" cy="68" r="34" fill="none" stroke="#B9C3D6" stroke-width="4"/>
+  <!-- Lens inner highlight -->
+  <circle cx="68" cy="68" r="28" fill="none" stroke="#B9C3D6" stroke-width="1" stroke-opacity="0.5"/>
+  <!-- Handle -->
+  <line x1="93" y1="93" x2="124" y2="124" stroke="#B9C3D6" stroke-width="6" stroke-linecap="round"/>
+  <!-- Stylized match-bracket indicator inside the lens -->
+  <text x="68" y="78" text-anchor="middle" font-family="monospace"
+        font-size="26" font-weight="700" fill="#3D8FE5">⟨⟩</text>
+</svg>
