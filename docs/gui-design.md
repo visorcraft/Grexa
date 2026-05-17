@@ -5,17 +5,26 @@
 PLAN.md Phase 1 calls for a Rust ⇄ Qt bridge spike before committing
 to the GUI stack. Two paths were evaluated.
 
-**`cxx-qt` 0.8** — rejected. The current Cargo-only repo can't host a
-clean cxx-qt build: `cxx-qt-build` 0.8 wraps its initializer registry
-around a `links = "<crate>"` Cargo convention that downstream
-binaries can't easily satisfy without the full cxx-qt-build → CMake
-→ qmake6 toolchain. A smoke test with the documented API
-(`CxxQtBuilder::new().qt_module("Core").file(...).build()` plus
-`cxx_qt::init_crate!(cxx_qt_lib)`) failed to link with
-`undefined symbol: cxx_qt_init_crate_cxx_qt_lib` — the cxx-qt-lib
-initializer is exported only when CMake threads it through. We
-re-evaluate when cxx-qt ships a pure-Cargo flow or when CMake is on
-every Grexa CI host.
+**`cxx-qt` 0.8** — rejected. Two smoke attempts (with and without a
+`links = "..."` Cargo manifest field, with and without
+`interface.export()` in `build.rs`, with and without explicit
+`cxx_qt::init_crate!(cxx_qt_lib)` calls) all failed to link with the
+same error:
+
+```
+ld.lld: error: undefined symbol: cxx_qt_init_crate_cxx_qt_lib
+>>> referenced by public-initializer.cpp:11
+>>>   target/debug/build/<crate>/out/cxx-qt-build/initializers/<crate>/public-initializer.cpp:11
+>>> referenced by main.rs:N (init_crate! call site)
+```
+
+The symbol is emitted by an auto-generated `public-initializer.cpp`
+that the cxx-qt-build script writes into `OUT_DIR`. It cannot be
+suppressed by Rust source changes. The cxx-qt-lib build script
+`.export()`s the corresponding C++ initializer but downstream
+binaries don't pick it up under pure Cargo — the CMake harness in
+the cxx-qt repo's own examples threads the export through. We
+re-evaluate when cxx-qt ships a pure-Cargo flow.
 
 **`qmetaobject` 0.2** — accepted. Pure Rust, no build script, no
 CMake. `cargo build -p grexa` produces a working binary that

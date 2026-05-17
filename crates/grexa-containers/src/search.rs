@@ -31,7 +31,16 @@ pub struct ContainerSearchHit {
     /// fallback.
     pub container_path: String,
     pub line_number: usize,
+    /// 1-based byte column where the match starts. `1` when the parser
+    /// runs without a pattern (back-compat) or when the pattern was
+    /// not found inside the reported line.
+    #[serde(default = "default_column")]
+    pub column_number: usize,
     pub line_content: String,
+}
+
+fn default_column() -> usize {
+    1
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -113,23 +122,71 @@ fn direct_grep<R: RuntimeOperations>(
         });
     }
 
-    Ok(parse_grep_output(
+    Ok(parse_grep_output_with_pattern(
         &String::from_utf8_lossy(&result.stdout),
         runtime.kind(),
         &container.id,
+        Some(GrepPattern {
+            needle: &options.pattern,
+            regex: options.regex,
+            case_sensitive: options.case_sensitive,
+        }),
     ))
 }
 
-/// Parse colon-delimited `grep -rnH` output. The first colon separates the
-/// file path from the line number; the second separates line number from
-/// content. Both halves may themselves contain colons (Windows-style paths
-/// don't show up in containers, but Unix paths with `:` are rare yet legal).
-/// We split greedily on the first two colons only.
+/// What `parse_grep_output_with_pattern` needs to re-scan each line
+/// and emit one hit per match occurrence + correct column numbers.
+#[derive(Debug, Clone, Copy)]
+pub struct GrepPattern<'a> {
+    pub needle: &'a str,
+    pub regex: bool,
+    pub case_sensitive: bool,
+}
+
+/// Parse colon-delimited `grep -rnH` output. Back-compat shim that emits
+/// one hit per matched line at column 1. Callers that have the pattern
+/// available should prefer [`parse_grep_output_with_pattern`].
 pub fn parse_grep_output(
     stdout: &str,
     kind: ContainerRuntimeKind,
     container_id: &str,
 ) -> Vec<ContainerSearchHit> {
+    parse_grep_output_with_pattern(stdout, kind, container_id, None)
+}
+
+/// Parse colon-delimited `grep -rnH` output. The first colon separates
+/// the file path from the line number; the second separates line number
+/// from content. Both halves may themselves contain colons; we split
+/// greedily on the first two colons only.
+///
+/// When `pattern` is supplied, the parser re-scans each line for all
+/// occurrences of the pattern and emits one [`ContainerSearchHit`] per
+/// match with the correct `column_number`. When `pattern` is `None`,
+/// the parser falls back to one hit per matched line at column 1
+/// (which is what `grep` reports by default).
+pub fn parse_grep_output_with_pattern(
+    stdout: &str,
+    kind: ContainerRuntimeKind,
+    container_id: &str,
+    pattern: Option<GrepPattern<'_>>,
+) -> Vec<ContainerSearchHit> {
+    let compiled = pattern.and_then(|p| {
+        if p.regex {
+            regex::RegexBuilder::new(p.needle)
+                .case_insensitive(!p.case_sensitive)
+                .build()
+                .ok()
+        } else {
+            // Literal mode: build a literal-match regex so we get one
+            // pass over the line content regardless of case.
+            let escaped = regex::escape(p.needle);
+            regex::RegexBuilder::new(&escaped)
+                .case_insensitive(!p.case_sensitive)
+                .build()
+                .ok()
+        }
+    });
+
     let mut hits = Vec::new();
     for line in stdout.lines() {
         // Need exactly two colons to split into (path, lineno, content).
@@ -154,13 +211,44 @@ pub fn parse_grep_output(
         let Ok(line_number) = lineno_str.parse::<usize>() else {
             continue;
         };
-        hits.push(ContainerSearchHit {
-            runtime: kind,
-            container_id: container_id.to_string(),
-            container_path: path.to_string(),
-            line_number,
-            line_content: content.to_string(),
-        });
+
+        if let Some(re) = compiled.as_ref() {
+            let mut emitted = false;
+            for mat in re.find_iter(content) {
+                emitted = true;
+                hits.push(ContainerSearchHit {
+                    runtime: kind,
+                    container_id: container_id.to_string(),
+                    container_path: path.to_string(),
+                    line_number,
+                    column_number: mat.start() + 1,
+                    line_content: content.to_string(),
+                });
+            }
+            if !emitted {
+                // grep matched the line but our local regex didn't.
+                // Surface the line at column 1 so the user still sees
+                // the hit; differs from grep only when the pattern is
+                // a regex feature we can't compile locally.
+                hits.push(ContainerSearchHit {
+                    runtime: kind,
+                    container_id: container_id.to_string(),
+                    container_path: path.to_string(),
+                    line_number,
+                    column_number: 1,
+                    line_content: content.to_string(),
+                });
+            }
+        } else {
+            hits.push(ContainerSearchHit {
+                runtime: kind,
+                container_id: container_id.to_string(),
+                container_path: path.to_string(),
+                line_number,
+                column_number: 1,
+                line_content: content.to_string(),
+            });
+        }
     }
     hits
 }
@@ -191,6 +279,7 @@ fn mirror_search<R: RuntimeOperations>(
             container_id: container.id.clone(),
             container_path,
             line_number: result.line_number,
+            column_number: result.column_number,
             line_content: result.line_content,
         });
     }
@@ -336,7 +425,63 @@ mod tests {
         assert_eq!(hits.len(), 2);
         assert_eq!(hits[0].container_path, "/etc/hostname");
         assert_eq!(hits[0].line_number, 1);
+        assert_eq!(hits[0].column_number, 1);
         assert_eq!(hits[1].line_content, "127.0.0.1 localhost");
+    }
+
+    #[test]
+    fn parse_grep_output_with_pattern_emits_one_hit_per_match() {
+        let stdout = "/var/log/syslog:7:TODO ship it; TODO TODO again\n";
+        let hits = parse_grep_output_with_pattern(
+            stdout,
+            ContainerRuntimeKind::Podman,
+            "abc",
+            Some(GrepPattern {
+                needle: "TODO",
+                regex: false,
+                case_sensitive: true,
+            }),
+        );
+        assert_eq!(hits.len(), 3, "got {hits:?}");
+        let columns: Vec<_> = hits.iter().map(|h| h.column_number).collect();
+        assert_eq!(columns, vec![1, 15, 20]);
+    }
+
+    #[test]
+    fn parse_grep_output_with_pattern_handles_case_insensitive() {
+        let stdout = "/etc/issue:1:Ubuntu OS ubuntu LTS\n";
+        let hits = parse_grep_output_with_pattern(
+            stdout,
+            ContainerRuntimeKind::Docker,
+            "abc",
+            Some(GrepPattern {
+                needle: "ubuntu",
+                regex: false,
+                case_sensitive: false,
+            }),
+        );
+        assert_eq!(hits.len(), 2);
+        assert_eq!(hits[0].column_number, 1);
+        assert_eq!(hits[1].column_number, 11);
+    }
+
+    #[test]
+    fn parse_grep_output_with_pattern_uses_regex() {
+        let stdout = "/data/notes:42:abc-1 abc-22 xyz abc-333\n";
+        let hits = parse_grep_output_with_pattern(
+            stdout,
+            ContainerRuntimeKind::Podman,
+            "abc",
+            Some(GrepPattern {
+                needle: r"abc-\d+",
+                regex: true,
+                case_sensitive: true,
+            }),
+        );
+        assert_eq!(hits.len(), 3);
+        let cols: Vec<_> = hits.iter().map(|h| h.column_number).collect();
+        // "abc-1 abc-22 xyz abc-333" — matches at columns 1, 7, 18.
+        assert_eq!(cols, vec![1, 7, 18]);
     }
 
     #[test]

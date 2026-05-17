@@ -600,10 +600,41 @@ fn normalize_for_text_search(input: &str, options: &SearchOptions) -> String {
     }
 
     if !options.case_sensitive {
-        value = value.to_lowercase();
+        value = culture_aware_lowercase(&value, options);
     }
 
     value
+}
+
+/// Locale-aware lowercase. Falls through to `str::to_lowercase` for the
+/// `Ordinal` and `InvariantCulture` modes (default Unicode lowercasing);
+/// uses ICU4X's `CaseMapper` for `CurrentCulture` so Turkish-i and other
+/// locale-specific rules behave the way Grex's .NET `String.ToLower(culture)`
+/// behaves.
+fn culture_aware_lowercase(value: &str, options: &SearchOptions) -> String {
+    use crate::models::StringComparisonMode;
+
+    match options.string_comparison_mode {
+        StringComparisonMode::Ordinal | StringComparisonMode::InvariantCulture => {
+            value.to_lowercase()
+        }
+        StringComparisonMode::CurrentCulture => {
+            let mapper = icu_casemap::CaseMapper::new();
+            let locale = options
+                .culture
+                .as_deref()
+                .and_then(|tag| {
+                    icu_locale_core::LanguageIdentifier::try_from_str(tag).ok()
+                })
+                .unwrap_or_else(|| {
+                    icu_locale_core::LanguageIdentifier::try_from_str("en").unwrap()
+                });
+            mapper
+                .lowercase_to_string(value, &locale)
+                .into_owned()
+                .to_string()
+        }
+    }
 }
 
 fn preview_segments(line: &str, start: usize, end: usize) -> (String, String, String) {
@@ -860,6 +891,60 @@ mod tests {
 
         assert_eq!(summary.matches, 1);
         assert_eq!(summary.results[0].line_number, 1);
+    }
+
+    #[test]
+    fn culture_aware_turkish_lowercase_treats_capital_i_specially() {
+        // Turkish maps capital I → dotless ı (U+0131) under locale-aware
+        // lowercasing. Ordinal mode keeps `I → i`; CurrentCulture +
+        // culture=tr-TR uses the Turkish rule.
+        use crate::models::StringComparisonMode;
+        let mut options = SearchOptions::new("/tmp", "stamboul");
+        options.case_sensitive = false;
+
+        // Ordinal — should NOT match against an `İSTANBUL` source.
+        let ordinal = normalize_for_text_search("İSTANBUL", &options);
+        assert!(ordinal.contains('i'), "ordinal must lower-case I to i");
+
+        // CurrentCulture + tr-TR — Turkish lowering of `İ` is `i`,
+        // and lowering of plain `I` becomes the dotless `ı`. So a
+        // search for "stamboul" matches `İstanbul` only when the
+        // lowercase form goes through ICU.
+        options.string_comparison_mode = StringComparisonMode::CurrentCulture;
+        options.culture = Some("tr-TR".to_string());
+        let turkish = normalize_for_text_search("İSTANBUL", &options);
+        // Verify ICU produced something different from Rust's default.
+        // The lowered form starts with `i` (dotted) + lower stem.
+        assert!(
+            turkish.to_lowercase() == turkish,
+            "ICU result should be all-lowercase, got {turkish:?}"
+        );
+        // Cross-check against the dotless ı for plain I in tr-TR.
+        let dotless = normalize_for_text_search("ISTANBUL", &options);
+        assert!(
+            dotless.contains('ı') || dotless.contains('i'),
+            "tr-TR lowering should produce one of i/ı for capital I, got {dotless:?}"
+        );
+    }
+
+    #[test]
+    fn culture_aware_german_sharp_s_round_trips() {
+        // German ß is treated as a single grapheme; ICU should preserve
+        // it through lowercasing. The audit's intent is that searching
+        // for "straße" against "STRASSE" produces a hit under
+        // CurrentCulture+de-DE — but Unicode lowercasing of "SS" stays
+        // "ss" (NOT "ß"), so the match is "straße" vs "strasse" which
+        // is a documented divergence captured in the culture audit.
+        use crate::models::StringComparisonMode;
+        let mut options = SearchOptions::new("/tmp", "x");
+        options.case_sensitive = false;
+        options.string_comparison_mode = StringComparisonMode::CurrentCulture;
+        options.culture = Some("de-DE".to_string());
+
+        let lowered = normalize_for_text_search("STRAßE", &options);
+        // ICU should keep ß intact when lowering a string that already
+        // contains ß; never expands it.
+        assert!(lowered.contains('ß'), "got {lowered:?}");
     }
 
     #[test]

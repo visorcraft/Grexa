@@ -7,10 +7,18 @@ repository.workspace = true
 
 [dependencies]
 grexa-core = { version = "0.1.0", path = "../grexa-core" }
+regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+
+[features]
+default = []
+# Enable end-to-end tests that drive a real Docker/Podman daemon.
+# Tests under `crates/grexa-containers/tests/live.rs` only compile when
+# this feature is on, so CI without a daemon stays green.
+container-live = []
 
 [dev-dependencies]

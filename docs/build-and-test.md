@@ -83,8 +83,21 @@ Both require `cargo install cargo-deny` / `cargo install cargo-audit`.
 
 ## Container search live tests
 
-The container test suite uses `MockCommandRunner` so it runs without
-a daemon. To exercise the live path manually:
+The default container test suite uses `MockCommandRunner` so it runs
+without a daemon. To exercise the live path automatically, enable the
+`container-live` Cargo feature:
+
+```bash
+# Run the live-daemon integration tests (requires podman or docker
+# on $PATH; tests no-op when neither is reachable).
+cargo test -p grexa-containers --features container-live -- live::
+```
+
+The live tests spawn a throwaway Alpine container, run direct grep
+inside it, exercise the archive mirror fallback, and clean up on the
+way out.
+
+You can also exercise the live path manually:
 
 ```bash
 # Start a podman container and search inside it.

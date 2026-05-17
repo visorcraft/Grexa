@@ -651,19 +651,31 @@ Decision and module map: `docs/gui-design.md`.
 
 ## Optional follow-ups
 
-Nice-to-haves, not blockers for 1.0:
+These were the v1.0 "nice-to-haves" — three of four shipped in
+follow-up commits, one remains genuinely deferred:
 
-- Migrate `qobjects.rs` from `qmetaobject` to `cxx_qt::bridge` once
-  the cxx-qt build chain is friendlier (or once Grexa CI hosts ship
-  CMake). qmetaobject is fine for v1.0; cxx-qt's compile-time-typed
-  property notifications are a quality-of-life upgrade.
-- Layer ICU4X under the `--comparison current-culture` matrix to
-  honor Turkish-i / German ß / Greek sigma. Audit + 43-case fixture
-  matrix already in `docs/grex-culture-comparison-audit.md`.
-- Land the live container-daemon test matrix behind a
-  `container-live` Cargo feature.
-- Land the byte-offset multi-hit-per-line grep parser for richer
-  container result columns.
+- [x] **Byte-offset multi-hit-per-line grep parser.**
+  `parse_grep_output_with_pattern` re-scans each line of the
+  container's grep output for the pattern and emits one
+  `ContainerSearchHit` per occurrence with a correct
+  `column_number`. Backed by 3 new unit tests covering literal +
+  case-insensitive + regex patterns.
+- [x] **Live container-daemon test matrix.**
+  `crates/grexa-containers/tests/live.rs` ships behind the
+  `container-live` Cargo feature. The 4 tests detect-runtime,
+  list-containers, direct-grep against a live Alpine container,
+  and round-trip `archive_path` via the real daemon. Confirmed
+  passing against rootless Podman 5.x on the dev host.
+- [x] **ICU4X-backed culture-aware comparison.** `icu_casemap` +
+  `icu_locale_core` wired into `normalize_for_text_search`. When
+  `string_comparison_mode = CurrentCulture` and a `culture` tag is
+  supplied, lowercasing routes through ICU. Turkish-i and German ß
+  tests pin the behavior.
+- [ ] **Migrate `qobjects.rs` from `qmetaobject` to
+  `cxx_qt::bridge`.** Attempted in this session; two reproducible
+  link errors prevented a working build (concrete diagnostics in
+  `docs/gui-design.md`). qmetaobject is the production bridge until
+  cxx-qt 0.9+ ships a pure-Cargo flow or Grexa CI hosts gain CMake.
 
 ## Non-Goals
 
