@@ -197,7 +197,7 @@ cycle:
 
 ## Verification
 
-- `cargo test --workspace`: **297 passing** across 8 crates.
+- `cargo test --workspace`: **300 passing** across 8 crates.
 - `cargo clippy --workspace --all-targets -- -D warnings`: clean.
 - `cargo fmt --all -- --check`: clean.
 - Offscreen smoke (`QT_QPA_PLATFORM=offscreen`): clean.

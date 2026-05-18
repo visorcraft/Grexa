@@ -159,7 +159,7 @@ Kirigami.Page {
                         font.pixelSize: app.tokens.textHeading
                         font.weight: app.tokens.weightBold
                         font.family: app.tokens.sansFamily
-                        font.letterSpacing: -0.3
+                        font.letterSpacing: 0
                     }
                     Controls.Label {
                         text: qsTr("Test patterns against sample text — same engine the search uses.")
@@ -330,7 +330,7 @@ Kirigami.Page {
                         text: qsTr("SAMPLE TEXT")
                         font.pixelSize: 10
                         font.weight: app.tokens.weightSemibold
-                        font.letterSpacing: 1.6
+                        font.letterSpacing: 0
                         opacity: 0.5
                     }
                     Item { Layout.fillWidth: true }
@@ -411,7 +411,7 @@ Kirigami.Page {
                         text: qsTr("MATCHES")
                         font.pixelSize: 10
                         font.weight: app.tokens.weightSemibold
-                        font.letterSpacing: 1.6
+                        font.letterSpacing: 0
                         opacity: 0.5
                     }
                     Item { Layout.fillWidth: true }

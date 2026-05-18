@@ -84,7 +84,7 @@ Kirigami.ScrollablePage {
                     font.pixelSize: app.tokens.textHeading
                     font.weight: app.tokens.weightBold
                     font.family: app.tokens.sansFamily
-                    font.letterSpacing: -0.3
+                    font.letterSpacing: 0
                 }
                 Controls.Label {
                     text: qsTr("Built on Rust + Qt 6 / Kirigami via cxx-qt.")
@@ -152,7 +152,7 @@ Kirigami.ScrollablePage {
                             font.pixelSize: app.tokens.textDisplay
                             font.weight: app.tokens.weightBold
                             font.family: app.tokens.sansFamily
-                            font.letterSpacing: -0.5
+                            font.letterSpacing: 0
                         }
                         Controls.Label {
                             text: qsTr("Fast Linux file content search — built on the ripgrep core.")
@@ -230,7 +230,7 @@ Kirigami.ScrollablePage {
                 text: qsTr("WHAT'S INSIDE")
                 font.pixelSize: 10
                 font.weight: app.tokens.weightSemibold
-                font.letterSpacing: 1.6
+                font.letterSpacing: 0
                 opacity: 0.5
                 Layout.topMargin: app.tokens.spaceM
             }

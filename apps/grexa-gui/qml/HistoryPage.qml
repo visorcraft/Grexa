@@ -120,7 +120,7 @@ Kirigami.ScrollablePage {
                         font.pixelSize: app.tokens.textHeading
                         font.weight: app.tokens.weightBold
                         font.family: app.tokens.sansFamily
-                        font.letterSpacing: -0.3
+                        font.letterSpacing: 0
                     }
                     Controls.Label {
                         text: qsTr("Every completed search, deduped on the seven-field Grex key.")

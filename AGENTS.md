@@ -155,7 +155,7 @@ service `io.visorcraft.Grexa`, never on disk.
 ## Tests
 
 ```bash
-cargo test --workspace                                  # 298 tests (v0.3)
+cargo test --workspace                                  # 300 tests (v0.3)
 cargo test -p grexa-core --test gitignore_parity        # 61 cases
 cargo test -p grexa-core --test property                # 4 proptests
 cargo test -p grexa-core --test root_safety             # 3 pseudo-FS

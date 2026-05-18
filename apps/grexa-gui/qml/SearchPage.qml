@@ -233,7 +233,7 @@ Kirigami.Page {
         target: page.controller
         function onContainersJsonChanged() {
             page.applyContainersJson()
-            if (targetSelector) targetSelector.rebuildTargetModel()
+            if (targetSelector) targetSelector.rebuildTargetModel(false)
         }
     }
 
@@ -473,18 +473,20 @@ Kirigami.Page {
                     ListElement { label: "Local files";    kind: 0; containerId: "" }
                 }
                 textRole: "label"
-                Component.onCompleted: rebuildTargetModel()
+                Component.onCompleted: rebuildTargetModel(true)
                 onActivated: {
                     page.controller.targetKind = targetModel.get(currentIndex).kind
                     page.controller.selectedContainerId = targetModel.get(currentIndex).containerId
                 }
-                function rebuildTargetModel() {
+                function rebuildTargetModel(requestRefresh) {
                     const prevKind = page.controller.targetKind
                     const prevId = page.controller.selectedContainerId
                     targetModel.clear()
                     targetModel.append({ label: qsTr("Local files"), kind: 0, containerId: "" })
                     if (app.settingsController.enableContainerSearch) {
-                        page.refreshContainers()
+                        if (requestRefresh === true) {
+                            page.refreshContainers()
+                        }
                         for (let i = 0; i < containersModel.count; ++i) {
                             const c = containersModel.get(i)
                             targetModel.append({
@@ -515,7 +517,7 @@ Kirigami.Page {
                 // Re-list when the user flips the container toggle.
                 Connections {
                     target: app.settingsController
-                    function onEnableContainerSearchChanged() { targetSelector.rebuildTargetModel() }
+                    function onEnableContainerSearchChanged() { targetSelector.rebuildTargetModel(true) }
                 }
             }
 
@@ -803,7 +805,7 @@ Kirigami.Page {
                                 text: modelData.label
                                 font.pixelSize: app.tokens.textCaption
                                 font.weight: app.tokens.weightSemibold
-                                font.letterSpacing: 0.6
+                                font.letterSpacing: 0
                                 opacity: 0.6
                             }
                             Kirigami.Icon {

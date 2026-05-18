@@ -656,13 +656,18 @@ impl SearchControllerRust {
         serde_json::to_string(&strings).unwrap_or_else(|_| "[]".into())
     }
 
-    fn clear_search_state(&mut self) {
+    fn clear_rows_and_last_search(&mut self) {
         self.rows.clear();
         self.visible.clear();
         self.last_path.clear();
         self.last_term.clear();
         self.last_regex = false;
         self.last_case_sensitive = false;
+    }
+
+    #[cfg(test)]
+    fn clear_search_state(&mut self) {
+        self.clear_rows_and_last_search();
         self.match_count = 0;
         self.files_matched = 0;
         self.files_scanned = 0;
@@ -846,7 +851,7 @@ impl ffi::SearchController {
 
     fn clear_results(mut self: Pin<&mut Self>) {
         unsafe { self.as_mut().begin_reset_model() };
-        self.as_mut().rust_mut().clear_search_state();
+        self.as_mut().rust_mut().clear_rows_and_last_search();
         unsafe { self.as_mut().end_reset_model() };
         self.as_mut().set_match_count(0);
         self.as_mut().set_files_matched(0);
@@ -1143,99 +1148,105 @@ impl ffi::SearchController {
         // is dropped explicitly on tab close via `drop_tab_snapshot`.
         let snap_opt = self.as_ref().rust().tab_snapshots.get(&tab_id).cloned();
 
+        let (
+            rows,
+            last_path,
+            last_term,
+            last_regex,
+            last_case_sensitive,
+            status_text,
+            match_count,
+            files_matched,
+            files_scanned,
+            has_searched,
+            result_mode,
+            within_filter,
+            within_regex,
+            target_kind,
+            selected_container_id,
+            busy,
+            replacing,
+            last_replace_summary,
+        ) = match snap_opt {
+            Some(snap) => (
+                snap.rows,
+                snap.last_path,
+                snap.last_term,
+                snap.last_regex,
+                snap.last_case_sensitive,
+                QString::from(&snap.status_text),
+                snap.match_count,
+                snap.files_matched,
+                snap.files_scanned,
+                snap.has_searched,
+                snap.result_mode,
+                QString::from(&snap.within_filter),
+                snap.within_regex,
+                snap.target_kind,
+                QString::from(&snap.selected_container_id),
+                snap.busy,
+                snap.replacing,
+                QString::from(&snap.last_replace_summary),
+            ),
+            None => (
+                Vec::new(),
+                String::new(),
+                String::new(),
+                false,
+                false,
+                QString::default(),
+                0,
+                0,
+                0,
+                false,
+                0,
+                QString::default(),
+                false,
+                0,
+                QString::default(),
+                false,
+                false,
+                QString::default(),
+            ),
+        };
+
+        // Set projection-driving qproperties through the generated
+        // setters before rebuilding `visible`. Writing these backing
+        // fields directly would pre-stage the values and make the
+        // setters below silent no-ops, leaving QML bound controls
+        // stale after a tab switch.
+        self.as_mut().set_result_mode(result_mode);
+        self.as_mut().set_within_filter(within_filter);
+        self.as_mut().set_within_regex(within_regex);
+        self.as_mut().set_target_kind(target_kind);
+        self.as_mut()
+            .set_selected_container_id(selected_container_id);
+
         unsafe { self.as_mut().begin_reset_model() };
         {
             let mut s = self.as_mut().rust_mut();
-            match snap_opt {
-                Some(snap) => {
-                    s.rows = snap.rows;
-                    s.last_path = snap.last_path;
-                    s.last_term = snap.last_term;
-                    s.last_regex = snap.last_regex;
-                    s.last_case_sensitive = snap.last_case_sensitive;
-                    s.result_mode = snap.result_mode;
-                    s.within_filter = QString::from(&snap.within_filter);
-                    s.within_regex = snap.within_regex;
-                    s.target_kind = snap.target_kind;
-                    s.selected_container_id = QString::from(&snap.selected_container_id);
-                    // Re-project: the visible vec is derived from
-                    // rows + result_mode + within_filter on every
-                    // restore, never persisted to the snapshot. This
-                    // keeps the projection consistent if the user
-                    // changed view rules while a different tab was
-                    // active.
-                    s.rebuild_visible();
-                    // Re-stash the snapshot's qproperty-shaped
-                    // counters into the Rust struct so the setters
-                    // below pick them up.
-                    s.match_count = snap.match_count;
-                    s.files_matched = snap.files_matched;
-                    s.files_scanned = snap.files_scanned;
-                    s.has_searched = snap.has_searched;
-                    s.status_text = QString::from(&snap.status_text);
-                    s.busy = snap.busy;
-                    s.replacing = snap.replacing;
-                    s.last_replace_summary = QString::from(&snap.last_replace_summary);
-                }
-                None => {
-                    // No snapshot yet — treat as a fresh tab.
-                    s.rows.clear();
-                    s.visible.clear();
-                    s.last_path.clear();
-                    s.last_term.clear();
-                    s.last_regex = false;
-                    s.last_case_sensitive = false;
-                    s.match_count = 0;
-                    s.files_matched = 0;
-                    s.files_scanned = 0;
-                    s.has_searched = false;
-                    s.status_text = QString::default();
-                    s.result_mode = 0;
-                    s.within_filter = QString::default();
-                    s.within_regex = false;
-                    s.target_kind = 0;
-                    s.selected_container_id = QString::default();
-                    s.busy = false;
-                    s.replacing = false;
-                    s.last_replace_summary = QString::default();
-                }
-            }
+            s.rows = rows;
+            s.last_path = last_path;
+            s.last_term = last_term;
+            s.last_regex = last_regex;
+            s.last_case_sensitive = last_case_sensitive;
+            // Re-project: the visible vec is derived from rows +
+            // result_mode + within_filter on every restore, never
+            // persisted to the snapshot. This keeps the projection
+            // consistent if the user changed view rules while a
+            // different tab was active.
+            s.rebuild_visible();
         }
         unsafe { self.as_mut().end_reset_model() };
 
-        // Re-emit every qproperty setter so QML observers
-        // (status pill, counters, target dropdown, within input)
-        // pick up the restored values. We sample each field via
-        // its own `rust()` call so the temporary's lifetime is
-        // bounded to a single statement (cxx-qt's `rust()` returns
-        // a short-lived reference).
-        let status = self.as_ref().rust().status_text.clone();
-        let mc = self.as_ref().rust().match_count;
-        let fm = self.as_ref().rust().files_matched;
-        let fs = self.as_ref().rust().files_scanned;
-        let hs = self.as_ref().rust().has_searched;
-        let rm = self.as_ref().rust().result_mode;
-        let wf = self.as_ref().rust().within_filter.clone();
-        let wr = self.as_ref().rust().within_regex;
-        let tk = self.as_ref().rust().target_kind;
-        let sci = self.as_ref().rust().selected_container_id.clone();
-        let bz = self.as_ref().rust().busy;
-        let rp = self.as_ref().rust().replacing;
-        let lrs = self.as_ref().rust().last_replace_summary.clone();
-
-        self.as_mut().set_status_text(status);
-        self.as_mut().set_match_count(mc);
-        self.as_mut().set_files_matched(fm);
-        self.as_mut().set_files_scanned(fs);
-        self.as_mut().set_has_searched(hs);
-        self.as_mut().set_result_mode(rm);
-        self.as_mut().set_within_filter(wf);
-        self.as_mut().set_within_regex(wr);
-        self.as_mut().set_target_kind(tk);
-        self.as_mut().set_selected_container_id(sci);
-        self.as_mut().set_busy(bz);
-        self.as_mut().set_replacing(rp);
-        self.as_mut().set_last_replace_summary(lrs);
+        self.as_mut().set_status_text(status_text);
+        self.as_mut().set_match_count(match_count);
+        self.as_mut().set_files_matched(files_matched);
+        self.as_mut().set_files_scanned(files_scanned);
+        self.as_mut().set_has_searched(has_searched);
+        self.as_mut().set_busy(busy);
+        self.as_mut().set_replacing(replacing);
+        self.as_mut().set_last_replace_summary(last_replace_summary);
     }
 
     fn drop_tab_snapshot(mut self: Pin<&mut Self>, tab_id: i32) {
@@ -1906,6 +1917,18 @@ fn finish_search(
     pin.as_mut().set_busy(false);
     match outcome {
         Ok(summary) => {
+            // The progress sink only queues row batches. A zero-match
+            // search may never call `push_rows`, and multi-hit lines
+            // can make row count differ from total match count, so
+            // the final summary is the authoritative source for the
+            // user-facing counters.
+            pin.as_mut()
+                .set_match_count(usize_to_i32_saturating(summary.matches));
+            pin.as_mut()
+                .set_files_scanned(usize_to_i32_saturating(summary.files_scanned));
+            pin.as_mut()
+                .set_files_matched(usize_to_i32_saturating(summary.files_matched));
+
             let path = PathBuf::from(path_str);
             with_workspace(|w| {
                 let _ = w.recent_paths.add(path);
@@ -1990,6 +2013,10 @@ fn finish_search(
     }
     pin.as_mut().rust_mut().cancel_token = None;
     pin.as_mut().search_completed(cancelled);
+}
+
+fn usize_to_i32_saturating(n: usize) -> i32 {
+    i32::try_from(n).unwrap_or(i32::MAX)
 }
 
 #[cfg(test)]

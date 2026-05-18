@@ -72,7 +72,7 @@ Item {
                 text: qsTr("TRY ONE OF THESE")
                 font.pixelSize: 10
                 font.weight: app.tokens.weightSemibold
-                font.letterSpacing: 1.6
+                font.letterSpacing: 0
                 opacity: 0.4
                 horizontalAlignment: Text.AlignHCenter
                 Layout.alignment: Qt.AlignHCenter

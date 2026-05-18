@@ -358,7 +358,7 @@ Kirigami.ApplicationWindow {
                         font.pixelSize: tokens.textSubheading + 1
                         font.weight: tokens.weightBold
                         font.family: tokens.sansFamily
-                        font.letterSpacing: -0.2
+                        font.letterSpacing: 0
                         color: tokens.textPrimary
                     }
                     Controls.Label {
@@ -380,7 +380,7 @@ Kirigami.ApplicationWindow {
                 text: qsTr("WORKSPACE")
                 font.pixelSize: 10
                 font.weight: tokens.weightSemibold
-                font.letterSpacing: 1.6
+                font.letterSpacing: 0
                 opacity: 0.5
                 visible: !drawer.isCollapsed
                 color: tokens.textPrimary
@@ -404,7 +404,7 @@ Kirigami.ApplicationWindow {
                 text: qsTr("TOOLS")
                 font.pixelSize: 10
                 font.weight: tokens.weightSemibold
-                font.letterSpacing: 1.6
+                font.letterSpacing: 0
                 opacity: 0.5
                 visible: !drawer.isCollapsed
                 color: tokens.textPrimary
