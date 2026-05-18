@@ -71,41 +71,49 @@ Kirigami.ApplicationWindow {
     // F1 → About; Ctrl+, → Settings; Ctrl+1..4 jump to pages;
     // Esc cancels a running search; Ctrl+L focuses the search bar
     // (handled by the SearchPage); Ctrl+Q quits.
-    Controls.Action {
-        shortcut: "F1"
-        onTriggered: app.goTo("about")
+    //
+    // `Shortcut` (not `Controls.Action`) is the correct primitive for
+    // window-scoped keybindings — top-level `Action`s only fire when
+    // they're attached to a Menu / ToolButton, which Kirigami's
+    // `ApplicationWindow` doesn't expose for us at the root level.
+    Shortcut {
+        sequence: "F1"
+        context: Qt.ApplicationShortcut
+        onActivated: app.goTo("about")
     }
-    Controls.Action {
-        shortcut: StandardKey.Preferences
-        onTriggered: app.goTo("settings")
+    Shortcut {
+        sequences: [StandardKey.Preferences, "Ctrl+3"]
+        context: Qt.ApplicationShortcut
+        onActivated: app.goTo("settings")
     }
-    Controls.Action {
-        shortcut: "Ctrl+1"
-        onTriggered: app.goTo("search")
+    Shortcut {
+        sequence: "Ctrl+1"
+        context: Qt.ApplicationShortcut
+        onActivated: app.goTo("search")
     }
-    Controls.Action {
-        shortcut: "Ctrl+2"
-        onTriggered: app.goTo("regex")
+    Shortcut {
+        sequence: "Ctrl+2"
+        context: Qt.ApplicationShortcut
+        onActivated: app.goTo("regex")
     }
-    Controls.Action {
-        shortcut: "Ctrl+3"
-        onTriggered: app.goTo("settings")
+    Shortcut {
+        sequence: "Ctrl+4"
+        context: Qt.ApplicationShortcut
+        onActivated: app.goTo("about")
     }
-    Controls.Action {
-        shortcut: "Ctrl+4"
-        onTriggered: app.goTo("about")
-    }
-    Controls.Action {
-        shortcut: StandardKey.Cancel
-        onTriggered: {
+    Shortcut {
+        sequence: StandardKey.Cancel
+        context: Qt.ApplicationShortcut
+        onActivated: {
             if (app.searchController.busy) {
                 app.searchController.cancel()
             }
         }
     }
-    Controls.Action {
-        shortcut: StandardKey.Quit
-        onTriggered: Qt.quit()
+    Shortcut {
+        sequence: StandardKey.Quit
+        context: Qt.ApplicationShortcut
+        onActivated: Qt.quit()
     }
 
     function goTo(key) {

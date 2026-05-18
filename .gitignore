@@ -15,3 +15,9 @@
 .vscode/
 .idea/
 .zed/
+
+# Editor swap / temp / backup files
+**/*.tmp.*
+**/*.swp
+**/*.swo
+**/*~

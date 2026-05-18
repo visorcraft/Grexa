@@ -186,26 +186,44 @@ fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
 ///   guarantees.
 fn acquire_single_instance_lock() -> Option<std::fs::File> {
     use std::os::fd::AsRawFd;
-    let runtime_dir = std::env::var_os("XDG_RUNTIME_DIR")
-        .map(std::path::PathBuf::from)
+    // Prefer $XDG_RUNTIME_DIR (a tmpfs that's wiped on logout), fall
+    // back to $XDG_CACHE_HOME/grexa, then $HOME/.cache/grexa. The
+    // app-specific subdirectory keeps the lockfile from littering the
+    // cache root and matches our `~/.config/grexa` / `~/.local/share/
+    // grexa` convention.
+    let lock_dir = std::env::var_os("XDG_RUNTIME_DIR")
+        .map(|d| {
+            let mut p = std::path::PathBuf::from(d);
+            p.push("grexa");
+            p
+        })
+        .or_else(|| {
+            std::env::var_os("XDG_CACHE_HOME").map(|c| {
+                let mut p = std::path::PathBuf::from(c);
+                p.push("grexa");
+                p
+            })
+        })
         .or_else(|| {
             std::env::var_os("HOME").map(|h| {
                 let mut p = std::path::PathBuf::from(h);
                 p.push(".cache");
+                p.push("grexa");
                 p
             })
         })?;
-    if std::fs::create_dir_all(&runtime_dir).is_err() {
+    if std::fs::create_dir_all(&lock_dir).is_err() {
         return None;
     }
-    let lock_path = runtime_dir.join("grexa.lock");
+    let lock_path = lock_dir.join("grexa.lock");
     let file = std::fs::OpenOptions::new()
         .create(true)
         .read(true)
         .write(true)
-        // The lockfile is empty by contract — flock takes the fd, not
-        // the contents. Truncate to keep clippy happy and to clear
-        // stale content if anything ever ended up in there.
+        // The lockfile is empty by contract — `flock` operates on the
+        // fd, not the contents. Truncate clears anything that ever
+        // landed in there and makes the `create+write` open mode
+        // unambiguous to the `clippy::suspicious_open_options` lint.
         .truncate(true)
         .open(&lock_path)
         .ok()?;

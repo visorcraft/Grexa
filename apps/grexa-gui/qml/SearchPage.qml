@@ -54,10 +54,22 @@ Kirigami.Page {
     property var runtimesList: []
 
     function refreshContainers() {
+        // Kick off the off-thread probe — result lands on
+        // controller.containersJson via the `containersJsonChanged`
+        // signal, which the Connections{} block below handles.
+        page.controller.refreshContainers()
+    }
+
+    // Populate the model whenever the controller's cached JSON
+    // updates. This runs on the GUI thread after the worker has
+    // already done the slow `docker ps` / `podman ps` work.
+    function applyContainersJson() {
         containersModel.clear()
         runtimesList = []
+        const raw = page.controller.containersJson
+        if (!raw || raw.length === 0) return
         try {
-            const data = JSON.parse(controller.containersJson())
+            const data = JSON.parse(raw)
             runtimesList = data.runtimes || []
             const containers = data.containers || []
             for (let i = 0; i < containers.length; ++i) {
@@ -69,6 +81,14 @@ Kirigami.Page {
                 })
             }
         } catch (e) {}
+    }
+
+    Connections {
+        target: page.controller
+        function onContainersJsonChanged() {
+            page.applyContainersJson()
+            if (targetSelector) targetSelector.rebuildTargetModel()
+        }
     }
 
     // Re-apply the view rules whenever the search-within filter or
@@ -540,18 +560,33 @@ Kirigami.Page {
 
     // Native folder picker. On KDE Plasma this is the Breeze chooser;
     // on Wayland under Flatpak it routes through the XDG portal
-    // automatically.
+    // automatically. We feed the dialog an already-encoded
+    // `file://` URL so paths with spaces, accents, or tilde
+    // expansion don't fail at the portal layer.
+    function pathToFileUrl(path) {
+        if (!path || path.length === 0) return ""
+        // Tilde + relative paths get resolved Rust-side; this is a
+        // best-effort GUI prepass so the dialog opens *somewhere*
+        // sensible rather than rejecting `~/code` outright.
+        if (path.charAt(0) !== "/") return ""
+        // `encodeURI` preserves "/" but escapes spaces, accents,
+        // and other reserved characters per RFC 3986.
+        return "file://" + encodeURI(path)
+    }
+
     Dialogs.FolderDialog {
         id: browseDialog
         title: qsTr("Choose folder")
-        currentFolder: searchBar.pathText.length > 0
-            ? "file://" + searchBar.pathText
-            : "file://" + (Qt.resolvedUrl(".").toString().replace(/^file:\/\//, ""))
+        currentFolder: page.pathToFileUrl(searchBar.pathText)
         onAccepted: {
-            // selectedFolder is a file:// URL — strip the scheme.
+            // `selectedFolder` is a `url`. Convert to a string and
+            // run it through `decodeURIComponent` so percent-encoded
+            // characters (e.g. `My%20Code`) come back as literal text.
             const u = selectedFolder.toString()
-            searchBar.pathText = u.replace(/^file:\/\//, "")
-            page.controller.addRecentPath(searchBar.pathText)
+            let decoded = u.replace(/^file:\/\//, "")
+            try { decoded = decodeURIComponent(decoded) } catch (e) {}
+            searchBar.pathText = decoded
+            page.controller.addRecentPath(decoded)
         }
     }
 

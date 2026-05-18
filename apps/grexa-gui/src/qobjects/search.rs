@@ -131,6 +131,11 @@ pub mod ffi {
         // lets the empty state distinguish "haven't searched yet"
         // (false) from "searched, no matches" (true && match_count==0).
         #[qproperty(bool, has_searched)]
+        // Cached container-runtime discovery result. Populated
+        // asynchronously by `refresh_containers`; QML watches its
+        // changed signal to repopulate the target dropdown without
+        // blocking the GUI thread on `docker ps` / `podman ps`.
+        #[qproperty(QString, containers_json)]
         type SearchController = super::SearchControllerRust;
 
         /// Start an asynchronous search. The current results are cleared
@@ -205,12 +210,13 @@ pub mod ffi {
 
         // ---- Container search dispatch --------------------------
 
-        /// Detect available container runtimes (Docker, Podman
-        /// rootless, Podman rootful) and list containers for each.
-        /// Returns a JSON object: `{ "runtimes": [...], "containers": [...] }`.
-        /// Used by the target-selector dropdown.
+        /// Refresh the cached container-runtime discovery. Runs the
+        /// `docker ps` / `podman ps` probes on a worker thread and
+        /// updates `containers_json` when complete. QML target
+        /// selector listens for `containers_jsonChanged` to repopulate
+        /// without blocking the GUI thread.
         #[qinvokable]
-        fn containers_json(self: &SearchController) -> QString;
+        fn refresh_containers(self: Pin<&mut SearchController>);
 
         // ---- Replace pipeline -----------------------------------
 
@@ -322,6 +328,7 @@ pub struct SearchControllerRust {
     replacing: bool,
     last_replace_summary: QString,
     has_searched: bool,
+    containers_json: QString,
     /// All rows the search emitted, before any view-level filtering
     /// or files-mode deduplication.
     rows: Vec<ResultRow>,
@@ -349,26 +356,74 @@ impl SearchControllerRust {
     /// Indices are *visible* indices — when files-mode dedup or
     /// within-filter is active, the returned pair already accounts
     /// for which of the appended rows are actually visible.
+    ///
+    /// Kept for tests / future callers. Live `push_rows` uses the
+    /// two-phase `filter_batch_for_view` + `append_with_visible`
+    /// split so `beginInsertRows` can be bracketed around the
+    /// correct visible-row count.
+    #[allow(dead_code)]
     pub fn append_batch(&mut self, batch: Vec<ResultRow>) -> Option<(i32, i32)> {
         if batch.is_empty() {
             return None;
         }
-        let visible_before = self.visible.len();
-        let new_start = self.rows.len();
-        let mut keep: Vec<usize> = Vec::new();
-        for (i, row) in batch.iter().enumerate() {
-            if self.row_passes_view(row) {
-                keep.push(new_start + i);
-            }
-        }
-        self.rows.extend(batch);
-        if keep.is_empty() {
+        let kept = self.filter_batch_for_view(&batch);
+        if kept.is_empty() {
+            self.rows.extend(batch);
             return None;
         }
+        let visible_before = self.visible.len();
         let first = visible_before as i32;
-        let last = first + keep.len() as i32 - 1;
-        self.visible.extend(keep);
+        let last = first + kept.len() as i32 - 1;
+        self.append_with_visible(batch, kept);
         Some((first, last))
+    }
+
+    /// Pre-compute which rows in `batch` would pass the current
+    /// view rules (`within_filter` + files-mode dedup) and return
+    /// their indices INTO `batch` (NOT into `self.rows`). The caller
+    /// uses the length to bracket `beginInsertRows`/`endInsertRows`,
+    /// then commits via `append_with_visible(batch, kept)`.
+    ///
+    /// Splitting filter from append lets the model contract hold —
+    /// `rowCount` always grows by exactly `kept.len()`.
+    pub fn filter_batch_for_view(&self, batch: &[ResultRow]) -> Vec<usize> {
+        let mut kept: Vec<usize> = Vec::with_capacity(batch.len());
+        // Files-mode dedup must consider rows we're about to keep
+        // from THIS batch as well as rows already in `self.visible`.
+        // Track seen full_paths across both sources.
+        if self.result_mode == 1 {
+            let mut seen: std::collections::HashSet<std::path::PathBuf> =
+                std::collections::HashSet::with_capacity(self.visible.len() + batch.len());
+            for &idx in &self.visible {
+                if let Some(r) = self.rows.get(idx) {
+                    seen.insert(r.full_path.clone());
+                }
+            }
+            for (i, row) in batch.iter().enumerate() {
+                if !self.row_passes_within(row) {
+                    continue;
+                }
+                if seen.insert(row.full_path.clone()) {
+                    kept.push(i);
+                }
+            }
+        } else {
+            for (i, row) in batch.iter().enumerate() {
+                if self.row_passes_within(row) {
+                    kept.push(i);
+                }
+            }
+        }
+        kept
+    }
+
+    /// Commit a filtered batch. `kept` must come from
+    /// `filter_batch_for_view(&batch)`; the indices are translated
+    /// into `self.rows`-space as we extend.
+    pub fn append_with_visible(&mut self, batch: Vec<ResultRow>, kept: Vec<usize>) {
+        let new_start = self.rows.len();
+        self.visible.extend(kept.iter().map(|&i| new_start + i));
+        self.rows.extend(batch);
     }
 
     /// Row count for `QAbstractListModel::rowCount`. Reflects the
@@ -394,61 +449,57 @@ impl SearchControllerRust {
         })
     }
 
-    /// True when the given row should appear in the visible list
-    /// given the current `result_mode` and `within_filter`. Files
-    /// mode drops the row if a prior row with the same `full_path`
-    /// is already in `visible`.
-    fn row_passes_view(&self, row: &ResultRow) -> bool {
-        // Within-filter: substring or regex against the preview line.
+    /// Within-filter test only — does NOT consider files-mode dedup.
+    /// Files-mode dedup is structurally handled where seen-set
+    /// bookkeeping is available (`filter_batch_for_view` and
+    /// `rebuild_visible`). Splitting the two keeps the dedup logic
+    /// from accidentally consulting a partially-emptied
+    /// `self.rows` (the original bug found in code review).
+    fn row_passes_within(&self, row: &ResultRow) -> bool {
         let within = self.within_filter.to_string();
         let trimmed = within.trim();
-        if !trimmed.is_empty() {
-            let line = format!("{}{}{}", row.preview_before, row.preview_match, row.preview_after);
-            let matched = if self.within_regex {
-                match regex::Regex::new(trimmed) {
-                    Ok(re) => re.is_match(&line),
-                    Err(_) => false,
-                }
-            } else {
-                let needle = trimmed.to_lowercase();
-                line.to_lowercase().contains(&needle)
-            };
-            if !matched {
-                return false;
-            }
+        if trimmed.is_empty() {
+            return true;
         }
-
-        // Files mode: keep only the first row per file.
-        if self.result_mode == 1 {
-            let already_visible = self.visible.iter().any(|&i| {
-                self.rows
-                    .get(i)
-                    .map(|r| r.full_path == row.full_path)
-                    .unwrap_or(false)
-            });
-            if already_visible {
-                return false;
+        let line = format!("{}{}{}", row.preview_before, row.preview_match, row.preview_after);
+        if self.within_regex {
+            match regex::Regex::new(trimmed) {
+                Ok(re) => re.is_match(&line),
+                Err(_) => false,
             }
+        } else {
+            let needle = trimmed.to_lowercase();
+            line.to_lowercase().contains(&needle)
         }
-
-        true
     }
 
     /// Recompute `visible` from scratch. O(rows.len()). Called when
     /// `within_filter`, `within_regex`, or `result_mode` changes.
+    ///
+    /// Iterates `self.rows` by index so we never have to take
+    /// ownership of the vector mid-loop — the previous version
+    /// did `mem::take(&mut self.rows)` and then asked the
+    /// view-pass helper to consult `self.rows` for files-mode
+    /// dedup, which always returned None because the vector was
+    /// empty. The seen-set is now local to this function so dedup
+    /// works regardless of `self.rows`'s state at entry.
     pub fn rebuild_visible(&mut self) {
         self.visible.clear();
-        // Take ownership of rows briefly so we can borrow `self` for
-        // `row_passes_view` against an empty `visible`. Files-mode
-        // dedup needs to look at `visible`-so-far, so we push as we
-        // go rather than collecting first.
-        let rows = std::mem::take(&mut self.rows);
-        for (i, row) in rows.iter().enumerate() {
-            if self.row_passes_view(row) {
-                self.visible.push(i);
+        let files_mode = self.result_mode == 1;
+        let mut seen: std::collections::HashSet<std::path::PathBuf> =
+            std::collections::HashSet::new();
+        for i in 0..self.rows.len() {
+            if !self.row_passes_within(&self.rows[i]) {
+                continue;
             }
+            if files_mode {
+                let full = self.rows[i].full_path.clone();
+                if !seen.insert(full) {
+                    continue;
+                }
+            }
+            self.visible.push(i);
         }
-        self.rows = rows;
     }
 
     /// Recent paths as a JSON array string.
@@ -759,8 +810,14 @@ impl ffi::SearchController {
         copy_to_system_clipboard(&s);
     }
 
-    fn containers_json(&self) -> QString {
-        QString::from(&build_containers_json())
+    fn refresh_containers(self: Pin<&mut Self>) {
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            let json = build_containers_json();
+            let _ = thread.queue(move |mut pin| {
+                pin.as_mut().set_containers_json(QString::from(&json));
+            });
+        });
     }
 
     fn start_replace(mut self: Pin<&mut Self>, replacement: &QString) {
@@ -865,23 +922,51 @@ fn push_rows(
         return;
     }
     if rows.is_empty() {
+        // Still update the scan counters — they tick on every file
+        // even when no match comes out of it.
+        let raw_added = pin.as_ref().rust().match_count;
+        pin.as_mut().set_match_count(raw_added);
+        pin.as_mut().set_files_scanned(files_scanned);
+        pin.as_mut().set_files_matched(files_matched);
         return;
     }
+    // Raw count is what we add to `match_count` (the user-facing
+    // "total matches" — never filtered) regardless of how many
+    // pass the view filter.
+    let raw_added = rows.len() as i32;
+    // Filter first to learn how many visible rows we're really
+    // inserting. The QAbstractListModel contract requires
+    // begin/endInsertRows to bracket EXACTLY the number of rows
+    // `rowCount()` will grow by; announcing more than we append
+    // corrupts QML's ListView indexing.
+    let kept = pin.as_ref().rust().filter_batch_for_view(&rows);
+    if kept.is_empty() {
+        // Match count still grows — we accumulate the raw matches
+        // even when the view filter hides them. Without this, the
+        // status counter would be wrong when a within-filter is
+        // active.
+        let new_count = pin.as_ref().rust().match_count + raw_added;
+        pin.as_mut().set_match_count(new_count);
+        pin.as_mut().set_files_scanned(files_scanned);
+        pin.as_mut().set_files_matched(files_matched);
+        // Even though no row is visible, the raw rows still need to
+        // land in `self.rows` so files-mode dedup against future
+        // batches sees them.
+        pin.as_mut().rust_mut().rows.extend(rows);
+        return;
+    }
+
     let parent = QModelIndex::default();
-    let preview_first = pin.as_ref().rust().row_count();
-    let preview_last = preview_first + rows.len() as i32 - 1;
+    let visible_first = pin.as_ref().rust().row_count();
+    let visible_last = visible_first + kept.len() as i32 - 1;
     unsafe {
         pin.as_mut()
-            .begin_insert_rows(&parent, preview_first, preview_last)
+            .begin_insert_rows(&parent, visible_first, visible_last)
     };
-    let appended = pin.as_mut().rust_mut().append_batch(rows);
+    pin.as_mut().rust_mut().append_with_visible(rows, kept);
     unsafe { pin.as_mut().end_insert_rows() };
 
-    let added = appended.map(|(f, l)| l - f + 1).unwrap_or(0);
-    if added == 0 {
-        return;
-    }
-    let new_count = pin.as_ref().rust().match_count + added;
+    let new_count = pin.as_ref().rust().match_count + raw_added;
     pin.as_mut().set_match_count(new_count);
     pin.as_mut().set_files_scanned(files_scanned);
     pin.as_mut().set_files_matched(files_matched);
@@ -946,10 +1031,9 @@ fn run_container_search(
             line: hit.line_number as u32,
             column: hit.column_number as u32,
             preview_before: String::new(),
-            preview_match: hit.line_content.clone(),
+            preview_match: hit.line_content,
             preview_after: String::new(),
         });
-        let _ = &info; // ContainerInfo retained only for borrow scoping.
     }
     Ok(rows)
 }
@@ -1070,16 +1154,41 @@ fn editor_preset_from_settings(s: &grexa_core::DefaultSettings) -> grexa_core::E
 }
 
 /// Spawn a process detached from grexa so the editor or file manager
-/// keeps running after we drop the `Child`. We intentionally don't
-/// capture stdout/stderr — any failure is the user's to debug.
+/// keeps running after we drop the `Child` and after grexa itself
+/// quits. We redirect stdin/stdout/stderr to `/dev/null` so the
+/// child doesn't share grexa's terminal, and ask Linux to drop the
+/// process into a new session (`setsid`) so it survives SIGHUP when
+/// the parent exits.
 fn spawn_detached(argv: Vec<std::ffi::OsString>) {
+    use std::os::unix::process::CommandExt;
+    use std::process::Stdio;
+
     if argv.is_empty() {
         return;
     }
     let mut iter = argv.into_iter();
     let program = iter.next().unwrap();
     let args: Vec<std::ffi::OsString> = iter.collect();
-    let _ = std::process::Command::new(&program).args(&args).spawn();
+    let mut cmd = std::process::Command::new(&program);
+    cmd.args(&args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    // SAFETY: `setsid` is signal-safe and side-effect-free on the
+    // child's POV — we only call it in the pre-exec hook before the
+    // process image is replaced.
+    unsafe {
+        cmd.pre_exec(|| {
+            libc_setsid();
+            Ok(())
+        });
+    }
+    let _ = cmd.spawn();
+}
+
+unsafe extern "C" {
+    #[link_name = "setsid"]
+    fn libc_setsid() -> i32;
 }
 
 /// Best-effort `org.freedesktop.FileManager1.ShowItems` call via

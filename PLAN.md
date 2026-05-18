@@ -903,6 +903,68 @@ Re-run the audit (`Agent` "Audit Grexa GUI parity gaps") after each
 round to keep this list honest. **Never re-tick a row without live
 verification.**
 
+### Peer-review pass (2026-05-17)
+
+A focused peer review against commits `41d8353..cea5400` flagged two
+correctness BLOCKERs and ~7 IMPORTANT items. Status after the fixup
+pass:
+
+**Fixed:**
+
+- `push_rows` row-count mismatch — `begin_insert_rows` was bracketed
+  with the unfiltered batch length while `append_batch` filtered;
+  `QAbstractListModel` invariants were violated whenever
+  `within_filter` or files-mode was active. Split into
+  `filter_batch_for_view` (compute kept indices) +
+  `append_with_visible` (commit) so the bracket is always tight.
+- `rebuild_visible` files-mode dedup broken — the previous version
+  called `mem::take(&mut self.rows)`, leaving the dedup helper to
+  consult an empty vector. Rewritten with a local seen-set that
+  doesn't depend on `self.rows`'s state.
+- `SearchPage.qml.tmp.5625.0d96299d036b` editor backup accidentally
+  committed in `450cc6d` — deleted and `*.tmp.*` / `*.swp` / `*.swo`
+  / `*~` added to `.gitignore`.
+- `containers_json` blocked the GUI thread on `docker ps` / `podman
+  ps` first-paint — converted to an async pattern. The result is now
+  a `QString` qproperty populated by a `refresh_containers()`
+  invokable that runs the probe off-thread; QML watches
+  `containersJsonChanged`.
+- `FolderDialog.currentFolder: "file://" + path` was broken for
+  spaces, accents, and tilde paths under the XDG portal — replaced
+  with a `pathToFileUrl()` helper that uses `encodeURI` and
+  `decodeURIComponent` on accept.
+- `Controls.Action` top-level shortcuts don't fire at window scope
+  in Kirigami.ApplicationWindow — replaced with `Shortcut { context:
+  Qt.ApplicationShortcut; sequence: ...; onActivated: ... }`.
+- `spawn_detached` wasn't actually detaching — added `setsid` +
+  `Stdio::null` redirection so editors and the file manager survive
+  grexa quitting.
+- Lockfile path leaked into `$HOME/.cache/grexa.lock` (no app subdir)
+  — now `$XDG_RUNTIME_DIR/grexa/grexa.lock` with `$XDG_CACHE_HOME`
+  fallback.
+- `parent.parent.hovered` brittle ancestor walk in `SearchBar.qml`
+  delegate — replaced with explicit `pathRow.hovered` id reference.
+- `propagateComposedEvents: true` on ResultRow's right-click
+  MouseArea — dropped (no-op since left-click isn't accepted).
+- "Linux · Qt %1".arg(... ? "6" : "6") dead ternary — hard-coded to
+  "Linux · Qt 6" with a comment explaining why.
+
+**Tracked, not yet fixed (acknowledged as v0.2):**
+
+- `reveal_in_file_manager`, `copy_to_clipboard` still block the GUI
+  thread briefly while shelling to gdbus / wl-copy. Sub-second on
+  the happy path; not worth a worker thread for fire-and-forget.
+- `try_filemanager1_reveal` argv quoting via `format!("['{uri}']")`
+  fails on paths containing apostrophes. Edge case; queued.
+- `editor_custom_command` is persisted + surfaced in Settings but
+  `open_in_editor` still uses the preset's argv. Needs a
+  `EditorPreset::Custom` variant + template substitution. v0.2.
+- `replace_confirm` / `replace_show_journal_on_startup` /
+  `privacy_redact_paths` / `accessibility_reduced_motion` /
+  `accessibility_high_contrast` are persisted but no code consumes
+  them yet. Scaffolding for v0.2 features — flagged here so they
+  don't get re-ticked silently.
+
 ## Non-Goals
 
 - [x] Do not preserve Windows GUI, WinUI, Windows Search, Windows toast, Windows App Runtime, WSL delegation, UNC path handling, or Windows-specific editor logic. (`docs/linux-decisions.md`)

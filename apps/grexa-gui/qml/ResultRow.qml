@@ -33,12 +33,14 @@ Controls.ItemDelegate {
     padding: 0
     hoverEnabled: true
 
-    // Right-click → context menu. Also reachable via Space-key on a
-    // focused row (handled in SearchPage's ListView keyNavigation).
+    // Right-click → context menu. The MouseArea only accepts the
+    // right button so left-clicks fall through to the ItemDelegate's
+    // own click handler (which opens the preview). Reachable via
+    // Space-key on a focused row (handled in SearchPage's ListView
+    // keyNavigation).
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.RightButton
-        propagateComposedEvents: true
         onPressed: function(mouse) { contextMenu.popup() }
     }
 

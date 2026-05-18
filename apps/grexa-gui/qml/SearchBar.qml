@@ -101,6 +101,7 @@ Item {
                 // path from the recent-paths store without picking it.
                 // Hover-only so the row reads cleanly at rest.
                 delegate: Controls.ItemDelegate {
+                    id: pathRow
                     width: pathField.width
                     hoverEnabled: true
                     contentItem: RowLayout {
@@ -115,7 +116,13 @@ Item {
                             flat: true
                             icon.name: "edit-delete-symbolic"
                             display: Controls.AbstractButton.IconOnly
-                            visible: parent.parent.hovered
+                            // Hover-only "forget" affordance. Bind to
+                            // the delegate's own `hovered` via the
+                            // explicit `pathRow` id — `parent.parent`
+                            // is brittle across Qt minor versions
+                            // because of how `contentItem` is
+                            // reparented.
+                            visible: pathRow.hovered
                             Controls.ToolTip.text: qsTr("Forget this path")
                             Controls.ToolTip.visible: hovered
                             onClicked: {
