@@ -19,6 +19,7 @@ Kirigami.Page {
     globalToolBarStyle: Kirigami.ApplicationHeaderStyle.None
 
     readonly property SearchController controller: app.searchController
+    property alias searchBar: searchBarControl
 
     Connections {
         target: page.controller
@@ -155,8 +156,11 @@ Kirigami.Page {
     function closeTab(idx) {
         if (tabsModel.count <= 1) return  // keep at least one
         const closingId = tabsModel.get(idx).tabId
-        page.controller.dropTabSnapshot(closingId)
         const wasActive = (idx === activeTab)
+        if (wasActive && page.controller.busy) {
+            page.controller.cancel()
+        }
+        page.controller.dropTabSnapshot(closingId)
         tabsModel.remove(idx)
         if (wasActive) {
             const next = Math.min(idx, tabsModel.count - 1)
@@ -314,6 +318,24 @@ Kirigami.Page {
                                 implicitWidth: tabRow.implicitWidth + app.tokens.spaceL * 2
                                 Behavior on color { ColorAnimation { duration: app.tokens.durationSnap } }
 
+                                MouseArea {
+                                    id: tabHover
+                                    anchors.fill: parent
+                                    acceptedButtons: Qt.LeftButton
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        // Short-circuit clicks on the
+                                        // already-active tab.
+                                        // `persistActiveTab` cancels an
+                                        // in-flight search; switching to
+                                        // the tab you're already on
+                                        // shouldn't have a side effect.
+                                        if (index === page.activeTab) return
+                                        page.persistActiveTab()
+                                        page.loadTab(index)
+                                    }
+                                }
                                 RowLayout {
                                     id: tabRow
                                     anchors.fill: parent
@@ -338,24 +360,6 @@ Kirigami.Page {
                                         visible: tabsModel.count > 1
                                             && (index === page.activeTab || tabHover.containsMouse)
                                         onClicked: page.closeTab(index)
-                                    }
-                                }
-                                MouseArea {
-                                    id: tabHover
-                                    anchors.fill: parent
-                                    acceptedButtons: Qt.LeftButton
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        // Short-circuit clicks on the
-                                        // already-active tab.
-                                        // `persistActiveTab` cancels an
-                                        // in-flight search; switching to
-                                        // the tab you're already on
-                                        // shouldn't have a side effect.
-                                        if (index === page.activeTab) return
-                                        page.persistActiveTab()
-                                        page.loadTab(index)
                                     }
                                 }
                             }
@@ -396,7 +400,7 @@ Kirigami.Page {
                 color: app.tokens.separator
             }
             SearchBar {
-                id: searchBar
+                id: searchBarControl
                 anchors.fill: parent
                 anchors.leftMargin: app.tokens.spaceXL
                 anchors.rightMargin: app.tokens.spaceXL
@@ -1264,11 +1268,10 @@ Kirigami.Page {
                 id: replacementField
                 Layout.fillWidth: true
                 placeholderText: qsTr("Replacement text (regex captures: $1, ${name})")
-                // Enter commits the replace when the Replace All
-                // button would be enabled. Esc closes the dialog
-                // (Qt default).
+                // Enter commits Replace All. Empty replacement is valid:
+                // it deletes each match. Esc closes the dialog (Qt default).
                 Keys.onReturnPressed: function(event) {
-                    if (!page.controller.replacing && text.length > 0) {
+                    if (!page.controller.replacing) {
                         page.controller.startReplace(text)
                         event.accepted = true
                     }
@@ -1294,7 +1297,7 @@ Kirigami.Page {
                 PrimaryButton {
                     text: page.controller.replacing ? qsTr("Replacing…") : qsTr("Replace All")
                     icon.name: "edit-find-replace-symbolic"
-                    enabled: !page.controller.replacing && replacementField.text.length > 0
+                    enabled: !page.controller.replacing
                     onClicked: page.controller.startReplace(replacementField.text)
                 }
             }

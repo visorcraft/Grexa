@@ -313,13 +313,6 @@ pub mod ffi {
         #[qinvokable]
         fn history_json(self: &SearchController) -> QString;
 
-        /// Append a row to the history store. The seven-field
-        /// dedupe key keeps the list from bloating when the same
-        /// search reruns. Called from the GUI after each
-        /// successful `start_search`.
-        #[qinvokable]
-        fn record_history(self: &SearchController, summary_json: &QString);
-
         /// Drop a history entry by its full row JSON. The store
         /// dedupes via `key`, so this passes the exact entry back.
         #[qinvokable]
@@ -492,6 +485,13 @@ pub struct SearchControllerRust {
 }
 
 impl SearchControllerRust {
+    fn cancel_active_search(&mut self) {
+        if let Some(token) = self.cancel_token.take() {
+            token.cancel();
+        }
+        self.active_generation = self.active_generation.wrapping_add(1);
+    }
+
     /// Append a batch of rows to the model. Returns the (first_idx, last_idx)
     /// pair the caller should pass to `beginInsertRows` / `endInsertRows`.
     /// Indices are *visible* indices — when files-mode dedup or
@@ -716,6 +716,7 @@ impl ffi::SearchController {
         if target_kind != 0 {
             let container_id = self.as_ref().rust().selected_container_id.to_string();
             if container_id.trim().is_empty() {
+                self.as_mut().rust_mut().cancel_token = None;
                 self.as_mut().set_busy(false);
                 self.as_mut().set_status_text(QString::from(
                     "Pick a container in the target selector before searching.",
@@ -814,12 +815,19 @@ impl ffi::SearchController {
     }
 
     fn cancel(mut self: Pin<&mut Self>) {
-        if let Some(token) = self.as_ref().rust().cancel_token.clone() {
-            token.cancel();
+        if !self.as_ref().rust().busy {
+            return;
         }
-        // The worker emits search_completed when it sees the cancellation —
-        // don't flip `busy` here, let the worker do it on its way out.
-        self.as_mut().set_status_text(QString::from("Cancelling…"));
+        let matches = self.as_ref().rust().match_count.max(0) as usize;
+        let files = self.as_ref().rust().files_matched.max(0) as usize;
+        self.as_mut().rust_mut().cancel_active_search();
+        self.as_mut().set_busy(false);
+        self.as_mut().set_status_text(QString::from(&format!(
+            "Cancelled — {} in {}",
+            plural_count("count-matches", matches),
+            plural_count("count-files", files),
+        )));
+        self.as_mut().search_completed(true);
     }
 
     fn clear_results(mut self: Pin<&mut Self>) {
@@ -1043,15 +1051,6 @@ impl ffi::SearchController {
             Ok(s) => QString::from(&s),
             Err(_) => QString::from("[]"),
         }
-    }
-
-    fn record_history(&self, summary_json: &QString) {
-        let s = summary_json.to_string();
-        let entry: grexa_core::RecentSearch = match serde_json::from_str(&s) {
-            Ok(v) => v,
-            Err(_) => return,
-        };
-        let _ = with_workspace(|w| w.history.add(entry));
     }
 
     fn remove_history_entry(&self, entry_json: &QString) {
@@ -1900,11 +1899,45 @@ fn finish_search(
             with_workspace(|w| {
                 let _ = w.recent_paths.add(path);
             });
+            let history_added = if cancelled {
+                false
+            } else {
+                let term = pin.as_ref().rust().last_term.clone();
+                let regex = pin.as_ref().rust().last_regex;
+                let case_sensitive = pin.as_ref().rust().last_case_sensitive;
+                let files_search = pin.as_ref().rust().result_mode == 1;
+                with_workspace(|w| {
+                    let settings = w.settings.load().unwrap_or_default();
+                    let mut options = SearchOptions::new(PathBuf::from(path_str), term);
+                    options.regex = regex;
+                    options.case_sensitive = case_sensitive;
+                    options.respect_gitignore = settings.respect_gitignore;
+                    options.include_hidden = settings.include_hidden_items;
+                    options.include_binary = settings.include_binary_files;
+                    options.include_system = settings.include_system_files;
+                    options.include_subfolders = settings.include_subfolders;
+                    options.include_symlinks = settings.include_symbolic_links;
+                    options.match_file_names = settings.default_match_files;
+                    options.exclude_dirs = settings.default_exclude_dirs;
+                    w.history
+                        .add(grexa_core::RecentSearch::from_options(
+                            &options,
+                            files_search,
+                            summary.matches,
+                        ))
+                        .is_ok()
+                })
+            };
             let recent_count =
                 with_workspace(|w| w.recent_paths.load().unwrap_or_default().len() as i32);
             let previous = pin.as_ref().rust().recent_path_count;
+            let mut emitted_history_changed = false;
             if recent_count != previous {
                 pin.as_mut().set_recent_path_count(recent_count);
+                pin.as_mut().history_changed();
+                emitted_history_changed = true;
+            }
+            if history_added && !emitted_history_changed {
                 pin.as_mut().history_changed();
             }
             let mc = pin.as_ref().rust().match_count as usize;
@@ -2018,6 +2051,20 @@ mod tests {
         assert_eq!(state.append_batch(vec![row.clone(); 3]), Some((0, 2)));
         assert_eq!(state.append_batch(vec![row.clone(); 2]), Some((3, 4)));
         assert_eq!(state.row_count(), 5);
+    }
+
+    #[test]
+    fn cancelling_invalidates_queued_worker_generation() {
+        let mut state = SearchControllerRust::default();
+        let token = CancelToken::new();
+        state.cancel_token = Some(token.clone());
+        state.active_generation = 41;
+
+        state.cancel_active_search();
+
+        assert!(token.is_cancelled());
+        assert!(state.cancel_token.is_none());
+        assert_eq!(state.active_generation, 42);
     }
 
     #[test]

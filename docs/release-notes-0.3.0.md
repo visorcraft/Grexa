@@ -197,8 +197,8 @@ cycle:
 
 ## Verification
 
-- `cargo test --workspace`: **292 passing** across 8 crates.
-- `cargo clippy --workspace --release -- -D warnings`: clean.
+- `cargo test --workspace`: **295 passing** across 8 crates.
+- `cargo clippy --workspace --all-targets -- -D warnings`: clean.
 - `cargo fmt --all --check`: clean.
 - Offscreen smoke (`QT_QPA_PLATFORM=offscreen`): clean.
 - Live KDE Plasma 6 Wayland verification at 800px and full

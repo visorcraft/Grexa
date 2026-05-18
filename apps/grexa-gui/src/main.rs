@@ -340,8 +340,9 @@ fn ensure_user_desktop_integration() {
         .ok()
         .and_then(|p| p.to_str().map(|s| s.to_owned()))
         .unwrap_or_else(|| "grexa".to_string());
+    let exec_token = desktop_exec_token(&exec_path);
     let desktop_bytes_owned: Vec<u8> = String::from_utf8_lossy(desktop_template)
-        .replace("Exec=grexa %f", &format!("Exec={exec_path} %f"))
+        .replace("Exec=grexa %f", &format!("Exec={exec_token} %f"))
         .into_bytes();
     let desktop_bytes = desktop_bytes_owned.as_slice();
 
@@ -442,6 +443,28 @@ fn ensure_user_desktop_integration() {
     }
 }
 
+fn desktop_exec_token(path: &str) -> String {
+    let needs_quotes = path
+        .bytes()
+        .any(|b| b.is_ascii_whitespace() || matches!(b, b'"' | b'\\' | b'`' | b'$'));
+    let mut escaped = String::with_capacity(path.len());
+    for ch in path.chars() {
+        match ch {
+            '%' => escaped.push_str("%%"),
+            '"' | '\\' | '`' | '$' => {
+                escaped.push('\\');
+                escaped.push(ch);
+            }
+            _ => escaped.push(ch),
+        }
+    }
+    if needs_quotes {
+        format!("\"{escaped}\"")
+    } else {
+        escaped
+    }
+}
+
 /// `std::io::Write` adapter that replaces the user's `$HOME` with
 /// `~` before forwarding bytes to the inner writer. Designed for
 /// the `tracing-appender` pipeline so log lines that include
@@ -504,5 +527,20 @@ impl std::io::Write for RedactingWriter {
 
     fn flush(&mut self) -> std::io::Result<()> {
         self.inner.flush()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::desktop_exec_token;
+
+    #[test]
+    fn desktop_exec_token_quotes_paths_with_spaces() {
+        assert_eq!(desktop_exec_token("/tmp/Grexa Build/grexa"), "\"/tmp/Grexa Build/grexa\"");
+    }
+
+    #[test]
+    fn desktop_exec_token_escapes_field_codes_and_quotes() {
+        assert_eq!(desktop_exec_token("/tmp/100%/a\"b/grexa"), "\"/tmp/100%%/a\\\"b/grexa\"");
     }
 }

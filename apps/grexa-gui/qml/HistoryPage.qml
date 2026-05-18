@@ -53,6 +53,7 @@ Kirigami.ScrollablePage {
                     path: path,
                     matches: e.result_count || 0,
                     regex: e.regex_search || false,
+                    filesMode: e.files_search || false,
                     caseSensitive: e.search_case_sensitive || false,
                     timestamp: e.timestamp_unix || 0,
                     raw: JSON.stringify(e)
@@ -213,17 +214,26 @@ Kirigami.ScrollablePage {
                             text: qsTr("Open")
                             display: Controls.AbstractButton.TextBesideIcon
                             onClicked: {
+                                const path = model.path
+                                const term = model.term
+                                const regex = model.regex
+                                const caseSensitive = model.caseSensitive
+                                const filesMode = model.filesMode
                                 // Switch to Search and populate the
                                 // form so the user can choose to
                                 // re-run (or edit) the search.
                                 app.goTo("search")
-                                const p = app.pageStack.currentItem
-                                if (p && p.searchBar) {
-                                    p.searchBar.pathText = model.path
-                                    p.searchBar.termText = model.term
-                                    p.searchBar.regexEnabled = model.regex
-                                    p.searchBar.caseSensitive = model.caseSensitive
-                                }
+                                Qt.callLater(function() {
+                                    const p = app.pageStack.currentItem
+                                    if (p && p.searchBar) {
+                                        p.searchBar.pathText = path
+                                        p.searchBar.termText = term
+                                        p.searchBar.regexEnabled = regex
+                                        p.searchBar.caseSensitive = caseSensitive
+                                        p.controller.resultMode = filesMode ? 1 : 0
+                                        p.controller.refreshView()
+                                    }
+                                })
                             }
                         }
                         Controls.Button {
