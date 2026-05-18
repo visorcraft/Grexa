@@ -34,15 +34,32 @@ Controls.CheckBox {
         border.width: cb.checked ? 0 : 1
         Behavior on color { ColorAnimation { duration: 110 } }
 
-        // Checkmark glyph
-        Kirigami.Icon {
-            anchors.centerIn: parent
+        // Draw the mark ourselves instead of asking the icon theme
+        // for "check-symbolic"; some themes resolve that name to a
+        // document-style icon.
+        Canvas {
+            id: checkMark
+            anchors.fill: parent
             visible: cb.checked
-            source: "check-symbolic"
-            implicitWidth: 12
-            implicitHeight: 12
-            color: app.tokens.accentText
-            isMask: true
+            opacity: cb.enabled ? 1 : 0.5
+            property color markColor: app.tokens.accentText
+            onMarkColorChanged: requestPaint()
+            onVisibleChanged: if (visible) requestPaint()
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+            onPaint: {
+                const ctx = getContext("2d")
+                ctx.clearRect(0, 0, width, height)
+                ctx.strokeStyle = markColor
+                ctx.lineWidth = 2.3
+                ctx.lineCap = "round"
+                ctx.lineJoin = "round"
+                ctx.beginPath()
+                ctx.moveTo(width * 0.28, height * 0.53)
+                ctx.lineTo(width * 0.43, height * 0.68)
+                ctx.lineTo(width * 0.74, height * 0.33)
+                ctx.stroke()
+            }
         }
     }
 }
