@@ -32,6 +32,8 @@ pub mod ffi {
         #[qproperty(bool, respect_gitignore)]
         #[qproperty(bool, include_hidden)]
         #[qproperty(bool, include_binary)]
+        #[qproperty(bool, include_system_files)]
+        #[qproperty(bool, include_symbolic_links)]
         #[qproperty(bool, include_subfolders)]
         #[qproperty(bool, files_search_mode)]
         #[qproperty(bool, enable_container_search)]
@@ -43,6 +45,13 @@ pub mod ffi {
         #[qproperty(i32, theme)]
         #[qproperty(i32, context_lines_before)]
         #[qproperty(i32, context_lines_after)]
+        #[qproperty(i32, editor_preset)]
+        #[qproperty(QString, editor_custom_command)]
+        #[qproperty(bool, replace_confirm)]
+        #[qproperty(bool, replace_show_journal_on_startup)]
+        #[qproperty(bool, privacy_redact_paths)]
+        #[qproperty(bool, accessibility_reduced_motion)]
+        #[qproperty(bool, accessibility_high_contrast)]
         #[qproperty(QString, last_save_status)]
         type SettingsController = super::SettingsControllerRust;
 
@@ -63,6 +72,8 @@ pub struct SettingsControllerRust {
     respect_gitignore: bool,
     include_hidden: bool,
     include_binary: bool,
+    include_system_files: bool,
+    include_symbolic_links: bool,
     include_subfolders: bool,
     files_search_mode: bool,
     enable_container_search: bool,
@@ -74,6 +85,13 @@ pub struct SettingsControllerRust {
     theme: i32,
     context_lines_before: i32,
     context_lines_after: i32,
+    editor_preset: i32,
+    editor_custom_command: QString,
+    replace_confirm: bool,
+    replace_show_journal_on_startup: bool,
+    privacy_redact_paths: bool,
+    accessibility_reduced_motion: bool,
+    accessibility_high_contrast: bool,
     last_save_status: QString,
 }
 
@@ -84,6 +102,8 @@ impl SettingsControllerRust {
         self.respect_gitignore = s.respect_gitignore;
         self.include_hidden = s.include_hidden_items;
         self.include_binary = s.include_binary_files;
+        self.include_system_files = s.include_system_files;
+        self.include_symbolic_links = s.include_symbolic_links;
         self.include_subfolders = s.include_subfolders;
         self.files_search_mode = s.files_search;
         self.enable_container_search = s.enable_container_search;
@@ -95,6 +115,13 @@ impl SettingsControllerRust {
         self.theme = theme_to_i32(s.theme_preference);
         self.context_lines_before = s.context_preview_lines_before as i32;
         self.context_lines_after = s.context_preview_lines_after as i32;
+        self.editor_preset = s.editor_preset as i32;
+        self.editor_custom_command = QString::from(&s.editor_custom_command);
+        self.replace_confirm = s.replace_confirm;
+        self.replace_show_journal_on_startup = s.replace_show_journal_on_startup;
+        self.privacy_redact_paths = s.privacy_redact_paths;
+        self.accessibility_reduced_motion = s.accessibility_reduced_motion;
+        self.accessibility_high_contrast = s.accessibility_high_contrast;
     }
 
     pub fn write_into(&self, s: &mut DefaultSettings) {
@@ -103,6 +130,8 @@ impl SettingsControllerRust {
         s.respect_gitignore = self.respect_gitignore;
         s.include_hidden_items = self.include_hidden;
         s.include_binary_files = self.include_binary;
+        s.include_system_files = self.include_system_files;
+        s.include_symbolic_links = self.include_symbolic_links;
         s.include_subfolders = self.include_subfolders;
         s.files_search = self.files_search_mode;
         s.enable_container_search = self.enable_container_search;
@@ -114,6 +143,13 @@ impl SettingsControllerRust {
         s.theme_preference = theme_from_i32(self.theme);
         s.context_preview_lines_before = self.context_lines_before.clamp(0, 50) as u8;
         s.context_preview_lines_after = self.context_lines_after.clamp(0, 50) as u8;
+        s.editor_preset = self.editor_preset.clamp(0, 8) as u8;
+        s.editor_custom_command = self.editor_custom_command.to_string();
+        s.replace_confirm = self.replace_confirm;
+        s.replace_show_journal_on_startup = self.replace_show_journal_on_startup;
+        s.privacy_redact_paths = self.privacy_redact_paths;
+        s.accessibility_reduced_motion = self.accessibility_reduced_motion;
+        s.accessibility_high_contrast = self.accessibility_high_contrast;
     }
 }
 
@@ -165,6 +201,8 @@ impl ffi::SettingsController {
         let respect_gitignore = self.as_ref().rust().respect_gitignore;
         let include_hidden = self.as_ref().rust().include_hidden;
         let include_binary = self.as_ref().rust().include_binary;
+        let include_system_files = self.as_ref().rust().include_system_files;
+        let include_symbolic_links = self.as_ref().rust().include_symbolic_links;
         let include_subfolders = self.as_ref().rust().include_subfolders;
         let files_search_mode = self.as_ref().rust().files_search_mode;
         let enable_container_search = self.as_ref().rust().enable_container_search;
@@ -176,12 +214,22 @@ impl ffi::SettingsController {
         let theme = self.as_ref().rust().theme;
         let context_lines_before = self.as_ref().rust().context_lines_before;
         let context_lines_after = self.as_ref().rust().context_lines_after;
+        let editor_preset = self.as_ref().rust().editor_preset;
+        let editor_custom_command = self.as_ref().rust().editor_custom_command.clone();
+        let replace_confirm = self.as_ref().rust().replace_confirm;
+        let replace_show_journal_on_startup = self.as_ref().rust().replace_show_journal_on_startup;
+        let privacy_redact_paths = self.as_ref().rust().privacy_redact_paths;
+        let accessibility_reduced_motion = self.as_ref().rust().accessibility_reduced_motion;
+        let accessibility_high_contrast = self.as_ref().rust().accessibility_high_contrast;
 
         self.as_mut().set_regex(regex);
         self.as_mut().set_case_sensitive(case_sensitive);
         self.as_mut().set_respect_gitignore(respect_gitignore);
         self.as_mut().set_include_hidden(include_hidden);
         self.as_mut().set_include_binary(include_binary);
+        self.as_mut().set_include_system_files(include_system_files);
+        self.as_mut()
+            .set_include_symbolic_links(include_symbolic_links);
         self.as_mut().set_include_subfolders(include_subfolders);
         self.as_mut().set_files_search_mode(files_search_mode);
         self.as_mut()
@@ -194,6 +242,17 @@ impl ffi::SettingsController {
         self.as_mut().set_theme(theme);
         self.as_mut().set_context_lines_before(context_lines_before);
         self.as_mut().set_context_lines_after(context_lines_after);
+        self.as_mut().set_editor_preset(editor_preset);
+        self.as_mut()
+            .set_editor_custom_command(editor_custom_command);
+        self.as_mut().set_replace_confirm(replace_confirm);
+        self.as_mut()
+            .set_replace_show_journal_on_startup(replace_show_journal_on_startup);
+        self.as_mut().set_privacy_redact_paths(privacy_redact_paths);
+        self.as_mut()
+            .set_accessibility_reduced_motion(accessibility_reduced_motion);
+        self.as_mut()
+            .set_accessibility_high_contrast(accessibility_high_contrast);
         self.as_mut().set_last_save_status(QString::from("Loaded"));
     }
 

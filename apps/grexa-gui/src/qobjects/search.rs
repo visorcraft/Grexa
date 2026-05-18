@@ -421,7 +421,10 @@ impl SearchControllerRust {
         // Files mode: keep only the first row per file.
         if self.result_mode == 1 {
             let already_visible = self.visible.iter().any(|&i| {
-                self.rows.get(i).map(|r| r.full_path == row.full_path).unwrap_or(false)
+                self.rows
+                    .get(i)
+                    .map(|r| r.full_path == row.full_path)
+                    .unwrap_or(false)
             });
             if already_visible {
                 return false;
@@ -666,8 +669,7 @@ impl ffi::SearchController {
         if trimmed.is_empty() {
             return;
         }
-        let removed =
-            with_workspace(|w| w.recent_paths.remove(&PathBuf::from(trimmed)).is_ok());
+        let removed = with_workspace(|w| w.recent_paths.remove(&PathBuf::from(trimmed)).is_ok());
         if !removed {
             return;
         }
@@ -1031,6 +1033,15 @@ fn finish_replace(
                 "Replaced {} matches in {} files",
                 summary.matches_replaced, summary.files_modified
             )));
+            // Replace is always notification-worthy — it rewrites
+            // files on disk, so the user wants to be told.
+            notify_desktop(
+                "Replace complete",
+                &format!(
+                    "{} matches in {} files (Grexa)",
+                    summary.matches_replaced, summary.files_modified
+                ),
+            );
             pin.as_mut().replace_completed(true);
         }
         Err(err) => {
@@ -1041,13 +1052,21 @@ fn finish_replace(
     }
 }
 
-/// Pick the editor preset to use from the persisted settings.
-/// Today the settings file doesn't expose `editor_preset` yet — this
-/// is a deliberate v0.1.1 follow-up. Until then we default to
-/// `XdgOpen` which gives users their system default editor for the
-/// file's MIME type.
-fn editor_preset_from_settings(_s: &grexa_core::DefaultSettings) -> grexa_core::EditorPreset {
-    grexa_core::EditorPreset::XdgOpen
+/// Pick the editor preset from the persisted settings. The numeric
+/// mapping matches the `editor_preset` qproperty and the order in
+/// `crates/grexa-core/src/desktop.rs`.
+fn editor_preset_from_settings(s: &grexa_core::DefaultSettings) -> grexa_core::EditorPreset {
+    match s.editor_preset {
+        0 => grexa_core::EditorPreset::Kate,
+        1 => grexa_core::EditorPreset::KWrite,
+        2 => grexa_core::EditorPreset::VsCode,
+        3 => grexa_core::EditorPreset::VsCodium,
+        4 => grexa_core::EditorPreset::SublimeText,
+        5 => grexa_core::EditorPreset::JetBrains,
+        6 => grexa_core::EditorPreset::GnomeTextEditor,
+        7 => grexa_core::EditorPreset::Neovim,
+        _ => grexa_core::EditorPreset::XdgOpen,
+    }
 }
 
 /// Spawn a process detached from grexa so the editor or file manager
@@ -1085,6 +1104,19 @@ fn try_filemanager1_reveal(path: &std::path::Path) -> Result<(), ()> {
         .status()
         .map_err(|_| ())?;
     if status.success() { Ok(()) } else { Err(()) }
+}
+
+/// Fire a desktop notification via `notify-send`. Best-effort — fails
+/// silently if the binary isn't installed. We use shell-out instead
+/// of D-Bus directly so the dependency surface stays in user-space
+/// tooling rather than a Rust D-Bus crate.
+fn notify_desktop(summary: &str, body: &str) {
+    let _ = std::process::Command::new("notify-send")
+        .arg("--app-name=Grexa")
+        .arg("--icon=io.visorcraft.Grexa")
+        .arg(summary)
+        .arg(body)
+        .spawn();
 }
 
 /// Push `text` to the system clipboard. Uses `wl-copy` (Wayland) when
@@ -1208,6 +1240,19 @@ fn finish_search(
                 )
             };
             pin.as_mut().set_status_text(QString::from(&status));
+            // Fire a desktop notification when the search ran longer
+            // than the 4-second threshold (matches Grex's behavior).
+            // Cancelled and zero-match searches are skipped — the user
+            // is probably looking at the window in those cases.
+            if !cancelled && summary.elapsed_ms >= 4000 && summary.matches > 0 {
+                notify_desktop(
+                    "Search complete",
+                    &format!(
+                        "{} matches in {} files (Grexa)",
+                        summary.matches, summary.files_matched
+                    ),
+                );
+            }
         }
         Err(err) => {
             pin.as_mut()

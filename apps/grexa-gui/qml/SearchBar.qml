@@ -96,6 +96,40 @@ Item {
                 font.family: app.tokens.sansFamily
                 background: null
                 Keys.onReturnPressed: root.submitted()
+
+                // Each dropdown row gets a small × that removes the
+                // path from the recent-paths store without picking it.
+                // Hover-only so the row reads cleanly at rest.
+                delegate: Controls.ItemDelegate {
+                    width: pathField.width
+                    hoverEnabled: true
+                    contentItem: RowLayout {
+                        spacing: app.tokens.spaceS
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            text: pathText
+                            elide: Text.ElideMiddle
+                            font.pixelSize: app.tokens.textBody
+                        }
+                        Controls.Button {
+                            flat: true
+                            icon.name: "edit-delete-symbolic"
+                            display: Controls.AbstractButton.IconOnly
+                            visible: parent.parent.hovered
+                            Controls.ToolTip.text: qsTr("Forget this path")
+                            Controls.ToolTip.visible: hovered
+                            onClicked: {
+                                app.searchController.removeRecentPath(pathText)
+                                pathField.popup.close()
+                            }
+                        }
+                    }
+                    onClicked: {
+                        pathField.currentIndex = index
+                        pathField.editText = pathText
+                        pathField.popup.close()
+                    }
+                }
             }
 
             Controls.Button {

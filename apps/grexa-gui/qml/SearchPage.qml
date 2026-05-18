@@ -184,7 +184,7 @@ Kirigami.Page {
             // model dedupes when `result_mode == 1`.
             Controls.ButtonGroup { id: modeGroup; exclusive: true }
             Controls.Button {
-                Layout.preferredWidth: 78
+                Layout.preferredWidth: 96
                 Controls.ButtonGroup.group: modeGroup
                 checkable: true
                 checked: page.controller.resultMode === 0
@@ -195,7 +195,7 @@ Kirigami.Page {
                 }
             }
             Controls.Button {
-                Layout.preferredWidth: 64
+                Layout.preferredWidth: 72
                 Controls.ButtonGroup.group: modeGroup
                 checkable: true
                 checked: page.controller.resultMode === 1
@@ -365,6 +365,22 @@ Kirigami.Page {
                 model: page.controller
                 spacing: 0
                 visible: count > 0
+                focus: true
+                keyNavigationEnabled: true
+                keyNavigationWraps: false
+
+                // Space on the focused row opens the context preview —
+                // mirrors Grex's keyboard-friendly result navigation.
+                Keys.onPressed: function(event) {
+                    if (event.key === Qt.Key_Space && currentIndex >= 0) {
+                        const path = page.controller.rowFullPath(currentIndex)
+                        const lineRaw = model.data(model.index(currentIndex, 0), 0x0102) || "0"
+                        contextPreview.path = path
+                        contextPreview.lineNumber = parseInt(String(lineRaw), 10)
+                        contextPreview.open()
+                        event.accepted = true
+                    }
+                }
 
                 add: Transition {
                     NumberAnimation { property: "opacity"; from: 0; to: 1; duration: app.tokens.durationSnap }
@@ -379,6 +395,7 @@ Kirigami.Page {
                     previewBefore: model.previewBefore
                     previewMatch: model.previewMatch
                     previewAfter: model.previewAfter
+                    fullPath: page.controller.rowFullPath(index)
                     onOpenPreview: {
                         contextPreview.path = page.controller.rowFullPath(index)
                         contextPreview.lineNumber = parseInt(model.line, 10)
@@ -535,6 +552,218 @@ Kirigami.Page {
             const u = selectedFolder.toString()
             searchBar.pathText = u.replace(/^file:\/\//, "")
             page.controller.addRecentPath(searchBar.pathText)
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // Filter drawer — per-search overrides bound to SettingsController.
+    // Toggling here also updates the persisted defaults for the next
+    // session, matching how Grex treats its filter pane.
+    // -----------------------------------------------------------------
+    Controls.Drawer {
+        id: filterDrawer
+        edge: Qt.RightEdge
+        modal: false
+        interactive: true
+        dim: false
+        width: Math.min(page.width * 0.42, 480)
+        height: page.height
+
+        Rectangle {
+            anchors.fill: parent
+            color: app.tokens.surface1
+            border.color: app.tokens.separator
+            border.width: 1
+
+            Controls.ScrollView {
+                anchors.fill: parent
+                anchors.margins: app.tokens.spaceL
+                clip: true
+
+                ColumnLayout {
+                    width: filterDrawer.width - app.tokens.spaceL * 2
+                    spacing: app.tokens.spaceM
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Controls.Label {
+                            text: qsTr("Filters")
+                            font.pixelSize: app.tokens.textSubheading
+                            font.weight: app.tokens.weightBold
+                            Layout.fillWidth: true
+                        }
+                        Controls.Button {
+                            flat: true
+                            icon.name: "window-close-symbolic"
+                            display: Controls.AbstractButton.IconOnly
+                            onClicked: filterDrawer.close()
+                        }
+                    }
+                    Controls.Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Changes apply to the next search and also persist as defaults for new sessions.")
+                        font.pixelSize: app.tokens.textCaption
+                        opacity: 0.65
+                        wrapMode: Text.WordWrap
+                    }
+
+                    Controls.CheckBox {
+                        text: qsTr("Respect .gitignore")
+                        checked: app.settingsController.respectGitignore
+                        onToggled: { app.settingsController.respectGitignore = checked; app.settingsController.apply() }
+                    }
+                    Controls.CheckBox {
+                        text: qsTr("Include hidden files (dotfiles)")
+                        checked: app.settingsController.includeHidden
+                        onToggled: { app.settingsController.includeHidden = checked; app.settingsController.apply() }
+                    }
+                    Controls.CheckBox {
+                        text: qsTr("Include binary / extracted docs")
+                        checked: app.settingsController.includeBinary
+                        onToggled: { app.settingsController.includeBinary = checked; app.settingsController.apply() }
+                    }
+                    Controls.CheckBox {
+                        text: qsTr("Include system files")
+                        checked: app.settingsController.includeSystemFiles
+                        onToggled: { app.settingsController.includeSystemFiles = checked; app.settingsController.apply() }
+                    }
+                    Controls.CheckBox {
+                        text: qsTr("Include subfolders (recursive)")
+                        checked: app.settingsController.includeSubfolders
+                        onToggled: { app.settingsController.includeSubfolders = checked; app.settingsController.apply() }
+                    }
+                    Controls.CheckBox {
+                        text: qsTr("Follow symbolic links")
+                        checked: app.settingsController.includeSymbolicLinks
+                        onToggled: { app.settingsController.includeSymbolicLinks = checked; app.settingsController.apply() }
+                    }
+
+                    Controls.Label {
+                        text: qsTr("Match file names")
+                        font.pixelSize: app.tokens.textCaption
+                        opacity: 0.65
+                        Layout.topMargin: app.tokens.spaceS
+                    }
+                    Controls.TextField {
+                        Layout.fillWidth: true
+                        placeholderText: "*.rs|*.toml|-target*"
+                        text: app.settingsController.defaultMatchFiles
+                        onEditingFinished: {
+                            app.settingsController.defaultMatchFiles = text
+                            app.settingsController.apply()
+                        }
+                    }
+
+                    Controls.Label {
+                        text: qsTr("Exclude directories")
+                        font.pixelSize: app.tokens.textCaption
+                        opacity: 0.65
+                    }
+                    Controls.TextField {
+                        Layout.fillWidth: true
+                        placeholderText: "node_modules, target, .venv"
+                        text: app.settingsController.defaultExcludeDirs
+                        onEditingFinished: {
+                            app.settingsController.defaultExcludeDirs = text
+                            app.settingsController.apply()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // Replace dialog — confirmation + irreversible warning. Reads the
+    // controller's `last_path` + `last_term` indirectly via the
+    // currently-displayed result count.
+    // -----------------------------------------------------------------
+    Controls.Dialog {
+        id: replaceDialog
+        modal: true
+        title: qsTr("Replace matches")
+        standardButtons: Controls.Dialog.Cancel
+        width: Math.min(page.width * 0.6, 520)
+
+        Connections {
+            target: page.controller
+            function onReplaceCompleted(success) {
+                if (success) {
+                    replaceDialog.close()
+                    replaceSummaryDialog.open()
+                }
+            }
+        }
+
+        contentItem: ColumnLayout {
+            spacing: app.tokens.spaceM
+
+            Controls.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: qsTr("Replace every match in %1 files. The original files are rewritten in place — there is no undo.").arg(page.controller.filesMatched)
+            }
+
+            Controls.Label {
+                text: qsTr("Replacement")
+                font.pixelSize: app.tokens.textCaption
+                opacity: 0.65
+            }
+            Controls.TextField {
+                id: replacementField
+                Layout.fillWidth: true
+                placeholderText: qsTr("Replacement text (regex captures: $1, ${name})")
+            }
+
+            Controls.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                font.pixelSize: app.tokens.textCaption
+                opacity: 0.6
+                text: qsTr("A journal of rewritten files lives at $XDG_STATE_HOME/grexa/replace-journal.json until grexa exits cleanly.")
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: app.tokens.spaceS
+                Item { Layout.fillWidth: true }
+                Controls.Button {
+                    text: qsTr("Cancel")
+                    onClicked: replaceDialog.close()
+                }
+                PrimaryButton {
+                    text: page.controller.replacing ? qsTr("Replacing…") : qsTr("Replace All")
+                    icon.name: "edit-find-replace-symbolic"
+                    enabled: !page.controller.replacing && replacementField.text.length > 0
+                    onClicked: page.controller.startReplace(replacementField.text)
+                }
+            }
+        }
+    }
+
+    // Result dialog shown when replace completes successfully.
+    Controls.Dialog {
+        id: replaceSummaryDialog
+        modal: true
+        title: qsTr("Replace complete")
+        standardButtons: Controls.Dialog.Ok
+        Controls.Label {
+            // Strip the JSON wrapper and surface the counts as plain
+            // text. `last_replace_summary` is a JSON object; parse it
+            // and pull the numeric fields.
+            text: {
+                try {
+                    const r = JSON.parse(page.controller.lastReplaceSummary || "{}")
+                    return qsTr("Modified %1 files · %2 matches replaced · %3 failures · %4 ms")
+                        .arg(r.files_modified || 0)
+                        .arg(r.matches_replaced || 0)
+                        .arg(r.failure_count || 0)
+                        .arg(r.elapsed_ms || 0)
+                } catch (e) {
+                    return qsTr("Replace finished.")
+                }
+            }
+            wrapMode: Text.WordWrap
         }
     }
 

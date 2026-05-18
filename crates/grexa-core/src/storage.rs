@@ -177,6 +177,30 @@ pub struct DefaultSettings {
     /// PLAN.md phase 8 require this explicit gate; secret storage alone is
     /// not enough.
     pub ai_search_enabled: bool,
+    /// Editor preset for "Open in Editor" actions. Indices follow
+    /// the [`EditorPreset`] enum: 0=Kate, 1=KWrite, 2=VsCode,
+    /// 3=VsCodium, 4=SublimeText, 5=JetBrains, 6=GnomeTextEditor,
+    /// 7=Neovim, 8=XdgOpen (default — uses the system MIME handler).
+    pub editor_preset: u8,
+    /// When set, used in place of the preset's default argv. Useful
+    /// for sandboxed editors or non-standard launchers.
+    pub editor_custom_command: String,
+    /// Replace flow: show a confirmation dialog before rewriting any
+    /// file. Defaults to true — the audit considers replace
+    /// irreversible.
+    pub replace_confirm: bool,
+    /// Replace flow: show the residual journal on the next startup
+    /// when an interrupted replace left files in a partial state.
+    pub replace_show_journal_on_startup: bool,
+    /// Privacy mode for diagnostics: when true, paths are redacted
+    /// from `grexa-gui.log` and crash reports.
+    pub privacy_redact_paths: bool,
+    /// Accessibility: prefer reduced motion (disables row-add
+    /// transitions, busy spinners, drawer slide-ins).
+    pub accessibility_reduced_motion: bool,
+    /// Accessibility: prefer the high-contrast variant of the
+    /// current color scheme.
+    pub accessibility_high_contrast: bool,
 }
 
 impl Default for DefaultSettings {
@@ -218,6 +242,13 @@ impl Default for DefaultSettings {
             ai_search_endpoint: "https://api.openai.com/v1".to_string(),
             ai_search_model: "gpt-4o-mini".to_string(),
             ai_search_enabled: false,
+            editor_preset: 8, // XdgOpen
+            editor_custom_command: String::new(),
+            replace_confirm: true,
+            replace_show_journal_on_startup: true,
+            privacy_redact_paths: false,
+            accessibility_reduced_motion: false,
+            accessibility_high_contrast: false,
         }
     }
 }

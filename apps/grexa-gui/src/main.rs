@@ -38,6 +38,29 @@ fn main() {
     let _log_guard = init_tracing();
     tracing::info!("Grexa GUI shell starting");
 
+    // Single-instance guard. We use a UNIX advisory lock on a
+    // lockfile in $XDG_RUNTIME_DIR so a second `grexa` invocation
+    // exits cleanly rather than spawning a duplicate window.
+    // Best-effort: when the runtime dir is unavailable (some
+    // containers / sandboxes) the check is skipped.
+    let _instance_lock = match acquire_single_instance_lock() {
+        Some(file) => Some(file),
+        None => {
+            // `acquire_single_instance_lock` returns None for both
+            // "couldn't open the lockfile" (continue silently) and
+            // "lock was held by another process" (exit). The
+            // distinction is signaled via the GREXA_INSTANCE_BUSY
+            // env var the helper sets when it sees a held lock.
+            if std::env::var_os("GREXA_INSTANCE_BUSY").is_some() {
+                tracing::info!(
+                    "Another Grexa instance is already running. Exiting; the existing window remains active."
+                );
+                return;
+            }
+            None
+        }
+    };
+
     // Trigger cxx-qt-lib's and our crate's static initializers so the
     // QML module and QObject types are registered before the engine
     // tries to resolve `import com.visorcraft.Grexa 1.0`.
@@ -151,3 +174,65 @@ fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
     }
     guard
 }
+
+/// Try to acquire an exclusive `flock` on `$XDG_RUNTIME_DIR/grexa.lock`.
+/// Returns:
+/// * `Some(File)` — we hold the lock; keep the file alive for the
+///   process's lifetime.
+/// * `None` and sets `GREXA_INSTANCE_BUSY=1` — another instance holds
+///   the lock; the caller should exit.
+/// * `None` and no env var — the lockfile couldn't be opened (no
+///   runtime dir / not writable); continue without single-instance
+///   guarantees.
+fn acquire_single_instance_lock() -> Option<std::fs::File> {
+    use std::os::fd::AsRawFd;
+    let runtime_dir = std::env::var_os("XDG_RUNTIME_DIR")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|h| {
+                let mut p = std::path::PathBuf::from(h);
+                p.push(".cache");
+                p
+            })
+        })?;
+    if std::fs::create_dir_all(&runtime_dir).is_err() {
+        return None;
+    }
+    let lock_path = runtime_dir.join("grexa.lock");
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        // The lockfile is empty by contract — flock takes the fd, not
+        // the contents. Truncate to keep clippy happy and to clear
+        // stale content if anything ever ended up in there.
+        .truncate(true)
+        .open(&lock_path)
+        .ok()?;
+    // `flock` is the simplest Linux primitive for an advisory
+    // single-instance lock. LOCK_EX | LOCK_NB returns EWOULDBLOCK
+    // (errno 11) when another process holds the lock.
+    let fd = file.as_raw_fd();
+    let rc = unsafe { libc_flock(fd, LOCK_EX | LOCK_NB) };
+    if rc == 0 {
+        Some(file)
+    } else {
+        // SAFETY: env var manipulation. We're single-threaded at this
+        // point (Qt hasn't booted yet).
+        unsafe {
+            std::env::set_var("GREXA_INSTANCE_BUSY", "1");
+        }
+        None
+    }
+}
+
+// Minimal libc binding for `flock`. We don't pull in the `libc` crate
+// for this single call — the syscall ABI is stable and the symbol
+// lives in glibc, musl, and Bionic.
+unsafe extern "C" {
+    #[link_name = "flock"]
+    fn libc_flock(fd: i32, operation: i32) -> i32;
+}
+
+const LOCK_EX: i32 = 2;
+const LOCK_NB: i32 = 4;

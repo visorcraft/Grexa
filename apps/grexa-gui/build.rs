@@ -37,8 +37,7 @@ fn main() {
             QResource::new()
                 .file(QResourceFile::new("resources/grexa.png").alias("resources/grexa.png"))
                 .file(
-                    QResourceFile::new("resources/grex-mark.png")
-                        .alias("resources/grex-mark.png"),
+                    QResourceFile::new("resources/grex-mark.png").alias("resources/grex-mark.png"),
                 )
                 .file(
                     QResourceFile::new("resources/empty-search.svg")

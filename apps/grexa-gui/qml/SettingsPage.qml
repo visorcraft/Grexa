@@ -333,6 +333,98 @@ Kirigami.ScrollablePage {
                 }
             }
 
+            // -- Editor
+            Card {
+                Layout.fillWidth: true
+                title: qsTr("Editor")
+                subtitle: qsTr("Which editor opens when you choose “Open in editor” from a result row.")
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: app.tokens.spaceS
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Controls.Label { text: qsTr("Preset") }
+                        Controls.ComboBox {
+                            Layout.fillWidth: true
+                            model: [
+                                qsTr("Kate"), qsTr("KWrite"), qsTr("VS Code"),
+                                qsTr("VSCodium"), qsTr("Sublime Text"),
+                                qsTr("JetBrains IDE"), qsTr("GNOME Text Editor"),
+                                qsTr("Neovim (terminal)"), qsTr("System default (xdg-open)"),
+                            ]
+                            currentIndex: page.settings.editorPreset
+                            onActivated: page.settings.editorPreset = currentIndex
+                        }
+                    }
+                    Controls.Label {
+                        text: qsTr("Custom command (overrides preset; supports {path} and {line})")
+                        font.pixelSize: app.tokens.textCaption
+                        opacity: 0.6
+                        Layout.topMargin: app.tokens.spaceS
+                    }
+                    Controls.TextField {
+                        Layout.fillWidth: true
+                        placeholderText: "kate --line {line} {path}"
+                        text: page.settings.editorCustomCommand
+                        onTextEdited: page.settings.editorCustomCommand = text
+                    }
+                }
+            }
+
+            // -- Replace
+            Card {
+                Layout.fillWidth: true
+                title: qsTr("Replace")
+                subtitle: qsTr("Safety + recovery options for the irreversible rewrite flow.")
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: app.tokens.spaceS
+                    Controls.CheckBox {
+                        text: qsTr("Confirm before replacing")
+                        checked: page.settings.replaceConfirm
+                        onToggled: page.settings.replaceConfirm = checked
+                    }
+                    Controls.CheckBox {
+                        text: qsTr("Surface residual journal on startup")
+                        checked: page.settings.replaceShowJournalOnStartup
+                        onToggled: page.settings.replaceShowJournalOnStartup = checked
+                    }
+                }
+            }
+
+            // -- Accessibility
+            Card {
+                Layout.fillWidth: true
+                title: qsTr("Accessibility")
+                subtitle: qsTr("Reduced motion disables result-row transitions and busy spinners. High contrast nudges the palette toward higher legibility.")
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: app.tokens.spaceS
+                    Controls.CheckBox {
+                        text: qsTr("Reduce motion")
+                        checked: page.settings.accessibilityReducedMotion
+                        onToggled: page.settings.accessibilityReducedMotion = checked
+                    }
+                    Controls.CheckBox {
+                        text: qsTr("High contrast")
+                        checked: page.settings.accessibilityHighContrast
+                        onToggled: page.settings.accessibilityHighContrast = checked
+                    }
+                }
+            }
+
+            // -- Privacy
+            Card {
+                Layout.fillWidth: true
+                title: qsTr("Privacy")
+                subtitle: qsTr("Redact filesystem paths from grexa-gui.log and any crash diagnostics generated locally.")
+                Controls.CheckBox {
+                    text: qsTr("Redact paths in diagnostics")
+                    checked: page.settings.privacyRedactPaths
+                    onToggled: page.settings.privacyRedactPaths = checked
+                }
+            }
+
             // -- Diagnostics
             Card {
                 Layout.fillWidth: true

@@ -67,6 +67,47 @@ Kirigami.ApplicationWindow {
     pageStack.initialPage: searchPage
     pageStack.globalToolBar.style: Kirigami.ApplicationHeaderStyle.None
 
+    // -- Global keyboard shortcuts -----------------------------------
+    // F1 → About; Ctrl+, → Settings; Ctrl+1..4 jump to pages;
+    // Esc cancels a running search; Ctrl+L focuses the search bar
+    // (handled by the SearchPage); Ctrl+Q quits.
+    Controls.Action {
+        shortcut: "F1"
+        onTriggered: app.goTo("about")
+    }
+    Controls.Action {
+        shortcut: StandardKey.Preferences
+        onTriggered: app.goTo("settings")
+    }
+    Controls.Action {
+        shortcut: "Ctrl+1"
+        onTriggered: app.goTo("search")
+    }
+    Controls.Action {
+        shortcut: "Ctrl+2"
+        onTriggered: app.goTo("regex")
+    }
+    Controls.Action {
+        shortcut: "Ctrl+3"
+        onTriggered: app.goTo("settings")
+    }
+    Controls.Action {
+        shortcut: "Ctrl+4"
+        onTriggered: app.goTo("about")
+    }
+    Controls.Action {
+        shortcut: StandardKey.Cancel
+        onTriggered: {
+            if (app.searchController.busy) {
+                app.searchController.cancel()
+            }
+        }
+    }
+    Controls.Action {
+        shortcut: StandardKey.Quit
+        onTriggered: Qt.quit()
+    }
+
     function goTo(key) {
         currentPageKey = key
         switch (key) {

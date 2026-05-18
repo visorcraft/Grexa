@@ -22,11 +22,74 @@ Controls.ItemDelegate {
     property string previewBefore: ""
     property string previewMatch: ""
     property string previewAfter: ""
+    /// Full filesystem path — needed for the context-menu actions
+    /// that route through `SearchController` (open in editor,
+    /// reveal in file manager, copy path). Set by the SearchPage
+    /// delegate factory from `searchController.rowFullPath(index)`.
+    property string fullPath: ""
     signal openPreview()
 
     height: 68
     padding: 0
     hoverEnabled: true
+
+    // Right-click → context menu. Also reachable via Space-key on a
+    // focused row (handled in SearchPage's ListView keyNavigation).
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.RightButton
+        propagateComposedEvents: true
+        onPressed: function(mouse) { contextMenu.popup() }
+    }
+
+    function fullLine() {
+        return root.previewBefore + root.previewMatch + root.previewAfter
+    }
+
+    Controls.Menu {
+        id: contextMenu
+        Controls.MenuItem {
+            text: qsTr("Preview")
+            icon.name: "document-preview-symbolic"
+            onTriggered: root.openPreview()
+        }
+        Controls.MenuItem {
+            text: qsTr("Open in editor")
+            icon.name: "document-edit"
+            onTriggered: app.searchController.openInEditor(root.fullPath, root.line)
+        }
+        Controls.MenuItem {
+            text: qsTr("Reveal in file manager")
+            icon.name: "system-file-manager"
+            onTriggered: app.searchController.revealInFileManager(root.fullPath)
+        }
+        Controls.MenuSeparator {}
+        Controls.MenuItem {
+            text: qsTr("Copy full path")
+            icon.name: "edit-copy-symbolic"
+            onTriggered: app.searchController.copyToClipboard(root.fullPath)
+        }
+        Controls.MenuItem {
+            text: qsTr("Copy file name")
+            icon.name: "edit-copy-symbolic"
+            onTriggered: app.searchController.copyToClipboard(root.fileName(root.relativePath))
+        }
+        Controls.MenuItem {
+            text: qsTr("Copy relative path")
+            icon.name: "edit-copy-symbolic"
+            onTriggered: app.searchController.copyToClipboard(root.relativePath)
+        }
+        Controls.MenuItem {
+            text: qsTr("Copy line content")
+            icon.name: "edit-copy-symbolic"
+            onTriggered: app.searchController.copyToClipboard(root.fullLine())
+        }
+        Controls.MenuItem {
+            text: qsTr("Copy %1:%2").arg(root.fullPath).arg(root.line)
+            icon.name: "edit-copy-symbolic"
+            onTriggered: app.searchController.copyToClipboard(root.fullPath + ":" + root.line)
+        }
+    }
 
     function escapeHtml(s) {
         return String(s)
