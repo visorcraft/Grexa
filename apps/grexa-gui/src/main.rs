@@ -71,6 +71,17 @@ fn main() {
     let workspace = Rc::new(RefCell::new(workspace::Workspace::new()));
     qobjects::install_workspace(workspace);
 
+    // Lay down the user-local desktop entry + icon theme BEFORE
+    // QGuiApplication boots. xdg-desktop-portal queries the
+    // application's registered `.desktop` file as soon as the Qt
+    // app contacts the compositor; if we wrote the file after
+    // QGuiApplication::new(), the portal would log
+    // `Could not register app ID: App info not found for
+    // 'io.visorcraft.Grexa'` on the user's very first launch (the
+    // file exists by the second launch, so the warning self-heals).
+    // Front-loading the write keeps the first launch clean too.
+    ensure_user_desktop_integration();
+
     let mut app = QGuiApplication::new();
     if app.is_null() {
         tracing::error!("could not construct QGuiApplication — exiting");
@@ -91,14 +102,10 @@ fn main() {
     // application to the io.visorcraft.Grexa.desktop file (and its
     // Icon= entry), so the taskbar / dock / alt-tab switcher
     // resolves the pink-gecko icon from the user's hicolor theme.
+    // The `.desktop` was already written above (before
+    // QGuiApplication::new()), so the portal can resolve this id
+    // immediately on first launch.
     cxx_qt_lib::QGuiApplication::set_desktop_file_name(&QString::from("io.visorcraft.Grexa"));
-
-    // Best-effort: populate the user's local icon theme + desktop
-    // entry from bytes embedded at compile time, so a dev running
-    // `cargo run -p grexa` sees the right icon without first
-    // installing a packaged build. Idempotent — only writes when
-    // the target file is missing or older than the embedded copy.
-    ensure_user_desktop_integration();
 
     // App-wide font. Inter first; fall through to Cantarell (GNOME),
     // Noto Sans (most distros), then the platform default.
@@ -318,14 +325,37 @@ fn ensure_user_desktop_integration() {
         None => return,
     };
 
+    let desktop_template = include_bytes!("../../../packaging/io.visorcraft.Grexa.desktop");
+    // The packaged template uses `Exec=grexa %f` which is fine for a
+    // distro install where `/usr/bin/grexa` is on $PATH. For a dev run
+    // out of `target/release/grexa`, `gio` / `GAppInfo` validates the
+    // `Exec=` token against $PATH and rejects the file when the binary
+    // isn't there — which makes xdg-desktop-portal log
+    // `Could not register app ID: App info not found`. Rewriting `Exec=`
+    // to the absolute path of the running binary fixes both cases:
+    // distro install resolves to `/usr/bin/grexa`, dev install resolves
+    // to the cargo target dir. Either way it's a real, on-disk path
+    // that GAppInfo can validate.
+    let exec_path = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.to_str().map(|s| s.to_owned()))
+        .unwrap_or_else(|| "grexa".to_string());
+    let desktop_bytes_owned: Vec<u8> = String::from_utf8_lossy(desktop_template)
+        .replace("Exec=grexa %f", &format!("Exec={exec_path} %f"))
+        .into_bytes();
+    let desktop_bytes = desktop_bytes_owned.as_slice();
+
+    // Refresh stamp includes both the crate version AND the running
+    // binary's path — so a dev rebuild that moves the binary (or a
+    // distro upgrade) triggers a re-extract of the .desktop with the
+    // correct Exec= line.
     let stamp_path = data_home.join("grexa/icon-rev");
-    let want_rev = env!("CARGO_PKG_VERSION");
+    let want_rev = format!("{}|{}", env!("CARGO_PKG_VERSION"), exec_path);
     let have_rev = std::fs::read_to_string(&stamp_path)
         .map(|s| s.trim().to_string())
         .unwrap_or_default();
     let force_rewrite = have_rev != want_rev;
 
-    let desktop_bytes = include_bytes!("../../../packaging/io.visorcraft.Grexa.desktop");
     let scalable_svg = include_bytes!("../../../packaging/icons/scalable/io.visorcraft.Grexa.svg");
     let icon_16 =
         include_bytes!("../../../packaging/icons/16x16/apps/io.visorcraft.Grexa.png").as_slice();
@@ -408,7 +438,7 @@ fn ensure_user_desktop_integration() {
         if let Some(parent) = stamp_path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        let _ = std::fs::write(&stamp_path, want_rev);
+        let _ = std::fs::write(&stamp_path, &want_rev);
     }
 }
 

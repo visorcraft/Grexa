@@ -126,14 +126,85 @@ audit-flagged items in one commit:
   changes; the mouse wheel scrolls horizontally; the "+" button
   stays outside the Flickable so it's always reachable.
 
+### Audit-driven follow-ups
+
+Two parallel peer-review passes against the v0.3 build flagged a
+short list of legitimate findings that landed in the same release
+cycle:
+
+- **Per-tab snapshot completeness.** The `TabSnapshot` now also
+  captures `busy`, `replacing`, and `last_replace_summary` so a
+  tab round-trip during a search or replace no longer drops the
+  status banner. `restore_tab_snapshot` switched from `HashMap::
+  remove` to `get().cloned()` so a double-restore (or restore-
+  before-save on bootstrap) doesn't wipe the row buffer.
+- **`launchSearch()` includes `tabId`** in its `tabsModel.set()`
+  dict so a future role addition to the tab schema can't silently
+  desync the auto-rename path.
+- **Settings save-status pill** now surfaces disk-write failures.
+  The pill turns into a red `"Save failed"` variant (with a
+  tooltip and a longer fade) when `lastSaveStatus == "Save
+  failed"` — the previous build silently swallowed disk errors.
+- **AI chat header label** changed from "turns" → "messages".
+  The AI controller sends each prompt as a single-turn request
+  with no server-side conversation context, so "turns" was
+  misleading. True multi-turn memory is tracked for a future
+  release.
+- **History + Profiles filter inputs** debounce at 120 ms so a
+  500-entry list doesn't rebuild on every keystroke. The
+  `×` clear button bypasses the debounce so explicit clears feel
+  instant.
+- **`FlagChip.checked` renamed to `active`** to prevent regression
+  of the imperative-binding bug fixed in `38d1e49`. The new name
+  has no intuitive "toggle me" verb, so future contributors are
+  far less likely to write `chip.active = !chip.active` and break
+  the parent's declarative binding.
+- **QML inline plurals** migrated to Qt's plural-aware
+  `qsTr("%n match(es)", "", n)` form. The companion Rust
+  `plural_count` helper now routes through the workspace's
+  Fluent bundle — five new keys (`count-matches`, `count-files`,
+  `count-files-modified`, `count-matches-replaced`,
+  `count-failures`) populated in en / de / ja catalogs. German
+  / Japanese users now see locale-correct inflection in status
+  pills and notifications instead of English plural rules.
+- **`.desktop` install rewrites `Exec=`** to the absolute path of
+  the running binary at install time. The packaged template
+  carried `Exec=grexa %f` which only validates against `$PATH` —
+  fine for `/usr/bin/grexa`, broken for a `cargo run` from the
+  workspace. The first symptom was xdg-desktop-portal logging
+  `Could not register app ID: App info not found for
+  'io.visorcraft.Grexa'` on every launch; that warning is gone.
+  The desktop integration also now runs **before** the
+  `QGuiApplication` constructor so the portal sees our file
+  immediately on the very first launch.
+- **`Shortcut { sequences: [...] }`** (plural) replaces the
+  singular `sequence:` for `StandardKey.Cancel` / `StandardKey.
+  Quit`. Each standard key aliases multiple platform keystrokes
+  (Esc / Ctrl+Q / Cmd+Q) and the singular form only registers
+  the first, logging a warning at startup.
+- **Wheel-to-horizontal-scroll on the tab strip** now prefers
+  `angleDelta.x` (horizontal two-finger trackpad pans) and falls
+  back to `.y` only when `.x` is zero (vertical wheel on a mouse).
+- **Cache-refresh helpers** (`kbuildsycoca6`, `update-desktop-
+  database`, `gtk-update-icon-cache`) are spawned detached with
+  `stdin` / `stdout` / `stderr` routed to `/dev/null` so they
+  don't block GUI startup or inherit Grexa's terminal.
+- **Icon refresh version stamp** at `$XDG_DATA_HOME/grexa/icon-
+  rev` folds in both `CARGO_PKG_VERSION` and the running
+  binary's path — so upgrading the binary or moving it between
+  build dirs triggers a re-extract with a correctly rewritten
+  `Exec=` line.
+
 ## Verification
 
-- `cargo test --workspace`: **291 passing** across 8 crates.
+- `cargo test --workspace`: **292 passing** across 8 crates.
 - `cargo clippy --workspace --release -- -D warnings`: clean.
 - `cargo fmt --all --check`: clean.
 - Offscreen smoke (`QT_QPA_PLATFORM=offscreen`): clean.
 - Live KDE Plasma 6 Wayland verification at 800px and full
-  width.
+  width — journal shows only two upstream warnings (Kirigami
+  pageStack timing + Breeze tablet-mode TextArea type-check),
+  no errors, no panics, no coredumps.
 
 ## Schema migration
 

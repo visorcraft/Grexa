@@ -165,7 +165,7 @@ Status legend:
 | ------------ | ------ | -------------- |
 | Fluent catalog format | ✅ | `crates/grexa-i18n`. |
 | Three locales (en/de/ja) | ✅ | `locales/<tag>/grexa.ftl`. |
-| Plural-aware status text | ✅ | `apps/grexa-gui/src/status.rs`. |
+| Plural-aware status text | ✅ | `apps/grexa-gui/src/status.rs` plus `Bundle::plural_count` for bare-count fragments (`count-matches`, `count-files`, `count-files-modified`, `count-matches-replaced`, `count-failures` in en/de/ja). QML side uses Qt's `qsTr("%n …(s)", "", n)` plural overload. |
 | Runtime locale switching | ✅ | `Bundle::for_locale(Locale::from_tag(tag))`. |
 | English fallback | ✅ | `Bundle` always carries a fallback bundle. |
 | Locale sync gate | ✅ | `scripts/check_locale_sync.py` + a unit test. |

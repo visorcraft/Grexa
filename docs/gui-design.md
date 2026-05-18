@@ -64,17 +64,26 @@ apps/grexa-gui/
 │   ├── qobjects.rs     # SearchController QObject (cxx_qt::bridge) + workspace TLS
 │   ├── controller.rs   # `Controllers` struct: settings, bundle, cancel
 │   ├── tab.rs          # `TabState` per-tab state
-│   ├── workspace.rs    # `Workspace`: tabs + persistent stores + replace
+│   ├── workspace.rs    # `Workspace`: tabs + persistent stores + Fluent bundle + replace
 │   └── status.rs       # `format_status` Fluent-aware status formatter
 └── qml/                # bundled into binary at qrc:/qt/qml/com/visorcraft/Grexa/
-    ├── Main.qml                # Kirigami ApplicationWindow + nav rail
-    ├── SearchPage.qml          # path + term + filters + result list
+    ├── Main.qml                # Kirigami ApplicationWindow + nav rail + shortcuts
+    ├── SearchPage.qml          # path + term + filters + tabs + result list
+    ├── SearchBar.qml           # path picker + term field + flag chips + Search button
+    ├── FlagChip.qml            # toggle chip (regex / case-sensitive); parent owns state
+    ├── ResultRow.qml           # one match row + right-click context menu
+    ├── HistoryPage.qml         # completed-search list with debounced filter
+    ├── ProfilesPage.qml        # saved-search presets with debounced filter
     ├── RegexBuilderPage.qml    # presets + sample + live matches
-    ├── SettingsPage.qml        # every settings section
+    ├── SettingsPage.qml        # auto-save sections + Saved / Save-failed pill
     ├── ContextPreviewDialog.qml# gutter + match-line highlight
-    ├── AiChatPanel.qml         # disabled / empty / busy / error states
+    ├── AiChatPanel.qml         # disabled / empty / busy / error states + Clear
     ├── AboutPage.qml           # version + license + credits
-    └── DesignTokens.qml        # spacing / radius / colors / typography
+    ├── NavItem.qml             # sidebar nav entry
+    ├── Card.qml                # rounded surface used by SettingsPage sections
+    ├── EmptyState.qml          # shared empty-state illustration + copy
+    ├── PrimaryButton.qml       # filled-accent primary action button
+    └── DesignTokens.qml        # spacing / radius / colors / typography / a11y
 ```
 
 ## Wiring contracts

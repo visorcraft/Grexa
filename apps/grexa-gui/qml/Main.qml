@@ -119,14 +119,20 @@ Kirigami.ApplicationWindow {
     // nothing (the Shortcut consumes the event, finds `busy` is
     // false, and exits silently — making the drawer's Esc-to-close
     // contract feel broken).
+    //
+    // StandardKey.Cancel / .Quit each alias multiple platform
+    // keystrokes (Esc on most platforms; Ctrl+Q vs Ctrl+W vs Cmd+Q
+    // depending on the host). `sequences: [ ... ]` registers every
+    // binding — using the singular `sequence:` only registers the
+    // first and Qt logs a warning at startup.
     Shortcut {
-        sequence: StandardKey.Cancel
+        sequences: [StandardKey.Cancel]
         context: Qt.ApplicationShortcut
         enabled: app.searchController.busy
         onActivated: app.searchController.cancel()
     }
     Shortcut {
-        sequence: StandardKey.Quit
+        sequences: [StandardKey.Quit]
         context: Qt.ApplicationShortcut
         onActivated: Qt.quit()
     }

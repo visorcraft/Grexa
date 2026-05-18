@@ -13,18 +13,29 @@ container search, optional AI assistance, and a fully scriptable CLI.
 
 **v0.3.0** — Polish + responsiveness pass on top of the v0.2 GUI
 parity release. Per-tab result-row isolation now preserves the
-full row buffer across tab switches; the action toolbar wraps to
+full row buffer across tab switches (including `busy`, `replacing`,
+and the last-replace summary); the action toolbar wraps to
 additional rows on narrow windows instead of clipping; the pink
 gecko renders correctly in the Wayland taskbar via Qt's
 `setDesktopFileName` + auto-installed hicolor theme; Settings
-auto-save on change (no more Apply button); Filters/Esc/Export-menu
-toggles behave as users expect; re-clicking the active tab or
-sidebar nav item is now a no-op instead of a hidden side effect.
+auto-save on change with an error-tinted pill on disk-write
+failure (no more Apply button); Filters/Esc/Export-menu toggles
+behave as users expect; re-clicking the active tab or sidebar
+nav item is a no-op instead of a hidden side effect.
+
 A follow-up polish round added inline pluralization
-("1 match · 1 file"), Enter-to-open on result rows, Enter-to-commit
-in the Replace dialog, an AI-chat Clear button, and filter rows on
-the History and Profiles pages; the tab strip now scrolls
-horizontally when it overflows.
+("1 match · 1 file"), Enter-to-open on result rows,
+Enter-to-commit in the Replace dialog, an AI-chat Clear button,
+filter rows on the History and Profiles pages, and horizontal
+scrolling on the tab strip.
+
+A final audit pass routed the Rust `plural_count` helper through
+the Fluent bundle (German / Japanese users now see locale-correct
+inflection in status pills + notifications), debounced the
+History/Profiles filter inputs, renamed `FlagChip.checked` to
+`active` to harden against the imperative-binding regression,
+and fixed two launch-time warnings (xdg-desktop-portal app-id
+registration + Qt `Shortcut` plural sequences).
 
 v0.2 added the original GUI parity surface: folder picker,
 filter drawer, target selector for Docker/Podman, replace flow with
