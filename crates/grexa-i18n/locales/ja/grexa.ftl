@@ -36,3 +36,10 @@ ai-error-empty-response = AI エンドポイントが空の応答を返しまし
 action-open-in-editor = エディターで開く
 action-reveal-in-file-manager = ファイルマネージャーで表示
 action-copy-path = パスをコピー
+
+# 日本語には複数形の文法的区別がないため、selector を使わず単一形にする。
+count-matches = {$count} 件のマッチ
+count-files = {$count} 件のファイル
+count-files-modified = {$count} 件のファイルを変更
+count-matches-replaced = {$count} 件のマッチを置換
+count-failures = {$count} 件の失敗

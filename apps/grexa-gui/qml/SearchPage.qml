@@ -44,6 +44,7 @@ Kirigami.Page {
         if (activeTab >= 0 && activeTab < tabsModel.count) {
             const cur = tabsModel.get(activeTab)
             tabsModel.set(activeTab, {
+                tabId: cur.tabId,
                 label: searchBar.termText.length > 22
                     ? searchBar.termText.substring(0, 20) + "…"
                     : searchBar.termText,
@@ -268,13 +269,20 @@ Kirigami.Page {
                         }
                     }
                     onContentWidthChanged: Qt.callLater(ensureActiveVisible)
-                    // Wheel-to-scroll-horizontally on Linux desktops
-                    // where the trackpad/mouse only emits vertical.
+                    // Wheel-to-scroll-horizontally on Linux desktops.
+                    // Horizontal trackpad / tilt-wheel pans emit
+                    // `angleDelta.x` — prefer it so two-finger swipes
+                    // feel natural; only fall back to `.y` for a
+                    // plain vertical wheel (which Linux apps
+                    // conventionally map to horizontal scroll on a
+                    // scrollable strip).
                     MouseArea {
                         anchors.fill: parent
                         acceptedButtons: Qt.NoButton
                         onWheel: function(wheel) {
-                            const dx = wheel.angleDelta.y || wheel.angleDelta.x
+                            const dx = wheel.angleDelta.x !== 0
+                                ? wheel.angleDelta.x
+                                : wheel.angleDelta.y
                             tabFlick.contentX = Math.max(0,
                                 Math.min(tabFlick.contentWidth - tabFlick.width,
                                          tabFlick.contentX - dx))
@@ -641,12 +649,13 @@ Kirigami.Page {
                     Controls.Label {
                         id: matchCountLabel
                         Layout.alignment: Qt.AlignVCenter
+                        // Plural-aware via Qt's qsTr overload so translators
+                        // pick the inflection per locale instead of inheriting
+                        // English rules from a ternary.
                         text: {
                             const m = page.controller.matchCount
                             const f = page.controller.filesMatched
-                            const mTxt = m === 1 ? qsTr("1 match") : qsTr("%1 matches").arg(m)
-                            const fTxt = f === 1 ? qsTr("1 file")  : qsTr("%1 files").arg(f)
-                            return mTxt + " · " + fTxt
+                            return qsTr("%n match(es)", "", m) + " · " + qsTr("%n file(s)", "", f)
                         }
                         font.pixelSize: app.tokens.textCaption + 1
                         font.weight: app.tokens.weightSemibold
@@ -1309,9 +1318,11 @@ Kirigami.Page {
                     const mr = r.matches_replaced || 0
                     const fc = r.failure_count || 0
                     const ms = r.elapsed_ms || 0
-                    const fmTxt = fm === 1 ? qsTr("1 file modified")    : qsTr("%1 files modified").arg(fm)
-                    const mrTxt = mr === 1 ? qsTr("1 match replaced")   : qsTr("%1 matches replaced").arg(mr)
-                    const fcTxt = fc === 1 ? qsTr("1 failure")          : qsTr("%1 failures").arg(fc)
+                    // Plural-aware via Qt's qsTr overload — translators pick
+                    // singular/plural inflection per locale.
+                    const fmTxt = qsTr("%n file(s) modified", "", fm)
+                    const mrTxt = qsTr("%n match(es) replaced", "", mr)
+                    const fcTxt = qsTr("%n failure(s)", "", fc)
                     return fmTxt + " · " + mrTxt + " · " + fcTxt + " · " + ms + " ms"
                 } catch (e) {
                     return qsTr("Replace finished.")

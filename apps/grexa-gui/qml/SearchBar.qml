@@ -191,14 +191,14 @@ Item {
                 id: regexChip
                 label: ".*"
                 tooltip: qsTr("Regex")
-                checked: root.regexEnabled
+                active: root.regexEnabled
                 onToggled: root.regexEnabled = !root.regexEnabled
             }
             FlagChip {
                 id: caseChip
                 label: "Aa"
                 tooltip: qsTr("Case-sensitive")
-                checked: root.caseSensitive
+                active: root.caseSensitive
                 onToggled: root.caseSensitive = !root.caseSensitive
             }
 

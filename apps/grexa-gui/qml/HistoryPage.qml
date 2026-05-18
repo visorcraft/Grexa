@@ -21,6 +21,16 @@ Kirigami.ScrollablePage {
     ListModel { id: historyModel }
     property string filterText: ""
 
+    // Debounce filter typing so a 500-entry history doesn't
+    // rebuild on every keystroke. 120ms is below the perceptual
+    // threshold for "typing while seeing results update".
+    Timer {
+        id: filterDebounce
+        interval: 120
+        repeat: false
+        onTriggered: page.refresh()
+    }
+
     Component.onCompleted: refresh()
 
     function rowMatchesFilter(term, path) {
@@ -119,14 +129,16 @@ Kirigami.ScrollablePage {
                 Layout.fillWidth: true
                 placeholderText: qsTr("Filter history by term or path")
                 text: page.filterText
-                onTextEdited: { page.filterText = text; page.refresh() }
+                onTextEdited: { page.filterText = text; filterDebounce.restart() }
             }
             Controls.Button {
                 flat: true
                 icon.name: "edit-clear-symbolic"
                 display: Controls.AbstractButton.IconOnly
                 enabled: page.filterText.length > 0
-                onClicked: { page.filterText = ""; page.refresh() }
+                // Clear is immediate — the user shouldn't wait
+                // for the debounce when they explicitly hit X.
+                onClicked: { page.filterText = ""; filterDebounce.stop(); page.refresh() }
             }
         }
 
@@ -182,8 +194,12 @@ Kirigami.ScrollablePage {
                             }
                             Controls.Label {
                                 Layout.fillWidth: true
-                                text: qsTr("%1 · %2 matches%3%4").arg(model.path)
-                                    .arg(model.matches)
+                                // Plural form goes through Qt's `qsTr(..., "", n)`
+                                // overload so translators can drive the singular /
+                                // plural inflection per locale instead of inheriting
+                                // English rules from an inline ternary.
+                                text: qsTr("%1 · %2%3%4").arg(model.path)
+                                    .arg(qsTr("%n match(es)", "", model.matches))
                                     .arg(model.regex ? " · regex" : "")
                                     .arg(model.caseSensitive ? " · case" : "")
                                 font.pixelSize: app.tokens.textCaption

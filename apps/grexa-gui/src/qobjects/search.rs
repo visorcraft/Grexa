@@ -81,6 +81,14 @@ struct TabSnapshot {
     within_regex: bool,
     target_kind: i32,
     selected_container_id: String,
+    // Tab-local pipeline state. `busy` and `replacing` track whether the
+    // tab has an in-flight search or replace; `last_replace_summary` is
+    // the JSON-encoded result banner shown after a replace completes.
+    // Container listings (`containers_json`) and `recent_path_count` are
+    // intentionally session-global, not snapshotted.
+    busy: bool,
+    replacing: bool,
+    last_replace_summary: String,
 }
 
 /// One row in the result list model.
@@ -1108,6 +1116,9 @@ impl ffi::SearchController {
             within_regex: self.as_ref().rust().within_regex,
             target_kind: self.as_ref().rust().target_kind,
             selected_container_id: self.as_ref().rust().selected_container_id.to_string(),
+            busy: self.as_ref().rust().busy,
+            replacing: self.as_ref().rust().replacing,
+            last_replace_summary: self.as_ref().rust().last_replace_summary.to_string(),
         };
         self.as_mut()
             .rust_mut()
@@ -1116,10 +1127,11 @@ impl ffi::SearchController {
     }
 
     fn restore_tab_snapshot(mut self: Pin<&mut Self>, tab_id: i32) {
-        // Pull the snapshot out so we can hold the model lock
-        // while we mutate. `remove` is fine here — `save` will
-        // re-insert when the user switches away again.
-        let snap_opt = self.as_mut().rust_mut().tab_snapshots.remove(&tab_id);
+        // Clone the snapshot rather than removing it so the contract
+        // is idempotent — a double-restore (or a restore-before-save
+        // on session bootstrap) doesn't wipe the buffer. The snapshot
+        // is dropped explicitly on tab close via `drop_tab_snapshot`.
+        let snap_opt = self.as_ref().rust().tab_snapshots.get(&tab_id).cloned();
 
         unsafe { self.as_mut().begin_reset_model() };
         {
@@ -1151,6 +1163,9 @@ impl ffi::SearchController {
                     s.files_scanned = snap.files_scanned;
                     s.has_searched = snap.has_searched;
                     s.status_text = QString::from(&snap.status_text);
+                    s.busy = snap.busy;
+                    s.replacing = snap.replacing;
+                    s.last_replace_summary = QString::from(&snap.last_replace_summary);
                 }
                 None => {
                     // No snapshot yet — treat as a fresh tab.
@@ -1170,6 +1185,9 @@ impl ffi::SearchController {
                     s.within_regex = false;
                     s.target_kind = 0;
                     s.selected_container_id = QString::default();
+                    s.busy = false;
+                    s.replacing = false;
+                    s.last_replace_summary = QString::default();
                 }
             }
         }
@@ -1191,6 +1209,9 @@ impl ffi::SearchController {
         let wr = self.as_ref().rust().within_regex;
         let tk = self.as_ref().rust().target_kind;
         let sci = self.as_ref().rust().selected_container_id.clone();
+        let bz = self.as_ref().rust().busy;
+        let rp = self.as_ref().rust().replacing;
+        let lrs = self.as_ref().rust().last_replace_summary.clone();
 
         self.as_mut().set_status_text(status);
         self.as_mut().set_match_count(mc);
@@ -1202,6 +1223,9 @@ impl ffi::SearchController {
         self.as_mut().set_within_regex(wr);
         self.as_mut().set_target_kind(tk);
         self.as_mut().set_selected_container_id(sci);
+        self.as_mut().set_busy(bz);
+        self.as_mut().set_replacing(rp);
+        self.as_mut().set_last_replace_summary(lrs);
     }
 
     fn drop_tab_snapshot(mut self: Pin<&mut Self>, tab_id: i32) {
@@ -1469,8 +1493,8 @@ fn finish_container_search(
             pin.as_mut().set_files_matched(unique_files);
             pin.as_mut().set_status_text(QString::from(&format!(
                 "Found {} in container ({})",
-                plural_count(added as usize, "match", "matches"),
-                plural_count(unique_files as usize, "file", "files"),
+                plural_count("count-matches", added as usize),
+                plural_count("count-files", unique_files as usize),
             )));
         }
         Err(err) => {
@@ -1510,8 +1534,8 @@ fn finish_replace(
             unsafe { pin.as_mut().end_reset_model() };
             pin.as_mut().set_status_text(QString::from(&format!(
                 "Replaced {} in {}",
-                plural_count(summary.matches_replaced, "match", "matches"),
-                plural_count(summary.files_modified, "file", "files"),
+                plural_count("count-matches", summary.matches_replaced),
+                plural_count("count-files", summary.files_modified),
             )));
             // Replace is always notification-worthy — it rewrites
             // files on disk, so the user wants to be told.
@@ -1519,8 +1543,8 @@ fn finish_replace(
                 "Replace complete",
                 &format!(
                     "{} in {} (Grexa)",
-                    plural_count(summary.matches_replaced, "match", "matches"),
-                    plural_count(summary.files_modified, "file", "files"),
+                    plural_count("count-matches", summary.matches_replaced),
+                    plural_count("count-files", summary.files_modified),
                 ),
             );
             pin.as_mut().replace_completed(true);
@@ -1745,16 +1769,21 @@ fn percent_encode_path(s: &str) -> String {
     out
 }
 
-/// `"1 match"` / `"0 matches"` / `"5 matches"` — singular when `n == 1`.
-/// Designed for status-bar and notification strings so users don't see
-/// the awkward "1 matches" English that English-only `format!("{} matches", n)`
-/// produces.
-fn plural_count(n: usize, singular: &str, plural: &str) -> String {
-    if n == 1 {
-        format!("1 {singular}")
-    } else {
-        format!("{n} {plural}")
-    }
+/// `"1 match"` / `"0 matches"` / `"5 matches"` — singular when
+/// `n == 1`. Routed through the workspace's Fluent bundle so the
+/// inflection follows the user's locale rather than hardcoded English
+/// rules. The valid keys today are `count-matches`, `count-files`,
+/// `count-files-modified`, `count-matches-replaced`, `count-failures`
+/// (all defined in `crates/grexa-i18n/locales/<lang>/grexa.ftl`).
+fn plural_count(key: &str, n: usize) -> String {
+    with_workspace(|w| {
+        w.bundle
+            .plural_count(key, n as i64)
+            // Fall back to the bare count if the catalog is broken —
+            // users see "5" instead of "5 matches", which is ugly but
+            // doesn't crash.
+            .unwrap_or_else(|_| n.to_string())
+    })
 }
 
 /// Fire a desktop notification via `notify-send`. Best-effort — fails
@@ -1883,14 +1912,14 @@ fn finish_search(
             let status = if cancelled {
                 format!(
                     "Cancelled — {} in {}",
-                    plural_count(mc, "match", "matches"),
-                    plural_count(fc, "file", "files"),
+                    plural_count("count-matches", mc),
+                    plural_count("count-files", fc),
                 )
             } else {
                 format!(
                     "Found {} in {} in {} ms",
-                    plural_count(summary.matches, "match", "matches"),
-                    plural_count(summary.files_matched, "file", "files"),
+                    plural_count("count-matches", summary.matches),
+                    plural_count("count-files", summary.files_matched),
                     summary.elapsed_ms,
                 )
             };
@@ -1904,8 +1933,8 @@ fn finish_search(
                     "Search complete",
                     &format!(
                         "{} in {} (Grexa)",
-                        plural_count(summary.matches, "match", "matches"),
-                        plural_count(summary.files_matched, "file", "files"),
+                        plural_count("count-matches", summary.matches),
+                        plural_count("count-files", summary.files_matched),
                     ),
                 );
             }

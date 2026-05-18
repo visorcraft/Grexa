@@ -20,6 +20,11 @@ gecko renders correctly in the Wayland taskbar via Qt's
 auto-save on change (no more Apply button); Filters/Esc/Export-menu
 toggles behave as users expect; re-clicking the active tab or
 sidebar nav item is now a no-op instead of a hidden side effect.
+A follow-up polish round added inline pluralization
+("1 match · 1 file"), Enter-to-open on result rows, Enter-to-commit
+in the Replace dialog, an AI-chat Clear button, and filter rows on
+the History and Profiles pages; the tab strip now scrolls
+horizontally when it overflows.
 
 v0.2 added the original GUI parity surface: folder picker,
 filter drawer, target selector for Docker/Podman, replace flow with
@@ -33,7 +38,8 @@ The Rust core, CLI, container adapter, AI client, document extraction,
 encoding detection, settings, history, profiles, context preview,
 sorting, gitignore parity, and Fluent localization (en / de / ja) all
 ship working. The Qt 6 / Kirigami GUI binary boots via
-[cxx-qt 0.8](https://github.com/KDAB/cxx-qt).
+[cxx-qt 0.8](https://github.com/KDAB/cxx-qt) and is feature-complete
+against the Grex parity matrix in [docs/feature-parity.md](docs/feature-parity.md).
 
 Release notes: [docs/release-notes-0.3.0.md](docs/release-notes-0.3.0.md).
 
@@ -81,9 +87,7 @@ The GUI is a Rust + Qt 6 / Kirigami binary built with
 [cxx-qt 0.8](https://github.com/KDAB/cxx-qt) — pure Cargo, no CMake.
 QML files under `apps/grexa-gui/qml/` are bundled into the binary at
 build time via Qt's resource system and registered under the
-`com.visorcraft.Grexa 1.0` QML module. The contract-shaped page
-placeholders ship today; live wiring against the controllers
-continues in Phases 4–18 of [PLAN.md](PLAN.md).
+`com.visorcraft.Grexa 1.0` QML module.
 
 ## Architecture
 
@@ -127,8 +131,6 @@ See [docs/architecture.md](docs/architecture.md) for the full breakdown.
   v0.2.0 changes (Phase 20 GUI parity)
 - [docs/release-notes-0.1.0.md](docs/release-notes-0.1.0.md) —
   v0.1.0 changes
-- [PLAN.md](PLAN.md) — phase-by-phase implementation map (Phase 20
-  closed; v0.3 release-ready)
 - [AGENTS.md](AGENTS.md) — guidelines for AI assistants working on
   this repo. AI tooling (Claude Code, Cursor, etc.) reads this first.
 - [CREDITS.md](CREDITS.md) — third-party attribution

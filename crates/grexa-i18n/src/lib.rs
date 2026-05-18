@@ -152,6 +152,16 @@ impl Bundle {
     pub fn t(&self, key: &str) -> Result<String, BundleError> {
         self.format(key, &[])
     }
+
+    /// Format a plural-aware key that takes a single `count` argument.
+    /// Used by status / notification formatters where the caller needs
+    /// a bare-count fragment (`"5 matches"`, `"1 file"`) without
+    /// hardcoding English plural rules. The locale's `.ftl` catalog
+    /// drives the inflection via Fluent's `{$count -> [one] … *[other] …}`
+    /// selectors.
+    pub fn plural_count(&self, key: &str, count: i64) -> Result<String, BundleError> {
+        self.format(key, &[("count", FluentValue::from(count))])
+    }
 }
 
 fn format_in(
@@ -348,6 +358,27 @@ mod tests {
         // works the other direction when needed. Pin behavior: when the
         // primary bundle does define the key, we get the primary's text.
         assert_eq!(bundle.t("app-name").unwrap(), "Grexa");
+    }
+
+    #[test]
+    fn plural_count_inflects_per_locale() {
+        let en = Bundle::for_locale(Locale::English).unwrap();
+        assert_eq!(en.plural_count("count-matches", 1).unwrap(), "1 match");
+        assert_eq!(en.plural_count("count-matches", 5).unwrap(), "5 matches");
+        assert_eq!(en.plural_count("count-files", 0).unwrap(), "0 files");
+
+        let de = Bundle::for_locale(Locale::German).unwrap();
+        assert_eq!(de.plural_count("count-files", 1).unwrap(), "1 Datei");
+        assert_eq!(de.plural_count("count-files", 3).unwrap(), "3 Dateien");
+
+        // Japanese has no plural inflection; the helper still produces
+        // a coherent fragment.
+        let ja = Bundle::for_locale(Locale::Japanese).unwrap();
+        assert!(
+            ja.plural_count("count-matches", 1)
+                .unwrap()
+                .contains("マッチ")
+        );
     }
 
     /// Locale-sync gate. Every shipped locale must define the exact same

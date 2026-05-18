@@ -289,14 +289,21 @@ const LOCK_NB: i32 = 4;
 /// binary via `include_bytes!`, so a dev box with no packaged
 /// install gets correct branding from `cargo run`.
 ///
-/// Idempotent: only writes a destination file when it's missing
-/// (so a packaged install on `/usr/share/...` continues to win
-/// because the user's `~/.local/share/...` only gets a copy when
-/// there's nothing there yet). After a fresh install we ping
-/// `kbuildsycoca6` (Plasma) and `update-desktop-database` /
-/// `gtk-update-icon-cache` (GNOME / generic) so the icon shows
-/// up without a logout-login cycle. All side effects are
-/// best-effort — failures fall through silently.
+/// Refresh policy: a stamp file at `$XDG_DATA_HOME/grexa/icon-rev`
+/// records the version that last wrote into the user theme. On
+/// startup we re-extract every file whenever the stamp is missing
+/// or doesn't match the running binary's `CARGO_PKG_VERSION` — so
+/// an upgraded build replaces stale icons, but unchanged builds
+/// skip the work. Files at `/usr/share/...` shipped by packagers
+/// always take precedence because XDG resolves them with higher
+/// priority than `$XDG_DATA_HOME`.
+///
+/// After a write we ping `kbuildsycoca6` (Plasma),
+/// `update-desktop-database` (generic), and `gtk-update-icon-cache`
+/// (GNOME) so the icon shows up without a logout-login cycle. The
+/// helpers run detached with stdio routed to `/dev/null` so they
+/// don't block startup. All side effects are best-effort —
+/// failures fall through silently.
 fn ensure_user_desktop_integration() {
     let data_home = match std::env::var_os("XDG_DATA_HOME")
         .map(std::path::PathBuf::from)
@@ -310,6 +317,13 @@ fn ensure_user_desktop_integration() {
         Some(p) => p,
         None => return,
     };
+
+    let stamp_path = data_home.join("grexa/icon-rev");
+    let want_rev = env!("CARGO_PKG_VERSION");
+    let have_rev = std::fs::read_to_string(&stamp_path)
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+    let force_rewrite = have_rev != want_rev;
 
     let desktop_bytes = include_bytes!("../../../packaging/io.visorcraft.Grexa.desktop");
     let scalable_svg = include_bytes!("../../../packaging/icons/scalable/io.visorcraft.Grexa.svg");
@@ -352,7 +366,7 @@ fn ensure_user_desktop_integration() {
     let mut wrote_anything = false;
     for (rel, bytes) in pairs.iter() {
         let target = data_home.join(rel);
-        if target.exists() {
+        if target.exists() && !force_rewrite {
             continue;
         }
         if let Some(parent) = target.parent()
@@ -367,23 +381,34 @@ fn ensure_user_desktop_integration() {
 
     if wrote_anything {
         // Best-effort cache refresh so the icon shows up without
-        // a session restart. Ignore exit codes — distros that
-        // don't ship the tool just skip the refresh.
+        // a session restart. Detached spawns with stdio routed
+        // away — we don't block GUI startup waiting for them.
+        let null = || std::process::Stdio::null();
         let _ = std::process::Command::new("kbuildsycoca6")
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status();
+            .stdin(null())
+            .stdout(null())
+            .stderr(null())
+            .spawn();
         let _ = std::process::Command::new("update-desktop-database")
             .arg(data_home.join("applications"))
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status();
+            .stdin(null())
+            .stdout(null())
+            .stderr(null())
+            .spawn();
         let _ = std::process::Command::new("gtk-update-icon-cache")
             .arg("-t")
             .arg(data_home.join("icons/hicolor"))
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status();
+            .stdin(null())
+            .stdout(null())
+            .stderr(null())
+            .spawn();
+
+        // Stamp the version we just laid down. If this fails we'll
+        // just re-extract next launch — cheap and correct.
+        if let Some(parent) = stamp_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(&stamp_path, want_rev);
     }
 }
 

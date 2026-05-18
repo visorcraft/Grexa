@@ -1,26 +1,25 @@
 # Grex → Grexa Feature Parity
 
-This is the synthesis doc PLAN.md phase 0 line 160 calls for. It is
-the canonical answer to "is feature X from Grex present in Grexa?"
+The canonical answer to "is feature X from Grex present in Grexa?"
 Every row is one Grex behavior; the *Implementation* column points at
 the code, doc, or audit that establishes parity, an intentional
 divergence, or an explicit non-applicability.
 
+Last refreshed: v0.3.0.
+
 Status legend:
 
-- ✅ **Done** — present in Grexa as of this row.
+- ✅ **Done** — shipped in Grexa.
 - 🟡 **Partial** — present at the contract level; some refinement
-  scheduled for v1.1.
-- 🟦 **GUI** — needs the Qt 6 / Kirigami shell to ship; controller is
-  ready.
-- ⏸ **Deferred** — explicit v1.1+ deferral with a recorded reason.
+  scheduled for a later release.
+- ⏸ **Deferred** — explicit deferral with a recorded reason.
 - 🟥 **N/A** — Windows-only or otherwise out of scope for Linux.
 
 ## Search
 
 | Grex feature | Status | Implementation |
 | ------------ | ------ | -------------- |
-| Tabbed searches, per-tab state | 🟦 | `apps/grexa-gui/src/tab.rs::TabState` (8 tests); QML tab strip in `SearchPage.qml`. |
+| Tabbed searches, per-tab state | ✅ | `apps/grexa-gui/src/tab.rs::TabState` + per-tab snapshot in `qobjects/search.rs::TabSnapshot`; QML tab strip in `SearchPage.qml` with horizontal-scroll overflow (v0.3). |
 | Text + Regex modes | ✅ | `crates/grexa-core/src/search.rs` + `pattern.rs` (two-engine cascade). |
 | Content mode with line / column / snippet | ✅ | `SearchResult`. |
 | Files mode aggregation | ✅ | `FileSearchResult` + `aggregate_file_results`. |
@@ -33,7 +32,7 @@ Status legend:
 | Streaming + cancellation | ✅ | `CancelToken` + `ProgressEvent`. |
 | Sort + stable tie-breakers | ✅ | `crates/grexa-core/src/sort.rs`. |
 | Search-within-results | ✅ | `TabState::set_within_filter(filter, regex)`. |
-| Result export (CSV / JSON / clipboard) | 🟦 | CLI emits CSV/JSON; GUI clipboard hooks Phase 4. |
+| Result export (CSV / JSON / clipboard) | ✅ | CLI emits CSV/JSON; GUI Export menu writes CSV/JSON/Markdown; result-row context menu copies path / filename / line content / path:line. |
 
 ## Replace
 
@@ -44,7 +43,7 @@ Status legend:
 | Permission preservation | ✅ | `restore_permissions`. |
 | CRLF + final-newline preservation | ✅ | Whole-buffer substitution; two unit tests. |
 | Encoding round-trip | ✅ | `encode_for_writeback` covers UTF-8 / UTF-8 BOM / UTF-16 / chardetng-detected encodings. |
-| Confirmation dialog | 🟦 | Fluent keys ready; QML dialog lands in Phase 6 GUI follow-up. |
+| Confirmation dialog | ✅ | `SearchPage.qml::replaceDialog` (gated on `replace_confirm` setting); Enter commits, Escape cancels. |
 | Switch to Files mode after replace | ✅ | `Workspace::run_replace_blocking` flips `result_mode` on completion. |
 | Crash-recovery journal | ✅ | `replace-journal.json` under `$XDG_STATE_HOME/grexa/`. |
 | No-undo, no backup files | ✅ | Documented in `docs/features.md`. |
@@ -86,7 +85,7 @@ Status legend:
 | Container path display | ✅ | `rewrite_path` keeps the container path intact. |
 | Container context preview | ✅ | `grexa_containers::container_context_preview`. |
 | Replace disabled for containers | ✅ | No write path on `RuntimeOperations`. |
-| Live Docker test suite | ⏸ | Gated behind `container-live` feature; Phase 19. |
+| Live Docker test suite | ⏸ | Gated behind the `container-live` Cargo feature; runs in CI when a daemon is present. |
 | Live Podman test suite | ⏸ | Same. |
 
 ## AI Search Chat
@@ -104,7 +103,7 @@ Status legend:
 | Secret-Service-backed API key | ✅ | `secret.rs` via `keyring`. |
 | Opt-in setting | ✅ | `DefaultSettings.ai_search_enabled`. |
 | Provider scope doc | ✅ | `docs/ai-provider-scope.md`. |
-| In-tab conversation state | 🟦 | `TabState::ai_mode` + AiChatPanel.qml. |
+| In-tab conversation state | ✅ | `TabState::ai_mode` + `AiChatPanel.qml` (with turn-count header + Clear button as of v0.3). |
 
 ## Context preview
 
@@ -116,7 +115,7 @@ Status legend:
 | Match-line index | ✅ | `match_line_index` field. |
 | Edge cases (empty / OOR / missing / perms) | ✅ | 9 unit tests. |
 | Container-backed preview | ✅ | `grexa_containers::container_context_preview`. |
-| Gutter + match highlight | 🟦 | `ContextPreviewDialog.qml` renders both. |
+| Gutter + match highlight | ✅ | `ContextPreviewDialog.qml` renders both. |
 
 ## Settings, history, profiles, recent paths
 
@@ -128,7 +127,7 @@ Status legend:
 | Search profiles upsert + move-to-top | ✅ | `SearchProfileStore`. |
 | JSON import/export with merge rules | ✅ | `SettingsStore::import_json`/`export_json`. |
 | Theme preference (12 variants) | ✅ | `ThemePreference` enum; Grex integer encoding preserved. |
-| Settings UI sections | 🟦 | `apps/grexa-gui/qml/SettingsPage.qml`. |
+| Settings UI sections | ✅ | `apps/grexa-gui/qml/SettingsPage.qml`; auto-save on change as of v0.3 (no Apply button). |
 | API key in keyring (never plaintext) | ✅ | `grexa_ai::secret`. |
 | Restore defaults | ✅ | `SettingsStore::delete`. |
 
@@ -156,9 +155,9 @@ Status legend:
 | Editor argv presets (Kate / VSCode / JetBrains / …) | ✅ | `grexa_core::desktop::open_in_editor_command`. |
 | FileManager1 reveal | ✅ | `grexa_core::desktop::file_manager_show_items_uris` + `reveal_with_xdg_open`. |
 | User path classifier (abstract URLs) | ✅ | `classify_user_path`. |
-| KNotifications | 🟦 | Flatpak grants the talk-name; dispatch lands with the cxx-qt PR. |
-| Portal file picker | 🟦 | Folder dialog placeholder; portal binding Phase 5. |
-| KDE color scheme + accent | 🟦 | Kirigami picks it up by default; live verification pending. |
+| KNotifications | ✅ | `notify_desktop` in `qobjects/search.rs` shells `notify-send` (which routes via `org.freedesktop.Notifications` / KNotifications). |
+| Portal file picker | ✅ | `QtQuick.Dialogs.FolderDialog` — Breeze on KDE, XDG desktop portal under Wayland / Flatpak. Recent-path store integrated. |
+| KDE color scheme + accent | 🟡 | Kirigami picks up the user's accent + theme today; full Qt palette swap via `KColorSchemeManager` still needs a cxx-qt-lib binding (v0.4 target — see release notes "Known limits"). |
 
 ## Localization
 
@@ -170,7 +169,7 @@ Status legend:
 | Runtime locale switching | ✅ | `Bundle::for_locale(Locale::from_tag(tag))`. |
 | English fallback | ✅ | `Bundle` always carries a fallback bundle. |
 | Locale sync gate | ✅ | `scripts/check_locale_sync.py` + a unit test. |
-| RTL layout | 🟦 | Documented contract in `docs/accessibility.md`; live verification with cxx-qt PR. |
+| RTL layout | 🟡 | Documented contract in `docs/accessibility.md`; Kirigami flips layout direction automatically when `LayoutMirroring.enabled` is set, but live verification with a translated RTL locale is pending a future translation contribution. |
 
 ## Non-applicable (Linux replacements)
 
@@ -216,8 +215,5 @@ upstream releases must:
 2. Implement, defer, or non-applicable-mark in Grexa with a status icon.
 3. Link to the audit doc that records the decision.
 
-A merge that adds a Grex feature without updating this matrix is a CI
-failure (`grep -c "^| " docs/feature-parity.md` must stay ≥ N — N
-recorded in the CI workflow file). The next release-readiness pass
-(`Phase 19`) walks every row and confirms the status flag is still
-accurate.
+Every release walks this matrix once and confirms the status flag is
+still accurate before the version is tagged.

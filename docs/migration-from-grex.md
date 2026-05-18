@@ -91,15 +91,10 @@ Linux divergence table.
 
 ## Running the import
 
-The importer is a Settings UI flow in the GUI (Phase 4). The CLI
-expose for one-shot scripts:
-
-```bash
-# Coming soon (Phase 4):
-grexa-cli import-grex-settings ~/path/to/Grex-LocalAppData
-```
-
-For now, manual import is straightforward:
+The library-level importer (`SettingsStore::import_json` and the
+matching history / profile / recent-path stores) is wired today;
+manual import is straightforward and works with both the GUI and
+CLI consumers:
 
 1. Drop `settings.json` at `$XDG_CONFIG_HOME/grexa/settings.json`.
    Grexa's `import_json` API will merge it on next launch.

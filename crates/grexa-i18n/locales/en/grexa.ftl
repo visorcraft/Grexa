@@ -77,3 +77,28 @@ ai-error-empty-response = AI endpoint returned an empty response.
 action-open-in-editor = Open in editor
 action-reveal-in-file-manager = Show in file manager
 action-copy-path = Copy path
+
+## Bare-count fragments. The status / notification formatters compose
+## these into the longer summary strings, so each locale can drive its
+## own plural inflection without the Rust caller hardcoding English
+## rules. Argument: $count (i64).
+count-matches = {$count ->
+    [one] 1 match
+   *[other] {$count} matches
+}
+count-files = {$count ->
+    [one] 1 file
+   *[other] {$count} files
+}
+count-files-modified = {$count ->
+    [one] 1 file modified
+   *[other] {$count} files modified
+}
+count-matches-replaced = {$count ->
+    [one] 1 match replaced
+   *[other] {$count} matches replaced
+}
+count-failures = {$count ->
+    [one] 1 failure
+   *[other] {$count} failures
+}

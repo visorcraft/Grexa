@@ -60,3 +60,24 @@ ai-error-empty-response = KI-Endpunkt lieferte eine leere Antwort.
 action-open-in-editor = Im Editor öffnen
 action-reveal-in-file-manager = Im Dateimanager anzeigen
 action-copy-path = Pfad kopieren
+
+count-matches = {$count ->
+    [one] 1 Treffer
+   *[other] {$count} Treffer
+}
+count-files = {$count ->
+    [one] 1 Datei
+   *[other] {$count} Dateien
+}
+count-files-modified = {$count ->
+    [one] 1 Datei geändert
+   *[other] {$count} Dateien geändert
+}
+count-matches-replaced = {$count ->
+    [one] 1 Treffer ersetzt
+   *[other] {$count} Treffer ersetzt
+}
+count-failures = {$count ->
+    [one] 1 Fehler
+   *[other] {$count} Fehler
+}

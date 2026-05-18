@@ -92,6 +92,40 @@ fixes them:
   SearchBar) no longer breaks its parent's declarative binding
   by imperatively writing its own `checked` state.
 
+### Polish round
+
+A follow-up sweep against the v0.3 build closed eight smaller
+audit-flagged items in one commit:
+
+- **Pluralization** — both the QML status pill and the Rust
+  status / notification formatters route through a
+  `plural_count(n, singular, plural)` helper. `"1 match · 1 file"`
+  reads correctly; `"5 matches · 3 files"` still works.
+- **Result row Enter** — pressing Enter on the focused result
+  row opens the file in the configured editor. Space still opens
+  the inline preview, so keyboard-only workflows have both verbs.
+- **Replace dialog Enter** — Enter in the replacement TextField
+  commits Replace All when the button would be enabled; Escape
+  cancels.
+- **AI chat Clear** — once the conversation has at least one
+  turn, a small header row appears showing the turn count and a
+  Clear button that resets the chat model. No API call, no
+  settings touched.
+- **Dead `replace_term` qproperty removed** — was set by
+  `start_replace` but never read from QML. Smaller bridge surface
+  = less drift.
+- **History page filter** — filter row at the top of the History
+  page matches case-insensitively against the search term and
+  search path; empty-state copy switches to "no entries match X"
+  when a filter is active.
+- **Profiles page filter** — same pattern, matches profile name,
+  search term, or path.
+- **Tab bar horizontal scrolling** — when the tab strip overflows
+  the available width, it now scrolls horizontally instead of
+  clipping. The active tab is auto-scrolled into view when it
+  changes; the mouse wheel scrolls horizontally; the "+" button
+  stays outside the Flickable so it's always reachable.
+
 ## Verification
 
 - `cargo test --workspace`: **291 passing** across 8 crates.

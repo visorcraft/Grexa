@@ -15,7 +15,7 @@ grexa/
 │   ├── grexa-cli/           # `grexa-cli` headless binary
 │   └── grexa-i18n/          # Fluent locales + Bundle runtime
 ├── apps/
-│   └── grexa-gui/           # Qt 6 / Kirigami shell (Phase 4+)
+│   └── grexa-gui/           # Qt 6 / Kirigami shell (crate: grexa)
 ├── docs/                    # this directory
 ├── packaging/               # Flatpak / AppImage / distro recipes
 └── scripts/                 # locale sync, future fixture generators
@@ -127,8 +127,8 @@ AiSearchClient<UreqTransport>
 
 ## Testing strategy
 
-- **Unit tests** live in each module's `#[cfg(test)]` block. ~252
-  tests today.
+- **Unit tests** live in each module's `#[cfg(test)]` block. 291
+  tests passing across the workspace as of v0.3.
 - **Integration tests** are in `crates/<crate>/tests/*.rs`:
   - `grexa-core/tests/gitignore_parity.rs` — 61 cases mirroring
     `docs/grex-gitignore-audit.md`.
@@ -143,10 +143,10 @@ AiSearchClient<UreqTransport>
 - **Clippy `-D warnings`** is the merge gate. `just lint` runs the
   same command CI uses.
 
-## What the GUI adds (Phase 4+)
+## What the GUI adds
 
 The GUI is intentionally a thin presentation layer. The Rust core
-already exposes:
+exposes:
 
 - Streaming search/replace primitives + cancellation
 - Typed `SearchResult` and `FileSearchResult` records
@@ -162,8 +162,10 @@ QObjects. No business logic lives in the GUI.
 
 - **`grexa-core` async path**: today every search/replace call is
   blocking. A `tokio`-backed variant would let the GUI run multiple
-  tabs concurrently without thread sprawl. Tracked in PLAN.md
-  Phase 1 line 170.
+  tabs concurrently without thread sprawl. Per-tab state isolation
+  already lives in the controller (see
+  `apps/grexa-gui/src/qobjects/search.rs::TabSnapshot`); the
+  scheduler is the remaining piece.
 - **Baloo seeding**: trait surface ships in `grexa-core::baloo`;
   wiring through the search engine is deferred per
   [docs/baloo-spike.md](baloo-spike.md).

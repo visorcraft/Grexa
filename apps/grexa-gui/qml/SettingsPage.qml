@@ -19,6 +19,12 @@ Kirigami.ScrollablePage {
     property var settings: app.settingsController
     property var ai: app.aiController
 
+    // Latched copy of `settings.lastSaveStatus`. The pill reads
+    // from this so it can stay coloured while it fades out, even
+    // if the controller writes a different status between the
+    // commit and the fade.
+    property string lastSaveResult: ""
+
     Component.onCompleted: settings.reload()
 
     // Every settings input calls `commit()` on change so the user
@@ -71,16 +77,20 @@ Kirigami.ScrollablePage {
                         opacity: 0.6
                     }
                 }
-                // Saved indicator — appears briefly after a commit
-                // so the user gets a small "yes, I saved" signal
-                // without a button to press. Fades out a second
-                // later via the timer.
+                // Save-status indicator. Green/accent pill when a
+                // commit succeeded; red/negative pill when the disk
+                // write failed (the user sees *some* feedback either
+                // way — silent failure is a footgun). Both states
+                // fade in via the timer; the failure pill stays
+                // visible longer so the user can actually read it.
                 Rectangle {
+                    id: saveStatusPill
+                    readonly property bool failed: lastSaveResult === "Save failed"
                     Layout.preferredHeight: 26
-                    Layout.preferredWidth: savedLabel.implicitWidth + app.tokens.spaceL * 2 + 8
+                    Layout.preferredWidth: saveStatusLabel.implicitWidth + app.tokens.spaceL * 2 + 8
                     radius: app.tokens.radiusPill
-                    color: app.tokens.accentMute
-                    border.color: app.tokens.accent
+                    color: failed ? app.tokens.errorMute : app.tokens.accentMute
+                    border.color: failed ? app.tokens.error : app.tokens.accent
                     border.width: 1
                     opacity: savedTimer.running ? 1.0 : 0.0
                     Behavior on opacity { NumberAnimation { duration: app.tokens.durationNormal } }
@@ -88,30 +98,56 @@ Kirigami.ScrollablePage {
                         anchors.centerIn: parent
                         spacing: app.tokens.spaceXS
                         Kirigami.Icon {
-                            source: "dialog-ok-symbolic"
+                            source: saveStatusPill.failed
+                                ? "dialog-error-symbolic"
+                                : "dialog-ok-symbolic"
                             implicitWidth: 12
                             implicitHeight: 12
-                            color: app.tokens.accent
+                            color: saveStatusPill.failed
+                                ? app.tokens.error
+                                : app.tokens.accent
                             isMask: true
                         }
                         Controls.Label {
-                            id: savedLabel
-                            text: qsTr("Saved")
+                            id: saveStatusLabel
+                            text: saveStatusPill.failed ? qsTr("Save failed") : qsTr("Saved")
                             font.pixelSize: app.tokens.textCaption
                             font.weight: app.tokens.weightSemibold
-                            color: app.tokens.accent
+                            color: saveStatusPill.failed
+                                ? app.tokens.error
+                                : app.tokens.accent
                         }
+                    }
+                    Controls.ToolTip.text: page.lastSaveResult
+                    Controls.ToolTip.visible: failed
+                        && saveStatusMouse.containsMouse
+                    MouseArea {
+                        id: saveStatusMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
                     }
                 }
                 Timer {
                     id: savedTimer
-                    interval: 1400
+                    // Success fades quickly; failures stay visible
+                    // a few seconds so the user can read them.
+                    interval: page.lastSaveResult === "Save failed" ? 4500 : 1400
                     repeat: false
                 }
                 Connections {
                     target: page.settings
                     function onLastSaveStatusChanged() {
-                        if (page.settings.lastSaveStatus === "Saved") savedTimer.restart()
+                        // Latch the latest status into a local property
+                        // so the pill keeps the right colour while
+                        // fading out (the controller could clear or
+                        // overwrite `lastSaveStatus` between the
+                        // commit and the fade).
+                        page.lastSaveResult = page.settings.lastSaveStatus
+                        if (page.lastSaveResult === "Saved"
+                            || page.lastSaveResult === "Save failed") {
+                            savedTimer.restart()
+                        }
                     }
                 }
                 Controls.Button {

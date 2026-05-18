@@ -65,7 +65,11 @@ Extracts text from `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`,
 ## Replace
 
 CLI replace isn't exposed today — replace runs only from the GUI to
-keep the confirmation step explicit. The library API is documented in
+keep the confirmation step explicit. In the GUI: Replace button →
+review the term + replacement + filter snapshot → Replace All →
+auto-flip to Files mode. If the process was killed mid-run, the
+residual journal dialog surfaces on next launch so the half-written
+work is reviewable or dismissable. The library API is documented in
 [features.md](features.md#safe-replace).
 
 ## Container search
@@ -106,8 +110,12 @@ container search.
 
 ## AI Search Chat
 
-Today the AI client is library-only — the GUI wires the conversation
-loop. From a script:
+The GUI ships an in-tab AI chat panel
+(`apps/grexa-gui/qml/AiChatPanel.qml`) wired to `app.aiController`.
+Enable it in Settings → AI Search; pick an endpoint and (optionally)
+a model. API keys are stored in the system keyring, never on disk.
+
+The same client is also available as a library — from a script:
 
 ```rust
 use grexa_ai::{AiSearchClient, AiSearchConfig, AiSearchContext, AiConversationTurn, AiRole, store_api_key};
@@ -188,7 +196,9 @@ GREXA_LOG=debug grexa-cli ~/code TODO
 GREXA_LOG=grexa_core::search=trace grexa-cli ~/code TODO
 ```
 
-The same logs come out of the GUI when wired (Phase 4+).
+The GUI writes the same logs to the same file
+(`$XDG_STATE_HOME/grexa/grexa-gui.log`); `GREXA_LOG` is honored
+either way.
 
 ## Shell completions
 

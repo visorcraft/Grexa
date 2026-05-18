@@ -44,8 +44,12 @@ ColumnLayout {
     }
 
     // -- Conversation header — small action row with a Clear button.
-    // Only visible once the conversation has at least one turn so it
-    // doesn't clutter the empty state.
+    // Only visible once the panel has at least one message so it
+    // doesn't clutter the empty state. The counter is "messages"
+    // (not "turns") because the AI controller currently sends each
+    // prompt as a single-turn request — no prior-message context is
+    // carried server-side, so the label shouldn't imply conversational
+    // memory. True multi-turn memory is tracked for a future release.
     RowLayout {
         Layout.fillWidth: true
         visible: messageModel.count > 0
@@ -53,9 +57,9 @@ ColumnLayout {
 
         Controls.Label {
             Layout.fillWidth: true
-            text: messageModel.count === 1
-                ? qsTr("1 turn")
-                : qsTr("%1 turns").arg(messageModel.count)
+            // Plural-aware via Qt's qsTr overload — translators can
+            // override the singular/plural inflection per locale.
+            text: qsTr("%n message(s)", "", messageModel.count)
             font.pixelSize: app.tokens.textCaption
             opacity: 0.55
         }
@@ -64,7 +68,7 @@ ColumnLayout {
             icon.name: "edit-clear-all-symbolic"
             text: qsTr("Clear")
             display: Controls.AbstractButton.TextBesideIcon
-            Controls.ToolTip.text: qsTr("Reset the AI conversation. Doesn't touch your API key or stored history.")
+            Controls.ToolTip.text: qsTr("Clear the chat panel. Doesn't touch your API key or stored history.")
             Controls.ToolTip.visible: hovered
             onClicked: messageModel.clear()
         }

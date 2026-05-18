@@ -41,17 +41,18 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-Specific test groups:
+Specific test groups (291 tests total as of v0.3):
 
 ```bash
-cargo test -p grexa-core                      # ~120 unit tests
+cargo test -p grexa-core                      # 190 total (122 unit + integration)
 cargo test --test gitignore_parity            # 61 cases
 cargo test --test property                    # 4 proptest properties
 cargo test --test root_safety                 # 3 pseudo-FS tests
 cargo test -p grexa-cli                       # 16 CLI integration tests
-cargo test -p grexa-containers                # 21 mocked container tests
+cargo test -p grexa-containers                # 24 mocked container tests
 cargo test -p grexa-ai                        # 17 mocked HTTP tests
 cargo test -p grexa-i18n                      # 8 locale tests
+cargo test -p grexa                           # 36 GUI controller tests (no Qt runtime)
 ```
 
 ## Locale sync
@@ -110,15 +111,22 @@ podman rm -f web
 
 ## GUI prerequisites + dev cycle
 
-The Qt/Kirigami shell lands in Phase 4. When it does:
+The Qt/Kirigami shell is the `grexa` binary under `apps/grexa-gui/`:
 
 ```bash
-# Hot-reload-friendly dev loop:
+# Iterate on QML / Rust together:
+cargo run -p grexa
+
+# Or with cargo-watch for an auto-rebuild on save:
 cargo install cargo-watch
 cargo watch -x 'run -p grexa'
 ```
 
-QML files reload without a Rust rebuild via Qt's QML loader.
+Note: QML files are bundled into the binary as Qt resources at
+build time via `cxx-qt-build`'s `qrc_resources`. Editing a `.qml`
+file requires a `cargo build` — there is no filesystem hot-reload
+path. New `.qml` files must be added to the `qml_files` list in
+`apps/grexa-gui/build.rs` or they won't ship.
 
 ## Cross-distro container build
 
@@ -129,8 +137,6 @@ podman build -t grexa-builder -f packaging/Dockerfile.builder .
 podman run --rm -v "$PWD:/src" -w /src grexa-builder \
     cargo build --workspace --release
 ```
-
-(The Dockerfile lands with Phase 16 packaging.)
 
 ## What CI runs
 
@@ -155,8 +161,7 @@ hyperfine --warmup 2 \
 ```
 
 A spreadsheet of comparison results lives at
-[memory-budgets.md](memory-budgets.md) plus the future
-`docs/perf-baselines.md` (Phase 15 follow-up).
+[memory-budgets.md](memory-budgets.md).
 
 ## Troubleshooting
 

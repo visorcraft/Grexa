@@ -9,6 +9,7 @@
 //! QObject (`qobjects.rs`) borrows this via a thread-local pointer.
 
 use std::path::Path;
+use std::rc::Rc;
 
 use anyhow::Result;
 use grexa_core::{
@@ -16,6 +17,7 @@ use grexa_core::{
     ReplaceSummary, SearchHistoryStore, SearchOptions, SearchProfile, SearchProfileStore,
     SettingsStore, open_in_editor_command, replace_with, reveal_with_xdg_open, search_with,
 };
+use grexa_i18n::{Bundle, Locale};
 
 use crate::tab::{ResultMode, TabId, TabState, TabStatus};
 
@@ -32,21 +34,29 @@ pub struct Workspace {
     pub history: SearchHistoryStore,
     pub profiles: SearchProfileStore,
     pub settings: SettingsStore,
+    /// Fluent localization bundle, locale-resolved from the persisted
+    /// `ui_language` setting. Used by status / notification formatters
+    /// to compose plural-aware count fragments without hardcoding
+    /// English inflection.
+    pub bundle: Rc<Bundle>,
 }
 
 #[allow(dead_code)]
 impl Workspace {
     pub fn new() -> Self {
         let paths = AppPaths::from_env();
+        let settings = SettingsStore::new(&paths);
+        let bundle = build_bundle(&settings);
         Self {
             recent_paths: RecentPathStore::new(&paths),
             history: SearchHistoryStore::new(&paths),
             profiles: SearchProfileStore::new(&paths),
-            settings: SettingsStore::new(&paths),
+            settings,
             paths,
             tabs: Vec::new(),
             active: None,
             next_tab: 1,
+            bundle,
         }
     }
 
@@ -54,15 +64,18 @@ impl Workspace {
     /// the user's real settings.
     pub fn under(base: &Path) -> Self {
         let paths = AppPaths::under(base);
+        let settings = SettingsStore::new(&paths);
+        let bundle = build_bundle(&settings);
         Self {
             recent_paths: RecentPathStore::new(&paths),
             history: SearchHistoryStore::new(&paths),
             profiles: SearchProfileStore::new(&paths),
-            settings: SettingsStore::new(&paths),
+            settings,
             paths,
             tabs: Vec::new(),
             active: None,
             next_tab: 1,
+            bundle,
         }
     }
 
@@ -237,6 +250,28 @@ impl Default for Workspace {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Resolve the user's `ui_language` setting into a Fluent bundle.
+/// Falls back to English if either the persisted language or the
+/// catalog itself can't be loaded — so the GUI never panics on a
+/// corrupt settings.json.
+fn build_bundle(settings: &SettingsStore) -> Rc<Bundle> {
+    let lang = settings
+        .load()
+        .ok()
+        .map(|s| s.ui_language)
+        .unwrap_or_default();
+    let locale = if lang.trim().is_empty() {
+        Locale::English
+    } else {
+        Locale::from_tag(&lang)
+    };
+    Rc::new(
+        Bundle::for_locale(locale)
+            .or_else(|_| Bundle::for_locale(Locale::English))
+            .expect("English fallback bundle always loads"),
+    )
 }
 
 #[cfg(test)]

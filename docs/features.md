@@ -1,8 +1,9 @@
 # Grexa Features
 
-A user-facing inventory of what Grexa can do today (alpha) and what
-lands in each upcoming phase. The source-of-truth audits live in
-`docs/grex-*-audit.md`; this doc is the consumer-shaped view.
+A user-facing inventory of what Grexa does today (v0.3). The
+source-of-truth audits live in `docs/grex-*-audit.md`; this doc is
+the consumer-shaped view. The Grex ↔ Grexa parity matrix lives in
+[feature-parity.md](feature-parity.md).
 
 ## Search
 
@@ -194,8 +195,8 @@ crashes on malformed input.
 
 ## Optional integrations
 
-- **Baloo** candidate seeding (KDE file index). Phase 13 spike
-  recommended **defer** for v1.0; the trait surface exists for a
-  future enable.
+- **Baloo** candidate seeding (KDE file index). The
+  [Baloo spike](baloo-spike.md) recommended **defer**; the trait
+  surface exists for a future enable.
 - **PDF text** via `pdftotext` (Poppler). Falls back gracefully when
   the binary is missing.

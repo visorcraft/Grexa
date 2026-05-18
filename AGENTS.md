@@ -72,7 +72,6 @@ grexa/
 ├── CREDITS.md                  # third-party attribution
 ├── LICENSE                     # GPL-3.0 verbatim
 ├── README.md                   # user-facing entry point
-├── PLAN.md                     # phase-by-phase implementation map (now 437/437)
 ├── deny.toml                   # cargo-deny license + advisory policy
 ├── rust-toolchain.toml         # pins Rust 1.95
 ├── rustfmt.toml                # workspace fmt config
@@ -156,7 +155,7 @@ service `io.visorcraft.Grexa`, never on disk.
 ## Tests
 
 ```bash
-cargo test --workspace                                  # 283 tests
+cargo test --workspace                                  # 291 tests (v0.3)
 cargo test -p grexa-core --test gitignore_parity        # 61 cases
 cargo test -p grexa-core --test property                # 4 proptests
 cargo test -p grexa-core --test root_safety             # 3 pseudo-FS
@@ -297,7 +296,9 @@ drift.
 
 | Doc | Purpose |
 | --- | ------- |
-| [PLAN.md](PLAN.md) | Phase map — what shipped when, 437/437 ticked |
+| [docs/release-notes-0.3.0.md](docs/release-notes-0.3.0.md) | v0.3.0 release notes (polish + responsiveness) |
+| [docs/release-notes-0.2.0.md](docs/release-notes-0.2.0.md) | v0.2.0 release notes (Phase 20 GUI parity) |
+| [docs/release-notes-0.1.0.md](docs/release-notes-0.1.0.md) | v0.1.0 release notes |
 | [docs/features.md](docs/features.md) | End-to-end feature list |
 | [docs/usage.md](docs/usage.md) | User workflows (KDE, Docker, Podman, AI, CLI) |
 | [docs/architecture.md](docs/architecture.md) | Module map + data paths |

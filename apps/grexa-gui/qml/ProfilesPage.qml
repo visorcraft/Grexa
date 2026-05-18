@@ -20,6 +20,15 @@ Kirigami.ScrollablePage {
     ListModel { id: profilesModel }
     property string filterText: ""
 
+    // See HistoryPage — debounce keystrokes so a large profile
+    // list doesn't rebuild per character.
+    Timer {
+        id: filterDebounce
+        interval: 120
+        repeat: false
+        onTriggered: page.refresh()
+    }
+
     Component.onCompleted: refresh()
 
     function rowMatchesFilter(name, term, path) {
@@ -119,14 +128,14 @@ Kirigami.ScrollablePage {
                 Layout.fillWidth: true
                 placeholderText: qsTr("Filter profiles by name, term, or path")
                 text: page.filterText
-                onTextEdited: { page.filterText = text; page.refresh() }
+                onTextEdited: { page.filterText = text; filterDebounce.restart() }
             }
             Controls.Button {
                 flat: true
                 icon.name: "edit-clear-symbolic"
                 display: Controls.AbstractButton.IconOnly
                 enabled: page.filterText.length > 0
-                onClicked: { page.filterText = ""; page.refresh() }
+                onClicked: { page.filterText = ""; filterDebounce.stop(); page.refresh() }
             }
         }
 
