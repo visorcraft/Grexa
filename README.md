@@ -11,16 +11,23 @@ container search, optional AI assistance, and a fully scriptable CLI.
 
 ## Status
 
-**v0.2.0** — Linux/Qt GUI is at feature parity with Grex on
-Windows. Folder picker, filter drawer, target selector for
-Docker/Podman, replace flow with residual-journal recovery, sortable
-result columns, search-within-results, in-session tabs, saved-search
-Profiles page, search History page, export to CSV/JSON/Markdown,
-context menu with Reveal / Open in editor (with custom-command
-template) / Copy actions, single-instance lockfile, KNotification on
-long searches, keyboard shortcuts (F1, Ctrl+T/W, Ctrl+1..4, Esc,
-Ctrl+Q). Settings expose Editor / Replace / Accessibility / Privacy
-in addition to the v0.1 Appearance / Filters / Containers / AI cards.
+**v0.3.0** — Polish + responsiveness pass on top of the v0.2 GUI
+parity release. Per-tab result-row isolation now preserves the
+full row buffer across tab switches; the action toolbar wraps to
+additional rows on narrow windows instead of clipping; the pink
+gecko renders correctly in the Wayland taskbar via Qt's
+`setDesktopFileName` + auto-installed hicolor theme; Settings
+auto-save on change (no more Apply button); Filters/Esc/Export-menu
+toggles behave as users expect; re-clicking the active tab or
+sidebar nav item is now a no-op instead of a hidden side effect.
+
+v0.2 added the original GUI parity surface: folder picker,
+filter drawer, target selector for Docker/Podman, replace flow with
+residual-journal recovery, sortable result columns,
+search-within-results, in-session tabs, Profiles page, History page,
+export to CSV/JSON/Markdown, result row context menu, single-instance
+lockfile, KNotification, keyboard shortcuts, Editor/Replace/
+Accessibility/Privacy settings.
 
 The Rust core, CLI, container adapter, AI client, document extraction,
 encoding detection, settings, history, profiles, context preview,
@@ -28,7 +35,7 @@ sorting, gitignore parity, and Fluent localization (en / de / ja) all
 ship working. The Qt 6 / Kirigami GUI binary boots via
 [cxx-qt 0.8](https://github.com/KDAB/cxx-qt).
 
-Release notes: [docs/release-notes-0.2.0.md](docs/release-notes-0.2.0.md).
+Release notes: [docs/release-notes-0.3.0.md](docs/release-notes-0.3.0.md).
 
 ## Quick start
 
@@ -114,12 +121,14 @@ See [docs/architecture.md](docs/architecture.md) for the full breakdown.
   bringing Grex settings / history / profiles into Grexa
 - [docs/gui-design.md](docs/gui-design.md) — cxx-qt bridge + QML
   module map
+- [docs/release-notes-0.3.0.md](docs/release-notes-0.3.0.md) —
+  v0.3.0 changes (polish + responsiveness)
 - [docs/release-notes-0.2.0.md](docs/release-notes-0.2.0.md) —
   v0.2.0 changes (Phase 20 GUI parity)
 - [docs/release-notes-0.1.0.md](docs/release-notes-0.1.0.md) —
   v0.1.0 changes
 - [PLAN.md](PLAN.md) — phase-by-phase implementation map (Phase 20
-  closed; v0.2 release-ready)
+  closed; v0.3 release-ready)
 - [AGENTS.md](AGENTS.md) — guidelines for AI assistants working on
   this repo. AI tooling (Claude Code, Cursor, etc.) reads this first.
 - [CREDITS.md](CREDITS.md) — third-party attribution

@@ -336,32 +336,17 @@ fn ensure_user_desktop_integration() {
 
     let pairs: [(&str, &[u8]); 12] = [
         ("applications/io.visorcraft.Grexa.desktop", desktop_bytes),
-        (
-            "icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg",
-            scalable_svg,
-        ),
+        ("icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg", scalable_svg),
         ("icons/hicolor/16x16/apps/io.visorcraft.Grexa.png", icon_16),
         ("icons/hicolor/24x24/apps/io.visorcraft.Grexa.png", icon_24),
         ("icons/hicolor/32x32/apps/io.visorcraft.Grexa.png", icon_32),
         ("icons/hicolor/48x48/apps/io.visorcraft.Grexa.png", icon_48),
         ("icons/hicolor/64x64/apps/io.visorcraft.Grexa.png", icon_64),
         ("icons/hicolor/96x96/apps/io.visorcraft.Grexa.png", icon_96),
-        (
-            "icons/hicolor/128x128/apps/io.visorcraft.Grexa.png",
-            icon_128,
-        ),
-        (
-            "icons/hicolor/192x192/apps/io.visorcraft.Grexa.png",
-            icon_192,
-        ),
-        (
-            "icons/hicolor/256x256/apps/io.visorcraft.Grexa.png",
-            icon_256,
-        ),
-        (
-            "icons/hicolor/512x512/apps/io.visorcraft.Grexa.png",
-            icon_512,
-        ),
+        ("icons/hicolor/128x128/apps/io.visorcraft.Grexa.png", icon_128),
+        ("icons/hicolor/192x192/apps/io.visorcraft.Grexa.png", icon_192),
+        ("icons/hicolor/256x256/apps/io.visorcraft.Grexa.png", icon_256),
+        ("icons/hicolor/512x512/apps/io.visorcraft.Grexa.png", icon_512),
     ];
 
     let mut wrote_anything = false;
@@ -370,10 +355,10 @@ fn ensure_user_desktop_integration() {
         if target.exists() {
             continue;
         }
-        if let Some(parent) = target.parent() {
-            if std::fs::create_dir_all(parent).is_err() {
-                continue;
-            }
+        if let Some(parent) = target.parent()
+            && std::fs::create_dir_all(parent).is_err()
+        {
+            continue;
         }
         if std::fs::write(&target, bytes).is_ok() {
             wrote_anything = true;

@@ -75,6 +75,29 @@
   </supports>
 
   <releases>
+    <release version="0.3.0" date="2026-05-18">
+      <description>
+        <p>v0.3 — polish, responsiveness, true per-tab isolation.</p>
+        <ul>
+          <li>True per-tab result-row isolation via a Rust-side
+              snapshot store — switching tabs preserves the full
+              result buffer + counters + within-filter state.</li>
+          <li>Responsive action toolbar — buttons wrap to additional
+              rows instead of clipping when the window narrows.</li>
+          <li>Taskbar icon — the pink gecko now resolves correctly
+              under Wayland / KDE Plasma via `setDesktopFileName`
+              + auto-install of the user-local hicolor icon theme.</li>
+          <li>Settings auto-save — every input commits to disk on
+              change; the Apply button is gone. A "Saved" pill
+              fades in for visual confirmation.</li>
+          <li>UX cleanup: Filters toggle now closes the drawer on
+              second click; Esc closes drawers when no search is
+              running; Export menu toggles; re-clicking the active
+              tab or nav item is a no-op (was a hidden side
+              effect).</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-05-18">
       <description>
         <p>v0.2 — full GUI feature parity with Grex on Linux.</p>
