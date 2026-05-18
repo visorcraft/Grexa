@@ -86,6 +86,20 @@ fn main() {
             .set_organization_domain(&QString::from("visorcraft.io"));
     }
 
+    // Wayland's `app_id` and X11's `WM_CLASS` map to this string.
+    // Setting it BEFORE the first window is shown ties the live
+    // application to the io.visorcraft.Grexa.desktop file (and its
+    // Icon= entry), so the taskbar / dock / alt-tab switcher
+    // resolves the pink-gecko icon from the user's hicolor theme.
+    cxx_qt_lib::QGuiApplication::set_desktop_file_name(&QString::from("io.visorcraft.Grexa"));
+
+    // Best-effort: populate the user's local icon theme + desktop
+    // entry from bytes embedded at compile time, so a dev running
+    // `cargo run -p grexa` sees the right icon without first
+    // installing a packaged build. Idempotent — only writes when
+    // the target file is missing or older than the embedded copy.
+    ensure_user_desktop_integration();
+
     // App-wide font. Inter first; fall through to Cantarell (GNOME),
     // Noto Sans (most distros), then the platform default.
     let mut font = QFont::default();
@@ -268,6 +282,125 @@ unsafe extern "C" {
 
 const LOCK_EX: i32 = 2;
 const LOCK_NB: i32 = 4;
+
+/// Populate `$XDG_DATA_HOME` with our `.desktop` file and the
+/// hicolor icon set so the running session can resolve our
+/// `app_id` to the pink-gecko icon. The bytes are baked into the
+/// binary via `include_bytes!`, so a dev box with no packaged
+/// install gets correct branding from `cargo run`.
+///
+/// Idempotent: only writes a destination file when it's missing
+/// (so a packaged install on `/usr/share/...` continues to win
+/// because the user's `~/.local/share/...` only gets a copy when
+/// there's nothing there yet). After a fresh install we ping
+/// `kbuildsycoca6` (Plasma) and `update-desktop-database` /
+/// `gtk-update-icon-cache` (GNOME / generic) so the icon shows
+/// up without a logout-login cycle. All side effects are
+/// best-effort — failures fall through silently.
+fn ensure_user_desktop_integration() {
+    let data_home = match std::env::var_os("XDG_DATA_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|h| {
+                let mut p = std::path::PathBuf::from(h);
+                p.push(".local/share");
+                p
+            })
+        }) {
+        Some(p) => p,
+        None => return,
+    };
+
+    let desktop_bytes = include_bytes!("../../../packaging/io.visorcraft.Grexa.desktop");
+    let scalable_svg = include_bytes!("../../../packaging/icons/scalable/io.visorcraft.Grexa.svg");
+    let icon_16 =
+        include_bytes!("../../../packaging/icons/16x16/apps/io.visorcraft.Grexa.png").as_slice();
+    let icon_24 =
+        include_bytes!("../../../packaging/icons/24x24/apps/io.visorcraft.Grexa.png").as_slice();
+    let icon_32 =
+        include_bytes!("../../../packaging/icons/32x32/apps/io.visorcraft.Grexa.png").as_slice();
+    let icon_48 =
+        include_bytes!("../../../packaging/icons/48x48/apps/io.visorcraft.Grexa.png").as_slice();
+    let icon_64 =
+        include_bytes!("../../../packaging/icons/64x64/apps/io.visorcraft.Grexa.png").as_slice();
+    let icon_96 =
+        include_bytes!("../../../packaging/icons/96x96/apps/io.visorcraft.Grexa.png").as_slice();
+    let icon_128 =
+        include_bytes!("../../../packaging/icons/128x128/apps/io.visorcraft.Grexa.png").as_slice();
+    let icon_192 =
+        include_bytes!("../../../packaging/icons/192x192/apps/io.visorcraft.Grexa.png").as_slice();
+    let icon_256 =
+        include_bytes!("../../../packaging/icons/256x256/apps/io.visorcraft.Grexa.png").as_slice();
+    let icon_512 =
+        include_bytes!("../../../packaging/icons/512x512/apps/io.visorcraft.Grexa.png").as_slice();
+
+    let pairs: [(&str, &[u8]); 12] = [
+        ("applications/io.visorcraft.Grexa.desktop", desktop_bytes),
+        (
+            "icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg",
+            scalable_svg,
+        ),
+        ("icons/hicolor/16x16/apps/io.visorcraft.Grexa.png", icon_16),
+        ("icons/hicolor/24x24/apps/io.visorcraft.Grexa.png", icon_24),
+        ("icons/hicolor/32x32/apps/io.visorcraft.Grexa.png", icon_32),
+        ("icons/hicolor/48x48/apps/io.visorcraft.Grexa.png", icon_48),
+        ("icons/hicolor/64x64/apps/io.visorcraft.Grexa.png", icon_64),
+        ("icons/hicolor/96x96/apps/io.visorcraft.Grexa.png", icon_96),
+        (
+            "icons/hicolor/128x128/apps/io.visorcraft.Grexa.png",
+            icon_128,
+        ),
+        (
+            "icons/hicolor/192x192/apps/io.visorcraft.Grexa.png",
+            icon_192,
+        ),
+        (
+            "icons/hicolor/256x256/apps/io.visorcraft.Grexa.png",
+            icon_256,
+        ),
+        (
+            "icons/hicolor/512x512/apps/io.visorcraft.Grexa.png",
+            icon_512,
+        ),
+    ];
+
+    let mut wrote_anything = false;
+    for (rel, bytes) in pairs.iter() {
+        let target = data_home.join(rel);
+        if target.exists() {
+            continue;
+        }
+        if let Some(parent) = target.parent() {
+            if std::fs::create_dir_all(parent).is_err() {
+                continue;
+            }
+        }
+        if std::fs::write(&target, bytes).is_ok() {
+            wrote_anything = true;
+        }
+    }
+
+    if wrote_anything {
+        // Best-effort cache refresh so the icon shows up without
+        // a session restart. Ignore exit codes — distros that
+        // don't ship the tool just skip the refresh.
+        let _ = std::process::Command::new("kbuildsycoca6")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        let _ = std::process::Command::new("update-desktop-database")
+            .arg(data_home.join("applications"))
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        let _ = std::process::Command::new("gtk-update-icon-cache")
+            .arg("-t")
+            .arg(data_home.join("icons/hicolor"))
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+}
 
 /// `std::io::Write` adapter that replaces the user's `$HOME` with
 /// `~` before forwarding bytes to the inner writer. Designed for
