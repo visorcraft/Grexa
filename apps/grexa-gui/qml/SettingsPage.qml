@@ -21,6 +21,17 @@ Kirigami.ScrollablePage {
 
     Component.onCompleted: settings.reload()
 
+    // Every settings input calls `commit()` on change so the user
+    // never has to remember to hit Apply. Saves are atomic on the
+    // Rust side (write to settings.json then rename), so this is
+    // cheap and safe to call on every keystroke / toggle. The AI
+    // controller also re-reads so the chat panel sees endpoint /
+    // model changes without restarting.
+    function commit() {
+        page.settings.apply()
+        page.ai.reloadFromSettings()
+    }
+
     ColumnLayout {
         width: page.width
         spacing: 0
@@ -55,11 +66,52 @@ Kirigami.ScrollablePage {
                         font.weight: app.tokens.weightBold
                     }
                     Controls.Label {
-                        text: page.settings.lastSaveStatus.length > 0
-                            ? page.settings.lastSaveStatus
-                            : qsTr("Preferences persist to ~/.config/grexa/settings.json")
+                        text: qsTr("Auto-saved to ~/.config/grexa/settings.json")
                         font.pixelSize: app.tokens.textCaption
                         opacity: 0.6
+                    }
+                }
+                // Saved indicator — appears briefly after a commit
+                // so the user gets a small "yes, I saved" signal
+                // without a button to press. Fades out a second
+                // later via the timer.
+                Rectangle {
+                    Layout.preferredHeight: 26
+                    Layout.preferredWidth: savedLabel.implicitWidth + app.tokens.spaceL * 2 + 8
+                    radius: app.tokens.radiusPill
+                    color: app.tokens.accentMute
+                    border.color: app.tokens.accent
+                    border.width: 1
+                    opacity: savedTimer.running ? 1.0 : 0.0
+                    Behavior on opacity { NumberAnimation { duration: app.tokens.durationNormal } }
+                    RowLayout {
+                        anchors.centerIn: parent
+                        spacing: app.tokens.spaceXS
+                        Kirigami.Icon {
+                            source: "dialog-ok-symbolic"
+                            implicitWidth: 12
+                            implicitHeight: 12
+                            color: app.tokens.accent
+                            isMask: true
+                        }
+                        Controls.Label {
+                            id: savedLabel
+                            text: qsTr("Saved")
+                            font.pixelSize: app.tokens.textCaption
+                            font.weight: app.tokens.weightSemibold
+                            color: app.tokens.accent
+                        }
+                    }
+                }
+                Timer {
+                    id: savedTimer
+                    interval: 1400
+                    repeat: false
+                }
+                Connections {
+                    target: page.settings
+                    function onLastSaveStatusChanged() {
+                        if (page.settings.lastSaveStatus === "Saved") savedTimer.restart()
                     }
                 }
                 Controls.Button {
@@ -67,18 +119,9 @@ Kirigami.ScrollablePage {
                     icon.name: "view-refresh"
                     text: qsTr("Reload")
                     display: Controls.AbstractButton.TextBesideIcon
+                    Controls.ToolTip.text: qsTr("Re-read settings.json from disk (useful after editing the file by hand).")
+                    Controls.ToolTip.visible: hovered
                     onClicked: page.settings.reload()
-                }
-                PrimaryButton {
-                    text: qsTr("Apply")
-                    icon.name: "dialog-ok-apply"
-                    onClicked: {
-                        page.settings.apply()
-                        // Push the newly persisted endpoint/model/key
-                        // state into the AI controller so the chat
-                        // panel sees changes without restarting.
-                        page.ai.reloadFromSettings()
-                    }
                 }
             }
         }
@@ -111,7 +154,7 @@ Kirigami.ScrollablePage {
                             qsTr("Tiefling"), qsTr("Vibes"),
                         ]
                         currentIndex: page.settings.theme
-                        onActivated: page.settings.theme = currentIndex
+                        onActivated: { page.settings.theme = currentIndex; page.commit() }
                     }
                 }
             }
@@ -129,37 +172,37 @@ Kirigami.ScrollablePage {
                     Controls.CheckBox {
                         text: qsTr("Regex by default")
                         checked: page.settings.regex
-                        onToggled: page.settings.regex = checked
+                        onToggled: { page.settings.regex = checked; page.commit() }
                     }
                     Controls.CheckBox {
                         text: qsTr("Files-mode by default")
                         checked: page.settings.filesSearchMode
-                        onToggled: page.settings.filesSearchMode = checked
+                        onToggled: { page.settings.filesSearchMode = checked; page.commit() }
                     }
                     Controls.CheckBox {
                         text: qsTr("Respect .gitignore")
                         checked: page.settings.respectGitignore
-                        onToggled: page.settings.respectGitignore = checked
+                        onToggled: { page.settings.respectGitignore = checked; page.commit() }
                     }
                     Controls.CheckBox {
                         text: qsTr("Case sensitive")
                         checked: page.settings.caseSensitive
-                        onToggled: page.settings.caseSensitive = checked
+                        onToggled: { page.settings.caseSensitive = checked; page.commit() }
                     }
                     Controls.CheckBox {
                         text: qsTr("Include subfolders")
                         checked: page.settings.includeSubfolders
-                        onToggled: page.settings.includeSubfolders = checked
+                        onToggled: { page.settings.includeSubfolders = checked; page.commit() }
                     }
                     Controls.CheckBox {
                         text: qsTr("Include hidden")
                         checked: page.settings.includeHidden
-                        onToggled: page.settings.includeHidden = checked
+                        onToggled: { page.settings.includeHidden = checked; page.commit() }
                     }
                     Controls.CheckBox {
                         text: qsTr("Include binary/docs")
                         checked: page.settings.includeBinary
-                        onToggled: page.settings.includeBinary = checked
+                        onToggled: { page.settings.includeBinary = checked; page.commit() }
                     }
                 }
             }
@@ -181,7 +224,13 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         placeholderText: "*.rs|*.toml|-target*"
                         text: page.settings.defaultMatchFiles
+                        // Text fields commit on editing-finished (focus
+                        // loss / Enter) rather than every keystroke so
+                        // we don't thrash settings.json while the user
+                        // is mid-edit. Keystroke updates still flow
+                        // through the qproperty for live preview.
                         onTextEdited: page.settings.defaultMatchFiles = text
+                        onEditingFinished: page.commit()
                     }
                     Controls.Label {
                         text: qsTr("Exclude dirs")
@@ -194,6 +243,7 @@ Kirigami.ScrollablePage {
                         placeholderText: "node_modules, target, .venv"
                         text: page.settings.defaultExcludeDirs
                         onTextEdited: page.settings.defaultExcludeDirs = text
+                        onEditingFinished: page.commit()
                     }
                 }
             }
@@ -211,13 +261,13 @@ Kirigami.ScrollablePage {
                     Controls.SpinBox {
                         from: 0; to: 50
                         value: page.settings.contextLinesBefore
-                        onValueModified: page.settings.contextLinesBefore = value
+                        onValueModified: { page.settings.contextLinesBefore = value; page.commit() }
                     }
                     Controls.Label { text: qsTr("Lines after") }
                     Controls.SpinBox {
                         from: 0; to: 50
                         value: page.settings.contextLinesAfter
-                        onValueModified: page.settings.contextLinesAfter = value
+                        onValueModified: { page.settings.contextLinesAfter = value; page.commit() }
                     }
                 }
             }
@@ -230,7 +280,7 @@ Kirigami.ScrollablePage {
                 Controls.CheckBox {
                     text: qsTr("Enable container search")
                     checked: page.settings.enableContainerSearch
-                    onToggled: page.settings.enableContainerSearch = checked
+                    onToggled: { page.settings.enableContainerSearch = checked; page.commit() }
                 }
             }
 
@@ -246,7 +296,7 @@ Kirigami.ScrollablePage {
                     Controls.CheckBox {
                         text: qsTr("Enable AI chat panel on the Search page")
                         checked: page.settings.aiSearchEnabled
-                        onToggled: page.settings.aiSearchEnabled = checked
+                        onToggled: { page.settings.aiSearchEnabled = checked; page.commit() }
                     }
 
                     GridLayout {
@@ -264,6 +314,7 @@ Kirigami.ScrollablePage {
                                 page.settings.aiEndpoint = text
                                 page.ai.endpoint = text
                             }
+                            onEditingFinished: page.commit()
                         }
                         Controls.Label { text: qsTr("Model") }
                         Controls.TextField {
@@ -274,6 +325,7 @@ Kirigami.ScrollablePage {
                                 page.settings.aiModel = text
                                 page.ai.model = text
                             }
+                            onEditingFinished: page.commit()
                         }
                         Controls.Label { text: qsTr("API key") }
                         RowLayout {
@@ -353,7 +405,7 @@ Kirigami.ScrollablePage {
                                 qsTr("Neovim (terminal)"), qsTr("System default (xdg-open)"),
                             ]
                             currentIndex: page.settings.editorPreset
-                            onActivated: page.settings.editorPreset = currentIndex
+                            onActivated: { page.settings.editorPreset = currentIndex; page.commit() }
                         }
                     }
                     Controls.Label {
@@ -367,6 +419,7 @@ Kirigami.ScrollablePage {
                         placeholderText: "kate --line {line} {path}"
                         text: page.settings.editorCustomCommand
                         onTextEdited: page.settings.editorCustomCommand = text
+                        onEditingFinished: page.commit()
                     }
                 }
             }
@@ -382,12 +435,12 @@ Kirigami.ScrollablePage {
                     Controls.CheckBox {
                         text: qsTr("Confirm before replacing")
                         checked: page.settings.replaceConfirm
-                        onToggled: page.settings.replaceConfirm = checked
+                        onToggled: { page.settings.replaceConfirm = checked; page.commit() }
                     }
                     Controls.CheckBox {
                         text: qsTr("Surface residual journal on startup")
                         checked: page.settings.replaceShowJournalOnStartup
-                        onToggled: page.settings.replaceShowJournalOnStartup = checked
+                        onToggled: { page.settings.replaceShowJournalOnStartup = checked; page.commit() }
                     }
                 }
             }
@@ -403,12 +456,12 @@ Kirigami.ScrollablePage {
                     Controls.CheckBox {
                         text: qsTr("Reduce motion")
                         checked: page.settings.accessibilityReducedMotion
-                        onToggled: page.settings.accessibilityReducedMotion = checked
+                        onToggled: { page.settings.accessibilityReducedMotion = checked; page.commit() }
                     }
                     Controls.CheckBox {
                         text: qsTr("High contrast")
                         checked: page.settings.accessibilityHighContrast
-                        onToggled: page.settings.accessibilityHighContrast = checked
+                        onToggled: { page.settings.accessibilityHighContrast = checked; page.commit() }
                     }
                 }
             }
@@ -421,7 +474,7 @@ Kirigami.ScrollablePage {
                 Controls.CheckBox {
                     text: qsTr("Redact paths in diagnostics")
                     checked: page.settings.privacyRedactPaths
-                    onToggled: page.settings.privacyRedactPaths = checked
+                    onToggled: { page.settings.privacyRedactPaths = checked; page.commit() }
                 }
             }
 
