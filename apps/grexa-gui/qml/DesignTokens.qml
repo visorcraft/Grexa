@@ -75,18 +75,57 @@ QtObject {
         return ""   // empty → Qt picks the platform default
     }
 
-    // ---- Accent palette --------------------------------------------
-    // Cobalt-leaning blue — slightly more saturated than the
-    // previous tone so the primary action and selection feel
-    // confident without becoming neon. Used for the primary button,
-    // focus rings, selection highlights, and the active-nav pill.
-    readonly property color accent:        "#2D7FF9"
-    readonly property color accentHover:   "#4892FB"
-    readonly property color accentPressed: "#1F6BDB"
-    readonly property color accentDeep:    "#1656B8"
-    readonly property color accentMute:    Qt.rgba(0.18, 0.50, 0.98, 0.14)
-    readonly property color accentMuteStrong: Qt.rgba(0.18, 0.50, 0.98, 0.22)
-    readonly property color accentRing:    Qt.rgba(0.18, 0.50, 0.98, 0.32)
+    // ---- Per-theme palette -----------------------------------------
+    // Mirrors upstream Grex's MainWindow.xaml.cs theme stops so a
+    // Grex user can pick the same name and get the same look. Each
+    // entry exposes five stops:
+    //   bg        — canvas / window background
+    //   secondary — sidebar chrome, card surface
+    //   tertiary  — hover / pressed lift, accent-adjacent fills
+    //   text      — primary text color (must read on bg)
+    //   accent    — active row, primary button, focus ring, selection
+    //
+    // Themes 0/1/2 (System/Light/Dark) intentionally return null for
+    // bg/secondary/tertiary so the host Kirigami palette stays in
+    // charge of the chrome — only the accent is forced for those.
+    //
+    // Index map (matches SettingsPage.qml's ComboBox and the
+    // ThemePreference enum on the Rust side):
+    //   0 Follow system  3 Gentle Gecko  6 Dreams      9 Subspace
+    //   1 Light          4 Black Knight  7 Paranoid   10 Tiefling
+    //   2 Dark           5 Diamond       8 Red Velvet 11 Vibes
+    readonly property int themeIdx: app.settingsController
+        ? app.settingsController.theme : 0
+
+    function themePalette(idx) {
+        switch (idx) {
+            case 3:  return { bg: "#000000", secondary: "#003322", tertiary: "#00593D", text: "#FFFFFF", accent: "#00B86B" } // Gentle Gecko
+            case 4:  return { bg: "#000000", secondary: "#003366", tertiary: "#00478F", text: "#FFFFFF", accent: "#0078D4" } // Black Knight
+            case 5:  return { bg: "#2D5B67", secondary: "#4F7F8C", tertiary: "#7CA2B1", text: "#B9DAE9", accent: "#A5C5D5" } // Diamond
+            case 6:  return { bg: "#210B4B", secondary: "#3F1C6D", tertiary: "#6A2A98", text: "#FF3D94", accent: "#B5307E" } // Dreams
+            case 7:  return { bg: "#1D1D4E", secondary: "#3F3F88", tertiary: "#5F5FBF", text: "#D2D2F4", accent: "#9A9AE0" } // Paranoid
+            case 8:  return { bg: "#1A0F0F", secondary: "#3C1414", tertiary: "#8B2323", text: "#FFDCDC", accent: "#DC3C3C" } // Red Velvet
+            case 9:  return { bg: "#2E1A47", secondary: "#4A2A6A", tertiary: "#794B8B", text: "#E2C7E6", accent: "#B77BB4" } // Subspace
+            case 10: return { bg: "#3A0A4D", secondary: "#711D9A", tertiary: "#A42DB4", text: "#F9C54E", accent: "#FF5C8A" } // Tiefling
+            case 11: return { bg: "#0F0F1E", secondary: "#1E1E3C", tertiary: "#CC00FF", text: "#00FFCC", accent: "#FFCC00" } // Vibes
+            case 1:  return { bg: "#F5F5F5", secondary: null,      tertiary: null,      text: "#1A1A1A", accent: "#2D7FF9" } // Light
+            case 2:  return { bg: "#181818", secondary: null,      tertiary: null,      text: "#F5F5F5", accent: "#2D7FF9" } // Dark
+            default: return { bg: null,      secondary: null,      tertiary: null,      text: null,      accent: "#2D7FF9" } // System
+        }
+    }
+    readonly property var palette: themePalette(themeIdx)
+    readonly property bool customPalette: themeIdx >= 3
+
+    // ---- Accent ----------------------------------------------------
+    // Derived: hover / pressed are tonal shifts; mute is the alpha
+    // wash used for the active nav row fill and selection tint.
+    readonly property color accent:        palette.accent
+    readonly property color accentHover:   Qt.lighter(accent, 1.15)
+    readonly property color accentPressed: Qt.darker(accent, 1.15)
+    readonly property color accentDeep:    Qt.darker(accent, 1.55)
+    readonly property color accentMute:    Qt.rgba(accent.r, accent.g, accent.b, 0.18)
+    readonly property color accentMuteStrong: Qt.rgba(accent.r, accent.g, accent.b, 0.28)
+    readonly property color accentRing:    Qt.rgba(accent.r, accent.g, accent.b, 0.40)
     readonly property color accentText:    "#FFFFFF"
 
     // Secondary accent (warm amber) — reserved for match-highlight
@@ -109,36 +148,55 @@ QtObject {
     // by cards and rows; `surface2` is the highest-lift state
     // (hover/press, raised pills). Derived from Kirigami so the
     // overall feel still follows the host palette in light / dark.
-    readonly property color surface0:     Kirigami.Theme.backgroundColor
-    // The sidebar uses a noticeably darker tint on dark themes and a
-    // cool warm tint on light themes — enough contrast to read as
-    // a distinct chrome panel without becoming a banded slab.
-    readonly property color surfaceSidebar: Qt.tint(Kirigami.Theme.backgroundColor,
-                                                    isDark
-                                                        ? Qt.rgba(0.0, 0.0, 0.0, 0.22)
-                                                        : Qt.rgba(0.20, 0.30, 0.50, 0.06))
-    // surface1 is the "elevated row / bar" colour — clearly above
-    // canvas on either theme. surface2 is the highest lift, used
-    // for hover/press states and headlines.
-    readonly property color surface1:     Qt.tint(Kirigami.Theme.backgroundColor,
-                                                  isDark
-                                                      ? Qt.rgba(1, 1, 1, 0.07)
-                                                      : Qt.rgba(0, 0, 0, 0.04))
-    readonly property color surface2:     Qt.tint(Kirigami.Theme.backgroundColor,
-                                                  isDark
-                                                      ? Qt.rgba(1, 1, 1, 0.12)
-                                                      : Qt.rgba(0, 0, 0, 0.07))
+    // surface0  — canvas / page background
+    // surfaceSidebar — chrome panel; uses the palette's secondary
+    //   when defined, otherwise a luminance tint over the host bg
+    // surface1  — elevated row / card surface (above canvas)
+    // surface2  — highest lift, hover / press states, headlines
+    //
+    // For named themes (idx >= 3) the surfaces come straight from
+    // Grex's per-theme color stops. For System/Light/Dark, surfaces
+    // are derived from the host Kirigami background with luminance
+    // tints — preserving the original Mailspring-style chrome.
+    readonly property color surface0: customPalette
+        ? palette.bg
+        : (palette.bg !== null ? palette.bg : Kirigami.Theme.backgroundColor)
+    readonly property color surfaceSidebar: {
+        if (customPalette) return palette.secondary
+        return Qt.tint(surface0,
+                       isDark
+                           ? Qt.rgba(0.0, 0.0, 0.0, 0.22)
+                           : Qt.rgba(0.20, 0.30, 0.50, 0.06))
+    }
+    readonly property color surface1: {
+        if (customPalette) return palette.secondary
+        return Qt.tint(surface0,
+                       isDark ? Qt.rgba(1, 1, 1, 0.07)
+                              : Qt.rgba(0, 0, 0, 0.04))
+    }
+    readonly property color surface2: {
+        if (customPalette) return palette.tertiary
+        return Qt.tint(surface0,
+                       isDark ? Qt.rgba(1, 1, 1, 0.12)
+                              : Qt.rgba(0, 0, 0, 0.07))
+    }
+    // Primary text color — overridden for named themes so high-
+    // chroma palettes (Tiefling's gold text on plum, Dreams's pink
+    // on violet) match Grex.
+    readonly property color textPrimary: customPalette
+        ? palette.text
+        : Kirigami.Theme.textColor
     readonly property color surfaceCard:  surface1
     // High-contrast biases the separator alpha up so card edges
     // remain visible against very light or very dark wallpapers.
-    readonly property color separator:    Qt.rgba(Kirigami.Theme.textColor.r,
-                                                  Kirigami.Theme.textColor.g,
-                                                  Kirigami.Theme.textColor.b,
+    readonly property color separator:    Qt.rgba(textPrimary.r,
+                                                  textPrimary.g,
+                                                  textPrimary.b,
                                                   highContrast ? (isDark ? 0.32 : 0.22)
                                                                : (isDark ? 0.12 : 0.09))
-    readonly property color separatorStrong: Qt.rgba(Kirigami.Theme.textColor.r,
-                                                     Kirigami.Theme.textColor.g,
-                                                     Kirigami.Theme.textColor.b,
+    readonly property color separatorStrong: Qt.rgba(textPrimary.r,
+                                                     textPrimary.g,
+                                                     textPrimary.b,
                                                      highContrast ? (isDark ? 0.50 : 0.38)
                                                                   : (isDark ? 0.22 : 0.16))
     readonly property color selection:    accentMute

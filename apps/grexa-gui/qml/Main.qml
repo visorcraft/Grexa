@@ -23,6 +23,21 @@ Kirigami.ApplicationWindow {
     minimumHeight: 600
     visible: true
 
+    // Cascade our per-theme palette through Kirigami's attached
+    // Theme so Pages, Cards, Labels, and Controls pick up the
+    // canvas / text / highlight colors. With `inherit: false` we
+    // override the host palette; descendants then inherit OURS
+    // unless they re-override locally. Themes 0/1/2 (System / Light
+    // / Dark) skip the bg + text overrides so the host Kirigami
+    // theme keeps owning the chrome.
+    Kirigami.Theme.inherit: false
+    Kirigami.Theme.colorSet: Kirigami.Theme.Window
+    Kirigami.Theme.backgroundColor: tokens.surface0
+    Kirigami.Theme.textColor: tokens.textPrimary
+    Kirigami.Theme.highlightColor: tokens.accent
+    Kirigami.Theme.highlightedTextColor: tokens.accentText
+    color: tokens.surface0
+
     Component.onCompleted: {
         app.raise()
         app.requestActivate()
@@ -186,13 +201,30 @@ Kirigami.ApplicationWindow {
     // than canvas), generous padding, ALL-CAPS micro-section labels,
     // and full-width pill rows for nav items. A hairline at the
     // right edge keeps the boundary clean without a hard divider.
-    globalDrawer: Kirigami.OverlayDrawer {
+    //
+    // `collapsible: true` gives the built-in handle Kirigami renders
+    // at the bottom edge — clicking it toggles the drawer between
+    // its full width and an icon-only strip ("Open Sidebar" /
+    // "Close Sidebar"). Section labels and the wordmark hide in the
+    // collapsed state so the strip stays clean.
+    globalDrawer: Kirigami.GlobalDrawer {
         id: drawer
         edge: Qt.LeftEdge
         modal: false
         drawerOpen: true
-        width: Kirigami.Units.gridUnit * 14
+        collapsible: true
+        collapsed: false
+        // Explicit width binding — Kirigami's default
+        // `width = collapsed ? collapsedSize : implicitWidth` is
+        // broken by setting `width:` at all, so we drive both states
+        // ourselves. Collapsed value matches LinSync's icon strip;
+        // expanded uses our previous 14-gridUnit chrome width.
+        width: drawer.isCollapsed ? Kirigami.Units.gridUnit * 3
+                                  : Kirigami.Units.gridUnit * 14
+        Behavior on width { NumberAnimation { duration: tokens.durationSnap; easing.type: Easing.OutCubic } }
         handleVisible: false
+
+        readonly property bool isCollapsed: drawer.collapsible && drawer.collapsed
 
         background: Rectangle {
             color: tokens.surfaceSidebar
@@ -216,16 +248,37 @@ Kirigami.ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 64
                 Layout.topMargin: tokens.spaceL
-                Layout.leftMargin: tokens.spaceL
-                Layout.rightMargin: tokens.spaceL
+                Layout.leftMargin: drawer.isCollapsed ? 0 : tokens.spaceL
+                Layout.rightMargin: drawer.isCollapsed ? 0 : tokens.spaceL
                 Layout.bottomMargin: tokens.spaceL
                 spacing: tokens.spaceM
 
+                // Hamburger toggle — collapses / expands the sidebar.
+                // `globalToolBar.style: None` suppresses Kirigami's
+                // own header hamburger, so we host one here instead.
+                // Sits at the leftmost edge of the header so it stays
+                // anchored in the same spot when the sidebar collapses;
+                // centers in the narrow strip via the row's margins.
+                Controls.ToolButton {
+                    Layout.alignment: drawer.isCollapsed
+                                          ? Qt.AlignHCenter | Qt.AlignVCenter
+                                          : Qt.AlignVCenter
+                    Layout.fillWidth: drawer.isCollapsed
+                    icon.name: "application-menu-symbolic"
+                    display: Controls.AbstractButton.IconOnly
+                    Controls.ToolTip.text: drawer.isCollapsed ? qsTr("Open Sidebar")
+                                                              : qsTr("Close Sidebar")
+                    Controls.ToolTip.visible: hovered
+                    Controls.ToolTip.delay: 400
+                    Accessible.name: Controls.ToolTip.text
+                    onClicked: drawer.collapsed = !drawer.collapsed
+                }
                 Rectangle {
                     Layout.preferredWidth: 40
                     Layout.preferredHeight: 40
                     radius: tokens.radiusAvatar
                     color: "transparent"
+                    visible: !drawer.isCollapsed
                     Image {
                         anchors.fill: parent
                         source: "qrc:/qt/qml/com/visorcraft/Grexa/resources/grexa.png"
@@ -238,6 +291,7 @@ Kirigami.ApplicationWindow {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 1
+                    visible: !drawer.isCollapsed
                     Controls.Label {
                         text: "Grexa"
                         font.pixelSize: tokens.textSubheading + 1
@@ -265,12 +319,14 @@ Kirigami.ApplicationWindow {
                 font.weight: tokens.weightSemibold
                 font.letterSpacing: 1.6
                 opacity: 0.5
+                visible: !drawer.isCollapsed
             }
             NavItem {
                 Layout.fillWidth: true
                 label: qsTr("Search")
                 iconName: "edit-find-symbolic"
                 active: app.currentPageKey === "search"
+                compact: drawer.isCollapsed
                 onTriggered: app.goTo("search")
             }
 
@@ -286,12 +342,14 @@ Kirigami.ApplicationWindow {
                 font.weight: tokens.weightSemibold
                 font.letterSpacing: 1.6
                 opacity: 0.5
+                visible: !drawer.isCollapsed
             }
             NavItem {
                 Layout.fillWidth: true
                 label: qsTr("Regex Builder")
                 iconName: "code-context-symbolic"
                 active: app.currentPageKey === "regex"
+                compact: drawer.isCollapsed
                 onTriggered: app.goTo("regex")
             }
             NavItem {
@@ -299,6 +357,7 @@ Kirigami.ApplicationWindow {
                 label: qsTr("History")
                 iconName: "history-symbolic"
                 active: app.currentPageKey === "history"
+                compact: drawer.isCollapsed
                 onTriggered: app.goTo("history")
             }
             NavItem {
@@ -306,6 +365,7 @@ Kirigami.ApplicationWindow {
                 label: qsTr("Profiles")
                 iconName: "document-save-symbolic"
                 active: app.currentPageKey === "profiles"
+                compact: drawer.isCollapsed
                 onTriggered: app.goTo("profiles")
             }
             NavItem {
@@ -313,6 +373,7 @@ Kirigami.ApplicationWindow {
                 label: qsTr("Settings")
                 iconName: "settings-configure-symbolic"
                 active: app.currentPageKey === "settings"
+                compact: drawer.isCollapsed
                 onTriggered: app.goTo("settings")
             }
             NavItem {
@@ -320,14 +381,15 @@ Kirigami.ApplicationWindow {
                 label: qsTr("About")
                 iconName: "help-about-symbolic"
                 active: app.currentPageKey === "about"
+                compact: drawer.isCollapsed
                 onTriggered: app.goTo("about")
             }
 
             Item { Layout.fillHeight: true; Layout.fillWidth: true }
 
             // -- Footer — version pill on the left, license badge
-            // on the right. No hard divider; the breathing room
-            // sells the separation.
+            // on the right. Hidden when the sidebar is collapsed
+            // so the icon strip stays clean.
             RowLayout {
                 Layout.fillWidth: true
                 Layout.leftMargin: tokens.spaceL
@@ -335,6 +397,7 @@ Kirigami.ApplicationWindow {
                 Layout.bottomMargin: tokens.spaceL
                 Layout.topMargin: tokens.spaceM
                 spacing: tokens.spaceS
+                visible: !drawer.isCollapsed
 
                 Rectangle {
                     radius: tokens.radiusPill

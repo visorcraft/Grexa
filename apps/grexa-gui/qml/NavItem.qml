@@ -21,6 +21,9 @@ Item {
     property string label: ""
     property string iconName: ""
     property bool active: false
+    // `compact` hides the text label so the row reads as an
+    // icon-only entry — used when the sidebar is collapsed.
+    property bool compact: false
     signal triggered()
 
     Rectangle {
@@ -58,6 +61,9 @@ Item {
             source: root.iconName
             implicitWidth: 18
             implicitHeight: 18
+            // Center the icon when there's no label to anchor against.
+            Layout.alignment: root.compact ? Qt.AlignHCenter : Qt.AlignLeft
+            Layout.fillWidth: root.compact
             color: root.active ? app.tokens.accent : Kirigami.Theme.textColor
             opacity: root.active ? 1.0 : 0.75
             isMask: true
@@ -71,9 +77,14 @@ Item {
             color: root.active ? app.tokens.accent : Kirigami.Theme.textColor
             opacity: root.active ? 1.0 : 0.88
             Layout.fillWidth: true
+            visible: !root.compact
             Behavior on color { ColorAnimation { duration: app.tokens.durationSnap } }
         }
     }
+
+    Controls.ToolTip.visible: root.compact && mouseArea.containsMouse
+    Controls.ToolTip.text: root.label
+    Controls.ToolTip.delay: 400
 
     MouseArea {
         id: mouseArea
