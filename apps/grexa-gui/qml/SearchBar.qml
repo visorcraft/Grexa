@@ -89,7 +89,11 @@ Item {
                 id: pathField
                 editable: true
                 textRole: "pathText"
+                // Preferred 300 but allow shrinking to a usable
+                // ~140 so a narrow window still shows the term
+                // input and primary action without clipping.
                 Layout.preferredWidth: 300
+                Layout.minimumWidth: 140
                 Layout.fillHeight: true
                 Layout.leftMargin: app.tokens.spaceS
                 font.pixelSize: app.tokens.textBody

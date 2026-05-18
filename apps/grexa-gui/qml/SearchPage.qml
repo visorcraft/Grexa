@@ -339,8 +339,14 @@ Kirigami.Page {
         // ============================================================
         // Action toolbar — target selector, mode toggle, filter +
         // replace buttons, Stop / Clear / AI assist + counter pill.
+        //
+        // We use `Flow` (not RowLayout) so the buttons wrap to a
+        // second row when the window narrows, instead of clipping off
+        // the right edge. Order matters: the most-used affordances
+        // come first so they stay on the visible first row even at
+        // narrow widths.
         // ============================================================
-        RowLayout {
+        Flow {
             Layout.fillWidth: true
             Layout.leftMargin: app.tokens.spaceXL
             Layout.rightMargin: app.tokens.spaceXL
@@ -355,7 +361,7 @@ Kirigami.Page {
             // hasn't opted into container search.
             Controls.ComboBox {
                 id: targetSelector
-                Layout.preferredWidth: 220
+                width: 220
                 model: ListModel {
                     id: targetModel
                     ListElement { label: "Local files";    kind: 0; containerId: "" }
@@ -411,7 +417,7 @@ Kirigami.Page {
             // model dedupes when `result_mode == 1`.
             Controls.ButtonGroup { id: modeGroup; exclusive: true }
             Controls.Button {
-                Layout.preferredWidth: 96
+                width: 96
                 Controls.ButtonGroup.group: modeGroup
                 checkable: true
                 checked: page.controller.resultMode === 0
@@ -422,7 +428,7 @@ Kirigami.Page {
                 }
             }
             Controls.Button {
-                Layout.preferredWidth: 72
+                width: 72
                 Controls.ButtonGroup.group: modeGroup
                 checkable: true
                 checked: page.controller.resultMode === 1
@@ -519,10 +525,13 @@ Kirigami.Page {
                 Controls.ToolTip.text: qsTr("Enable AI in Settings → AI Search to use this panel.")
                 onCheckedChanged: checked ? aiDrawer.open() : aiDrawer.close()
             }
-            Item { Layout.fillWidth: true }
             // Live status pill — match count + files, with a soft
             // accent fill and animated counter shimmer. Mailspring
             // uses similar pills for unread/important counters.
+            // In Flow, the pill ends up to the right of the visible
+            // buttons on the first row when there's room, otherwise
+            // wraps to the next row alongside the buttons that
+            // overflowed.
             Rectangle {
                 visible: page.controller.matchCount > 0
                 radius: app.tokens.radiusPill
