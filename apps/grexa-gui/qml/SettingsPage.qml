@@ -56,6 +56,7 @@ Kirigami.ScrollablePage {
                                      app.tokens.textPrimary.b, 0.55)
 
     property var settings: app.settingsController
+    readonly property var themeValues: [0, 1, 2, 12, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     property var ai: app.aiController
 
     // Latched copy of `settings.lastSaveStatus`. The pill reads
@@ -223,14 +224,17 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         model: [
                             qsTr("Follow system"), qsTr("Light"), qsTr("Dark"),
+                            qsTr("OLED Black"),
                             qsTr("Gentle Gecko"), qsTr("Black Knight"),
                             qsTr("Diamond"), qsTr("Dreams"), qsTr("Paranoid"),
                             qsTr("Red Velvet"), qsTr("Subspace"),
                             qsTr("Tiefling"), qsTr("Vibes"),
-                            qsTr("OLED Black"),
                         ]
-                        currentIndex: page.settings.theme
-                        onActivated: { page.settings.theme = currentIndex; page.commit() }
+                        currentIndex: page.themeValues.indexOf(page.settings.theme)
+                        onActivated: {
+                            page.settings.theme = page.themeValues[currentIndex]
+                            page.commit()
+                        }
                     }
                 }
             }

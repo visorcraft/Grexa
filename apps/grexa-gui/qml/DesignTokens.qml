@@ -91,8 +91,8 @@ QtObject {
     // (OLED Black) is Grexa-only: it follows Dark's accent and text
     // treatment but pins the canvas to true black.
     //
-    // Index map (matches SettingsPage.qml's ComboBox and the
-    // ThemePreference enum on the Rust side):
+    // Index map (matches the ThemePreference enum on the Rust side;
+    // SettingsPage.qml can display these in a friendlier order):
     //   0 Follow system  3 Gentle Gecko  6 Dreams      9 Subspace
     //   1 Light          4 Black Knight  7 Paranoid   10 Tiefling
     //   2 Dark           5 Diamond       8 Red Velvet 11 Vibes
