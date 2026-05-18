@@ -38,6 +38,11 @@ Kirigami.Page {
     palette.highlightedText: app.tokens.accentText
     palette.toolTipBase:     app.tokens.surface2
     palette.toolTipText:     app.tokens.textPrimary
+    palette.mid:             app.tokens.separator
+    palette.midlight:        app.tokens.surface1
+    palette.light:           app.tokens.surface2
+    palette.dark:            app.tokens.surface0
+    palette.shadow:          app.tokens.shadowFar
     palette.placeholderText: Qt.rgba(app.tokens.textPrimary.r,
                                      app.tokens.textPrimary.g,
                                      app.tokens.textPrimary.b, 0.55)
@@ -787,10 +792,9 @@ Kirigami.Page {
                         { col: 1, label: qsTr("Line"),  fill: false, align: Qt.AlignRight },
                         { col: 2, label: qsTr("Match"), fill: false, align: Qt.AlignLeft }
                     ]
-                    delegate: Controls.Button {
+                    delegate: AppFlatButton {
                         Layout.fillWidth: modelData.fill
                         Layout.preferredWidth: modelData.fill ? -1 : 80
-                        flat: true
                         contentItem: RowLayout {
                             spacing: 4
                             Controls.Label {

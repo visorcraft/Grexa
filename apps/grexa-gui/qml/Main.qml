@@ -66,9 +66,11 @@ Kirigami.ApplicationWindow {
     Component.onCompleted: {
         app.raise()
         app.requestActivate()
-        // GREXA_INITIAL_PAGE env var lets dev/QA jump to a specific
-        // page on launch — used for screenshot validation across the
-        // theme palette.
+        // First positional CLI arg lets dev/QA jump to a specific
+        // page on launch — used for screenshot validation across
+        // the theme palette. Usage: `grexa settings`, `grexa about`,
+        // etc. `arguments[0]` is the binary path; `arguments[1]` is
+        // the first user arg.
         const initial = Qt.application.arguments && Qt.application.arguments.length > 1
             ? Qt.application.arguments[1] : ""
         if (initial && ["search","regex","history","profiles","settings","about"].indexOf(initial) !== -1) {

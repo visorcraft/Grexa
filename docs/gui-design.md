@@ -83,8 +83,35 @@ apps/grexa-gui/
     ├── Card.qml                # rounded surface used by SettingsPage sections
     ├── EmptyState.qml          # shared empty-state illustration + copy
     ├── PrimaryButton.qml       # filled-accent primary action button
+    ├── AppTextField.qml        # themed TextField (re-states palette to dodge qqc2-desktop-style's inherit:false)
+    ├── AppComboBox.qml         # themed ComboBox (same pattern)
+    ├── AppCheckBox.qml         # themed CheckBox (replaces indicator delegate too)
+    ├── AppSpinBox.qml          # themed SpinBox (same pattern)
+    ├── AppFlatButton.qml       # themed flat Button — sets `flat: true` + Button colorSet overrides + icon.color
     └── DesignTokens.qml        # spacing / radius / colors / typography / a11y
 ```
+
+### Theming model
+
+User palettes (`Settings → Appearance`) map to a token table in
+`DesignTokens.qml` that mirrors upstream Grex's `MainWindow.xaml.cs`
+color stops. Tokens flow through three layers:
+
+1. **`Kirigami.Theme`** overrides on `ApplicationWindow` + each
+   `Page` cascade theme colors to children that respect Kirigami's
+   attached property.
+2. **Qt `palette.*`** overrides on the same items reach
+   QtQuick.Controls that read Qt's QPalette (Fusion-style backends
+   and any control that uses `palette.base` etc.).
+3. **`App*.qml` wrappers** re-state both layers at the *instance*
+   level on TextField / ComboBox / CheckBox / SpinBox / flat Button.
+   This is necessary because `qqc2-desktop-style` (the default
+   QtQuick.Controls style on Plasma) hardcodes
+   `Kirigami.Theme.inherit: false` on each of those control types,
+   blocking parent-level overrides. Instance-level attached
+   properties win over component defaults, so the wrappers force the
+   inheritance back on and re-state the colors from our tokens. New
+   forms should use the wrappers, not the raw `Controls.X`.
 
 ## Wiring contracts
 

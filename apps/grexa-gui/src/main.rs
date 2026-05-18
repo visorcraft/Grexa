@@ -82,24 +82,18 @@ fn main() {
     // Front-loading the write keeps the first launch clean too.
     ensure_user_desktop_integration();
 
-    // Force the QtQuick.Controls style to Fusion before the engine
-    // boots. The KDE default (qqc2-desktop-style) hardcodes
-    // `Kirigami.Theme.inherit: false` on TextField/ComboBox/
-    // CheckBox/etc., bypassing the per-theme Kirigami.Theme
-    // overrides we apply from QML — that leaves the inputs painted
-    // with the host's View colors regardless of the user's Theme
-    // selection (white text on white bg under Light). Fusion reads
-    // Qt's `palette` instead, which we drive from `DesignTokens`,
-    // so the whole theme stays internally consistent. Users can
-    // still override via QT_QUICK_CONTROLS_STYLE if they want the
-    // host KDE styling back.
-    // SAFETY: env mutation pre-Qt-init; no other threads running.
-    if std::env::var_os("QT_QUICK_CONTROLS_STYLE").is_none() {
-        // SAFETY: single-threaded, before QGuiApplication construction.
-        unsafe {
-            std::env::set_var("QT_QUICK_CONTROLS_STYLE", "Fusion");
-        }
-    }
+    // Note: an earlier revision tried to force
+    // QT_QUICK_CONTROLS_STYLE=Fusion here so Qt's palette would drive
+    // input backgrounds (Light theme white-on-white bug). Empirically,
+    // on this KDE Plasma 6 host the engine still resolved
+    // `qqc2-desktop-style` regardless of the env var, so the dance
+    // was dead. The theme story is instead handled in QML by the
+    // `App{TextField,ComboBox,CheckBox,SpinBox,FlatButton}` wrappers
+    // (apps/grexa-gui/qml/App*.qml), which re-state our token palette
+    // at the instance level — that wins over qqc2-desktop-style's
+    // `Kirigami.Theme.inherit: false` component default. If a future
+    // Qt revision changes the style resolution order we can revisit
+    // forcing Fusion from here, but until then it adds no value.
 
     let mut app = QGuiApplication::new();
     if app.is_null() {

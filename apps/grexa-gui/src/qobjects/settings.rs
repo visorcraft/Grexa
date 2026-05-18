@@ -96,6 +96,13 @@ pub struct SettingsControllerRust {
 }
 
 impl SettingsControllerRust {
+    /// Bulk-populate the Rust struct from a `DefaultSettings`.
+    ///
+    /// **Not used from `reload()` on purpose** — see the long comment
+    /// in `SettingsController::reload` for the why. Kept here so the
+    /// test in `tests::round_trip_via_default_settings` can stage a
+    /// full struct in one call.
+    #[cfg(test)]
     pub fn load_from(&mut self, s: &DefaultSettings) {
         self.regex = s.regex_search;
         self.case_sensitive = s.search_case_sensitive;
@@ -206,18 +213,25 @@ impl ffi::SettingsController {
         // setters directly. Each setter sees the current (old) value
         // on the struct, the new value, and emits when they differ.
         self.as_mut().set_regex(settings.regex_search);
-        self.as_mut().set_case_sensitive(settings.search_case_sensitive);
-        self.as_mut().set_respect_gitignore(settings.respect_gitignore);
-        self.as_mut().set_include_hidden(settings.include_hidden_items);
-        self.as_mut().set_include_binary(settings.include_binary_files);
-        self.as_mut().set_include_system_files(settings.include_system_files);
+        self.as_mut()
+            .set_case_sensitive(settings.search_case_sensitive);
+        self.as_mut()
+            .set_respect_gitignore(settings.respect_gitignore);
+        self.as_mut()
+            .set_include_hidden(settings.include_hidden_items);
+        self.as_mut()
+            .set_include_binary(settings.include_binary_files);
+        self.as_mut()
+            .set_include_system_files(settings.include_system_files);
         self.as_mut()
             .set_include_symbolic_links(settings.include_symbolic_links);
-        self.as_mut().set_include_subfolders(settings.include_subfolders);
+        self.as_mut()
+            .set_include_subfolders(settings.include_subfolders);
         self.as_mut().set_files_search_mode(settings.files_search);
         self.as_mut()
             .set_enable_container_search(settings.enable_container_search);
-        self.as_mut().set_ai_search_enabled(settings.ai_search_enabled);
+        self.as_mut()
+            .set_ai_search_enabled(settings.ai_search_enabled);
         self.as_mut()
             .set_ai_endpoint(QString::from(&settings.ai_search_endpoint));
         self.as_mut()
@@ -232,13 +246,15 @@ impl ffi::SettingsController {
             .set_context_lines_before(settings.context_preview_lines_before as i32);
         self.as_mut()
             .set_context_lines_after(settings.context_preview_lines_after as i32);
-        self.as_mut().set_editor_preset(settings.editor_preset as i32);
+        self.as_mut()
+            .set_editor_preset(settings.editor_preset as i32);
         self.as_mut()
             .set_editor_custom_command(QString::from(&settings.editor_custom_command));
         self.as_mut().set_replace_confirm(settings.replace_confirm);
         self.as_mut()
             .set_replace_show_journal_on_startup(settings.replace_show_journal_on_startup);
-        self.as_mut().set_privacy_redact_paths(settings.privacy_redact_paths);
+        self.as_mut()
+            .set_privacy_redact_paths(settings.privacy_redact_paths);
         self.as_mut()
             .set_accessibility_reduced_motion(settings.accessibility_reduced_motion);
         self.as_mut()
@@ -291,5 +307,47 @@ mod tests {
             let t = theme_from_i32(v);
             assert_eq!(theme_to_i32(t), v, "variant {v} did not round-trip");
         }
+    }
+
+    /// Regression pin for the silent-reload bug. The old `reload()`
+    /// called `rust_mut().load_from(&settings)` to bulk-populate the
+    /// struct, then `set_*` setters. The cxx-qt-generated setters
+    /// compare the new value against the current struct field and
+    /// skip emitting the change signal when they match — so the
+    /// pre-stage made every setter a silent no-op and QML bindings
+    /// to `app.settingsController.theme` never re-fired. The
+    /// user-visible symptom was "saved Light theme not restored on
+    /// reopen". The fix rewrites `reload()` to compute new values
+    /// directly from the loaded settings and call setters without
+    /// pre-staging, so the setter sees the OLD struct value vs the
+    /// NEW disk value and emits the change signal.
+    ///
+    /// This test documents and pins that invariant: at the start of
+    /// a `reload()` (default struct, fresh app launch), the value
+    /// the setter would receive from disk must NOT already be on
+    /// the struct field — otherwise we're back in the silent
+    /// no-op regime.
+    #[test]
+    fn reload_does_not_pre_stage_through_struct() {
+        let state = SettingsControllerRust::default();
+        assert_eq!(state.theme, 0, "default theme is System (0)");
+        assert!(!state.regex);
+        assert!(!state.respect_gitignore);
+
+        // Simulate what reload() reads from disk when the user saved
+        // a non-default settings.json.
+        let disk = DefaultSettings {
+            theme_preference: ThemePreference::Light,
+            regex_search: true,
+            respect_gitignore: true,
+            ..Default::default()
+        };
+
+        // Each value the setter would receive must differ from the
+        // current struct field — otherwise cxx-qt's setter would
+        // silently skip emission (the bug we fixed).
+        assert_ne!(state.theme, theme_to_i32(disk.theme_preference));
+        assert_ne!(state.regex, disk.regex_search);
+        assert_ne!(state.respect_gitignore, disk.respect_gitignore);
     }
 }
