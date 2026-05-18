@@ -82,6 +82,25 @@ fn main() {
     // Front-loading the write keeps the first launch clean too.
     ensure_user_desktop_integration();
 
+    // Force the QtQuick.Controls style to Fusion before the engine
+    // boots. The KDE default (qqc2-desktop-style) hardcodes
+    // `Kirigami.Theme.inherit: false` on TextField/ComboBox/
+    // CheckBox/etc., bypassing the per-theme Kirigami.Theme
+    // overrides we apply from QML — that leaves the inputs painted
+    // with the host's View colors regardless of the user's Theme
+    // selection (white text on white bg under Light). Fusion reads
+    // Qt's `palette` instead, which we drive from `DesignTokens`,
+    // so the whole theme stays internally consistent. Users can
+    // still override via QT_QUICK_CONTROLS_STYLE if they want the
+    // host KDE styling back.
+    // SAFETY: env mutation pre-Qt-init; no other threads running.
+    if std::env::var_os("QT_QUICK_CONTROLS_STYLE").is_none() {
+        // SAFETY: single-threaded, before QGuiApplication construction.
+        unsafe {
+            std::env::set_var("QT_QUICK_CONTROLS_STYLE", "Fusion");
+        }
+    }
+
     let mut app = QGuiApplication::new();
     if app.is_null() {
         tracing::error!("could not construct QGuiApplication — exiting");

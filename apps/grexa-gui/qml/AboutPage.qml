@@ -17,6 +17,14 @@ Kirigami.ScrollablePage {
     titleDelegate: Item {}
     globalToolBarStyle: Kirigami.ApplicationHeaderStyle.None
 
+    // See SettingsPage.qml — Pages render under the View colorSet.
+    Kirigami.Theme.inherit: false
+    Kirigami.Theme.colorSet: Kirigami.Theme.View
+    Kirigami.Theme.backgroundColor: app.tokens.surface0
+    Kirigami.Theme.textColor: app.tokens.textPrimary
+    Kirigami.Theme.highlightColor: app.tokens.accent
+    Kirigami.Theme.highlightedTextColor: app.tokens.accentText
+
     readonly property var features: [
         { icon: "edit-find-symbolic",        title: qsTr("Fast content search"),
           body: qsTr("Streams matches as files are scanned — no waiting for the whole tree.") },

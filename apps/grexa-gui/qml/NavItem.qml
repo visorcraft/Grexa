@@ -64,7 +64,7 @@ Item {
             // Center the icon when there's no label to anchor against.
             Layout.alignment: root.compact ? Qt.AlignHCenter : Qt.AlignLeft
             Layout.fillWidth: root.compact
-            color: root.active ? app.tokens.accent : Kirigami.Theme.textColor
+            color: root.active ? app.tokens.accent : app.tokens.textPrimary
             opacity: root.active ? 1.0 : 0.75
             isMask: true
             Behavior on color { ColorAnimation { duration: app.tokens.durationSnap } }
@@ -74,7 +74,7 @@ Item {
             font.pixelSize: app.tokens.textBody
             font.family: app.tokens.sansFamily
             font.weight: root.active ? app.tokens.weightSemibold : app.tokens.weightNormal
-            color: root.active ? app.tokens.accent : Kirigami.Theme.textColor
+            color: root.active ? app.tokens.accent : app.tokens.textPrimary
             opacity: root.active ? 1.0 : 0.88
             Layout.fillWidth: true
             visible: !root.compact

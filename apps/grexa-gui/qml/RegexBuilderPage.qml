@@ -18,6 +18,14 @@ Kirigami.Page {
     titleDelegate: Item {}
     globalToolBarStyle: Kirigami.ApplicationHeaderStyle.None
 
+    // See SettingsPage.qml — Pages render under the View colorSet.
+    Kirigami.Theme.inherit: false
+    Kirigami.Theme.colorSet: Kirigami.Theme.View
+    Kirigami.Theme.backgroundColor: app.tokens.surface0
+    Kirigami.Theme.textColor: app.tokens.textPrimary
+    Kirigami.Theme.highlightColor: app.tokens.accent
+    Kirigami.Theme.highlightedTextColor: app.tokens.accentText
+
     property var controller: app.regexController
     property int activePreset: -1
 

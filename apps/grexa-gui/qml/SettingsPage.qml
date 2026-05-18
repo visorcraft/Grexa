@@ -16,6 +16,17 @@ Kirigami.ScrollablePage {
     titleDelegate: Item {}
     globalToolBarStyle: Kirigami.ApplicationHeaderStyle.None
 
+    // Pages render with the View colorSet, separate from the
+    // Window colorSet we override on ApplicationWindow. Without
+    // this block, the page canvas keeps the host theme's View bg
+    // (visible as a stale dark stripe behind cards on Light).
+    Kirigami.Theme.inherit: false
+    Kirigami.Theme.colorSet: Kirigami.Theme.View
+    Kirigami.Theme.backgroundColor: app.tokens.surface0
+    Kirigami.Theme.textColor: app.tokens.textPrimary
+    Kirigami.Theme.highlightColor: app.tokens.accent
+    Kirigami.Theme.highlightedTextColor: app.tokens.accentText
+
     property var settings: app.settingsController
     property var ai: app.aiController
 

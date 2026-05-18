@@ -97,29 +97,70 @@ QtObject {
     readonly property int themeIdx: app.settingsController
         ? app.settingsController.theme : 0
 
-    function themePalette(idx) {
+    // Per-theme color stops as parallel functions of `themeIdx`.
+    // Direct color-property bindings depend on the int themeIdx,
+    // avoiding the var-object indirection through `palette` that
+    // QML doesn't always treat as reactive across re-evaluations
+    // (the symptom: surface0 frozen on its initial value after
+    // reload changes the theme).
+    function themeBg(idx) {
         switch (idx) {
-            case 3:  return { bg: "#000000", secondary: "#003322", tertiary: "#00593D", text: "#FFFFFF", accent: "#00B86B" } // Gentle Gecko
-            case 4:  return { bg: "#000000", secondary: "#003366", tertiary: "#00478F", text: "#FFFFFF", accent: "#0078D4" } // Black Knight
-            case 5:  return { bg: "#2D5B67", secondary: "#4F7F8C", tertiary: "#7CA2B1", text: "#B9DAE9", accent: "#A5C5D5" } // Diamond
-            case 6:  return { bg: "#210B4B", secondary: "#3F1C6D", tertiary: "#6A2A98", text: "#FF3D94", accent: "#B5307E" } // Dreams
-            case 7:  return { bg: "#1D1D4E", secondary: "#3F3F88", tertiary: "#5F5FBF", text: "#D2D2F4", accent: "#9A9AE0" } // Paranoid
-            case 8:  return { bg: "#1A0F0F", secondary: "#3C1414", tertiary: "#8B2323", text: "#FFDCDC", accent: "#DC3C3C" } // Red Velvet
-            case 9:  return { bg: "#2E1A47", secondary: "#4A2A6A", tertiary: "#794B8B", text: "#E2C7E6", accent: "#B77BB4" } // Subspace
-            case 10: return { bg: "#3A0A4D", secondary: "#711D9A", tertiary: "#A42DB4", text: "#F9C54E", accent: "#FF5C8A" } // Tiefling
-            case 11: return { bg: "#0F0F1E", secondary: "#1E1E3C", tertiary: "#CC00FF", text: "#00FFCC", accent: "#FFCC00" } // Vibes
-            case 1:  return { bg: "#F5F5F5", secondary: null,      tertiary: null,      text: "#1A1A1A", accent: "#2D7FF9" } // Light
-            case 2:  return { bg: "#181818", secondary: null,      tertiary: null,      text: "#F5F5F5", accent: "#2D7FF9" } // Dark
-            default: return { bg: null,      secondary: null,      tertiary: null,      text: null,      accent: "#2D7FF9" } // System
+            case 1: return "#F5F5F5"; case 2: return "#181818"
+            case 3: return "#000000"; case 4: return "#000000"
+            case 5: return "#2D5B67"; case 6: return "#210B4B"
+            case 7: return "#1D1D4E"; case 8: return "#1A0F0F"
+            case 9: return "#2E1A47"; case 10: return "#3A0A4D"
+            case 11: return "#0F0F1E"
+            default: return null  // System: use host
         }
     }
-    readonly property var palette: themePalette(themeIdx)
+    function themeSecondary(idx) {
+        switch (idx) {
+            case 3: return "#003322"; case 4: return "#003366"
+            case 5: return "#4F7F8C"; case 6: return "#3F1C6D"
+            case 7: return "#3F3F88"; case 8: return "#3C1414"
+            case 9: return "#4A2A6A"; case 10: return "#711D9A"
+            case 11: return "#1E1E3C"
+            default: return null
+        }
+    }
+    function themeTertiary(idx) {
+        switch (idx) {
+            case 3: return "#00593D"; case 4: return "#00478F"
+            case 5: return "#7CA2B1"; case 6: return "#6A2A98"
+            case 7: return "#5F5FBF"; case 8: return "#8B2323"
+            case 9: return "#794B8B"; case 10: return "#A42DB4"
+            case 11: return "#CC00FF"
+            default: return null
+        }
+    }
+    function themeText(idx) {
+        switch (idx) {
+            case 1: return "#1A1A1A"; case 2: return "#F5F5F5"
+            case 3: return "#FFFFFF"; case 4: return "#FFFFFF"
+            case 5: return "#B9DAE9"; case 6: return "#FF3D94"
+            case 7: return "#D2D2F4"; case 8: return "#FFDCDC"
+            case 9: return "#E2C7E6"; case 10: return "#F9C54E"
+            case 11: return "#00FFCC"
+            default: return null
+        }
+    }
+    function themeAccentColor(idx) {
+        switch (idx) {
+            case 3:  return "#00B86B"; case 4:  return "#0078D4"
+            case 5:  return "#A5C5D5"; case 6:  return "#B5307E"
+            case 7:  return "#9A9AE0"; case 8:  return "#DC3C3C"
+            case 9:  return "#B77BB4"; case 10: return "#FF5C8A"
+            case 11: return "#FFCC00"
+            default: return "#2D7FF9"
+        }
+    }
     readonly property bool customPalette: themeIdx >= 3
 
     // ---- Accent ----------------------------------------------------
     // Derived: hover / pressed are tonal shifts; mute is the alpha
     // wash used for the active nav row fill and selection tint.
-    readonly property color accent:        palette.accent
+    readonly property color accent:        themeAccentColor(themeIdx)
     readonly property color accentHover:   Qt.lighter(accent, 1.15)
     readonly property color accentPressed: Qt.darker(accent, 1.15)
     readonly property color accentDeep:    Qt.darker(accent, 1.55)
@@ -158,34 +199,49 @@ QtObject {
     // Grex's per-theme color stops. For System/Light/Dark, surfaces
     // are derived from the host Kirigami background with luminance
     // tints — preserving the original Mailspring-style chrome.
-    readonly property color surface0: customPalette
-        ? palette.bg
-        : (palette.bg !== null ? palette.bg : Kirigami.Theme.backgroundColor)
+    // surface0 routes through `hostTheme` (a sibling Item in Main.qml
+    // with `Kirigami.Theme.inherit: false`) for the System-theme
+    // fallback so we don't form a binding loop with the
+    // ApplicationWindow's `Kirigami.Theme.backgroundColor` override.
+    readonly property color surface0: {
+        const bg = themeBg(themeIdx)
+        if (bg !== null) return bg
+        return app.hostTheme ? app.hostTheme.background : "#1A1A1A"
+    }
     readonly property color surfaceSidebar: {
-        if (customPalette) return palette.secondary
+        const sec = themeSecondary(themeIdx)
+        if (sec !== null) return sec
         return Qt.tint(surface0,
                        isDark
                            ? Qt.rgba(0.0, 0.0, 0.0, 0.22)
                            : Qt.rgba(0.20, 0.30, 0.50, 0.06))
     }
     readonly property color surface1: {
-        if (customPalette) return palette.secondary
+        const sec = themeSecondary(themeIdx)
+        if (sec !== null) return sec
         return Qt.tint(surface0,
                        isDark ? Qt.rgba(1, 1, 1, 0.07)
                               : Qt.rgba(0, 0, 0, 0.04))
     }
     readonly property color surface2: {
-        if (customPalette) return palette.tertiary
+        const ter = themeTertiary(themeIdx)
+        if (ter !== null) return ter
         return Qt.tint(surface0,
                        isDark ? Qt.rgba(1, 1, 1, 0.12)
                               : Qt.rgba(0, 0, 0, 0.07))
     }
-    // Primary text color — overridden for named themes so high-
-    // chroma palettes (Tiefling's gold text on plum, Dreams's pink
-    // on violet) match Grex.
-    readonly property color textPrimary: customPalette
-        ? palette.text
-        : Kirigami.Theme.textColor
+    // Primary text color — pulled from the palette whenever defined
+    // (Light/Dark/named), falling back to the host palette ONLY for
+    // System. Light/Dark MUST use the palette text here, otherwise
+    // we recursively read Kirigami.Theme.textColor — which we just
+    // overrode on the window to point back at textPrimary, causing
+    // a binding loop that leaves text the host's color (unreadable
+    // on light surfaces).
+    readonly property color textPrimary: {
+        const t = themeText(themeIdx)
+        if (t !== null) return t
+        return app.hostTheme ? app.hostTheme.textColor : "#FFFFFF"
+    }
     readonly property color surfaceCard:  surface1
     // High-contrast biases the separator alpha up so card edges
     // remain visible against very light or very dark wallpapers.
@@ -227,7 +283,9 @@ QtObject {
         if (pref === 1) return false
         if (pref === 2) return true
         if (pref >= 3 && pref <= 11) return true
-        const c = Kirigami.Theme.backgroundColor
+        // System: probe the host palette via the snapshot reader so
+        // we don't loop back through our own override.
+        const c = app.hostTheme ? app.hostTheme.background : Qt.rgba(0.1, 0.1, 0.1, 1)
         return (c.r + c.g + c.b) / 3.0 < 0.5
     }
 

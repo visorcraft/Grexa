@@ -190,69 +190,59 @@ fn theme_from_i32(v: i32) -> ThemePreference {
 impl ffi::SettingsController {
     fn reload(mut self: Pin<&mut Self>) {
         let settings = with_workspace(|w| w.settings.load().unwrap_or_default());
-        // Stage all the new values on the Rust struct in one pass, then
-        // re-emit each property via its setter so QML sees a clean batch
-        // of change signals.
-        self.as_mut().rust_mut().load_from(&settings);
-        // Read each field via a short-lived borrow so we can issue
-        // setters (which take `Pin<&mut Self>`) immediately after.
-        let regex = self.as_ref().rust().regex;
-        let case_sensitive = self.as_ref().rust().case_sensitive;
-        let respect_gitignore = self.as_ref().rust().respect_gitignore;
-        let include_hidden = self.as_ref().rust().include_hidden;
-        let include_binary = self.as_ref().rust().include_binary;
-        let include_system_files = self.as_ref().rust().include_system_files;
-        let include_symbolic_links = self.as_ref().rust().include_symbolic_links;
-        let include_subfolders = self.as_ref().rust().include_subfolders;
-        let files_search_mode = self.as_ref().rust().files_search_mode;
-        let enable_container_search = self.as_ref().rust().enable_container_search;
-        let ai_search_enabled = self.as_ref().rust().ai_search_enabled;
-        let ai_endpoint = self.as_ref().rust().ai_endpoint.clone();
-        let ai_model = self.as_ref().rust().ai_model.clone();
-        let default_match_files = self.as_ref().rust().default_match_files.clone();
-        let default_exclude_dirs = self.as_ref().rust().default_exclude_dirs.clone();
-        let theme = self.as_ref().rust().theme;
-        let context_lines_before = self.as_ref().rust().context_lines_before;
-        let context_lines_after = self.as_ref().rust().context_lines_after;
-        let editor_preset = self.as_ref().rust().editor_preset;
-        let editor_custom_command = self.as_ref().rust().editor_custom_command.clone();
-        let replace_confirm = self.as_ref().rust().replace_confirm;
-        let replace_show_journal_on_startup = self.as_ref().rust().replace_show_journal_on_startup;
-        let privacy_redact_paths = self.as_ref().rust().privacy_redact_paths;
-        let accessibility_reduced_motion = self.as_ref().rust().accessibility_reduced_motion;
-        let accessibility_high_contrast = self.as_ref().rust().accessibility_high_contrast;
-
-        self.as_mut().set_regex(regex);
-        self.as_mut().set_case_sensitive(case_sensitive);
-        self.as_mut().set_respect_gitignore(respect_gitignore);
-        self.as_mut().set_include_hidden(include_hidden);
-        self.as_mut().set_include_binary(include_binary);
-        self.as_mut().set_include_system_files(include_system_files);
+        // IMPORTANT: do NOT call `load_from(&settings)` here. That
+        // writes directly to the Rust struct fields, bypassing the
+        // cxx-qt-generated setters and therefore their change-signal
+        // emits. The subsequent `set_*` calls then compare the new
+        // value against the (already-updated) struct field, find
+        // them equal, and silently skip emitting the change signal —
+        // QML never learns the property changed, and the live UI
+        // stays stuck on its initial value. The user-visible symptom
+        // was "Light selected, close+reopen Grexa, theme not
+        // restored": persistence was correct on disk and in Rust,
+        // but the QML bindings never re-fired.
+        //
+        // Compute fresh values from the loaded settings and call the
+        // setters directly. Each setter sees the current (old) value
+        // on the struct, the new value, and emits when they differ.
+        self.as_mut().set_regex(settings.regex_search);
+        self.as_mut().set_case_sensitive(settings.search_case_sensitive);
+        self.as_mut().set_respect_gitignore(settings.respect_gitignore);
+        self.as_mut().set_include_hidden(settings.include_hidden_items);
+        self.as_mut().set_include_binary(settings.include_binary_files);
+        self.as_mut().set_include_system_files(settings.include_system_files);
         self.as_mut()
-            .set_include_symbolic_links(include_symbolic_links);
-        self.as_mut().set_include_subfolders(include_subfolders);
-        self.as_mut().set_files_search_mode(files_search_mode);
+            .set_include_symbolic_links(settings.include_symbolic_links);
+        self.as_mut().set_include_subfolders(settings.include_subfolders);
+        self.as_mut().set_files_search_mode(settings.files_search);
         self.as_mut()
-            .set_enable_container_search(enable_container_search);
-        self.as_mut().set_ai_search_enabled(ai_search_enabled);
-        self.as_mut().set_ai_endpoint(ai_endpoint);
-        self.as_mut().set_ai_model(ai_model);
-        self.as_mut().set_default_match_files(default_match_files);
-        self.as_mut().set_default_exclude_dirs(default_exclude_dirs);
-        self.as_mut().set_theme(theme);
-        self.as_mut().set_context_lines_before(context_lines_before);
-        self.as_mut().set_context_lines_after(context_lines_after);
-        self.as_mut().set_editor_preset(editor_preset);
+            .set_enable_container_search(settings.enable_container_search);
+        self.as_mut().set_ai_search_enabled(settings.ai_search_enabled);
         self.as_mut()
-            .set_editor_custom_command(editor_custom_command);
-        self.as_mut().set_replace_confirm(replace_confirm);
+            .set_ai_endpoint(QString::from(&settings.ai_search_endpoint));
         self.as_mut()
-            .set_replace_show_journal_on_startup(replace_show_journal_on_startup);
-        self.as_mut().set_privacy_redact_paths(privacy_redact_paths);
+            .set_ai_model(QString::from(&settings.ai_search_model));
         self.as_mut()
-            .set_accessibility_reduced_motion(accessibility_reduced_motion);
+            .set_default_match_files(QString::from(&settings.default_match_files));
         self.as_mut()
-            .set_accessibility_high_contrast(accessibility_high_contrast);
+            .set_default_exclude_dirs(QString::from(&settings.default_exclude_dirs));
+        self.as_mut()
+            .set_theme(theme_to_i32(settings.theme_preference));
+        self.as_mut()
+            .set_context_lines_before(settings.context_preview_lines_before as i32);
+        self.as_mut()
+            .set_context_lines_after(settings.context_preview_lines_after as i32);
+        self.as_mut().set_editor_preset(settings.editor_preset as i32);
+        self.as_mut()
+            .set_editor_custom_command(QString::from(&settings.editor_custom_command));
+        self.as_mut().set_replace_confirm(settings.replace_confirm);
+        self.as_mut()
+            .set_replace_show_journal_on_startup(settings.replace_show_journal_on_startup);
+        self.as_mut().set_privacy_redact_paths(settings.privacy_redact_paths);
+        self.as_mut()
+            .set_accessibility_reduced_motion(settings.accessibility_reduced_motion);
+        self.as_mut()
+            .set_accessibility_high_contrast(settings.accessibility_high_contrast);
         self.as_mut().set_last_save_status(QString::from("Loaded"));
     }
 

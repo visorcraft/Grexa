@@ -16,7 +16,6 @@ import com.visorcraft.Grexa 1.0
 
 Kirigami.ApplicationWindow {
     id: app
-    title: qsTr("Grexa")
     width: 1180
     height: 760
     minimumWidth: 920
@@ -38,6 +37,32 @@ Kirigami.ApplicationWindow {
     Kirigami.Theme.highlightedTextColor: tokens.accentText
     color: tokens.surface0
 
+    // QtQuick.Controls (TextField, ComboBox, CheckBox, SpinBox …)
+    // paint their backgrounds from Qt's `palette`, NOT from
+    // Kirigami.Theme. Without these overrides, inputs keep the host
+    // theme's dark base color even on our Light surface, leaving
+    // unreadable dark bars on a light canvas.
+    palette.window:          tokens.surface0
+    palette.windowText:      tokens.textPrimary
+    palette.base:            tokens.surface1
+    palette.alternateBase:   tokens.surface2
+    palette.text:            tokens.textPrimary
+    palette.button:          tokens.surface1
+    palette.buttonText:      tokens.textPrimary
+    palette.brightText:      tokens.accentText
+    palette.highlight:       tokens.accent
+    palette.highlightedText: tokens.accentText
+    palette.toolTipBase:     tokens.surface2
+    palette.toolTipText:     tokens.textPrimary
+    palette.mid:             tokens.separator
+    palette.midlight:        tokens.surface1
+    palette.light:           tokens.surface2
+    palette.dark:            tokens.surface0
+    palette.shadow:          tokens.shadowFar
+    palette.placeholderText: Qt.rgba(tokens.textPrimary.r,
+                                     tokens.textPrimary.g,
+                                     tokens.textPrimary.b, 0.55)
+
     Component.onCompleted: {
         app.raise()
         app.requestActivate()
@@ -57,11 +82,31 @@ Kirigami.ApplicationWindow {
 
     // ---- Shared singletons ----
     property alias tokens: tokens
+    property alias hostTheme: hostTheme
     property alias searchController: searchController
     property alias settingsController: settingsController
     property alias regexController: regexController
     property alias aiController: aiController
     property string currentPageKey: "search"
+
+    // Snapshot of the host Kirigami palette captured *before* our
+    // overrides cascade through the window. DesignTokens reads its
+    // System-theme fallback from here, not from Kirigami.Theme on
+    // the window — otherwise the fallback chains back into our own
+    // override and Qt severs the binding loop, leaving every
+    // surface stuck on its initial value (the exact symptom the
+    // user hits: "Light saved but reopen doesn't apply").
+    Item {
+        id: hostTheme
+        visible: false
+        Kirigami.Theme.inherit: false
+        Kirigami.Theme.colorSet: Kirigami.Theme.Window
+        readonly property color background: Kirigami.Theme.backgroundColor
+        readonly property color textColor:  Kirigami.Theme.textColor
+        readonly property color highlight:  Kirigami.Theme.highlightColor
+    }
+
+    title: qsTr("Grexa")
 
     DesignTokens { id: tokens }
 
@@ -298,11 +343,13 @@ Kirigami.ApplicationWindow {
                         font.weight: tokens.weightBold
                         font.family: tokens.sansFamily
                         font.letterSpacing: -0.2
+                        color: tokens.textPrimary
                     }
                     Controls.Label {
                         text: qsTr("Fast file search")
                         font.pixelSize: tokens.textCaption
                         opacity: 0.55
+                        color: tokens.textPrimary
                     }
                 }
             }
@@ -320,6 +367,7 @@ Kirigami.ApplicationWindow {
                 font.letterSpacing: 1.6
                 opacity: 0.5
                 visible: !drawer.isCollapsed
+                color: tokens.textPrimary
             }
             NavItem {
                 Layout.fillWidth: true
@@ -343,6 +391,7 @@ Kirigami.ApplicationWindow {
                 font.letterSpacing: 1.6
                 opacity: 0.5
                 visible: !drawer.isCollapsed
+                color: tokens.textPrimary
             }
             NavItem {
                 Layout.fillWidth: true
@@ -413,6 +462,7 @@ Kirigami.ApplicationWindow {
                         font.pixelSize: tokens.textCaption
                         font.family: tokens.monoFamily
                         opacity: 0.7
+                        color: tokens.textPrimary
                     }
                 }
                 Item { Layout.fillWidth: true }
@@ -421,6 +471,7 @@ Kirigami.ApplicationWindow {
                     font.pixelSize: tokens.textCaption
                     font.family: tokens.sansFamily
                     opacity: 0.4
+                    color: tokens.textPrimary
                 }
             }
         }

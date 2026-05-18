@@ -18,6 +18,14 @@ Kirigami.ScrollablePage {
     titleDelegate: Item {}
     globalToolBarStyle: Kirigami.ApplicationHeaderStyle.None
 
+    // See SettingsPage.qml — Pages render under the View colorSet.
+    Kirigami.Theme.inherit: false
+    Kirigami.Theme.colorSet: Kirigami.Theme.View
+    Kirigami.Theme.backgroundColor: app.tokens.surface0
+    Kirigami.Theme.textColor: app.tokens.textPrimary
+    Kirigami.Theme.highlightColor: app.tokens.accent
+    Kirigami.Theme.highlightedTextColor: app.tokens.accentText
+
     ListModel { id: historyModel }
     property string filterText: ""
 
