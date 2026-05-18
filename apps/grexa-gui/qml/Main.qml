@@ -310,6 +310,7 @@ Kirigami.ApplicationWindow {
                                           : Qt.AlignVCenter
                     Layout.fillWidth: drawer.isCollapsed
                     icon.name: "application-menu-symbolic"
+                    icon.color: tokens.textPrimary
                     display: Controls.AbstractButton.IconOnly
                     Controls.ToolTip.text: drawer.isCollapsed ? qsTr("Open Sidebar")
                                                               : qsTr("Close Sidebar")
