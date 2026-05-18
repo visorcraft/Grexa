@@ -158,7 +158,7 @@ GPL-3.0-compatible license; the allowlist lives in
 
 ## Contributing
 
-- `just ci` runs format, clippy, and tests. Pre-PR sanity check.
+- `just ci` runs format check, clippy, and tests. Pre-PR sanity check.
 - `just manpage` + `just completions` regenerate the CLI artifacts.
 - `python3 scripts/check_locale_sync.py` enforces the Fluent
   translation key parity across locales.

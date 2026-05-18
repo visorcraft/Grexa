@@ -33,7 +33,7 @@ Binaries land at:
 ## Tests
 
 ```bash
-just ci             # format + clippy + tests, same gate CI uses
+just ci             # format check + clippy + tests, same gate CI uses
 
 # Individual stages:
 cargo fmt --all -- --check
@@ -41,7 +41,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-Specific test groups (295 tests total as of v0.3):
+Specific test groups (297 tests total as of v0.3):
 
 ```bash
 cargo test -p grexa-core                      # 190 total (122 unit + integration)
@@ -52,7 +52,7 @@ cargo test -p grexa-cli                       # 16 CLI integration tests
 cargo test -p grexa-containers                # 24 mocked container tests
 cargo test -p grexa-ai                        # 17 mocked HTTP tests
 cargo test -p grexa-i18n                      # 9 locale + plural-helper tests
-cargo test -p grexa                           # 39 GUI controller tests (no Qt runtime)
+cargo test -p grexa                           # 41 GUI controller tests (no Qt runtime)
 ```
 
 ## Locale sync

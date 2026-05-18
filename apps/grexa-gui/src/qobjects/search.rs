@@ -655,6 +655,20 @@ impl SearchControllerRust {
         });
         serde_json::to_string(&strings).unwrap_or_else(|_| "[]".into())
     }
+
+    fn clear_search_state(&mut self) {
+        self.rows.clear();
+        self.visible.clear();
+        self.last_path.clear();
+        self.last_term.clear();
+        self.last_regex = false;
+        self.last_case_sensitive = false;
+        self.match_count = 0;
+        self.files_matched = 0;
+        self.files_scanned = 0;
+        self.has_searched = false;
+        self.status_text = QString::default();
+    }
 }
 
 impl ffi::SearchController {
@@ -832,16 +846,13 @@ impl ffi::SearchController {
 
     fn clear_results(mut self: Pin<&mut Self>) {
         unsafe { self.as_mut().begin_reset_model() };
-        {
-            let mut s = self.as_mut().rust_mut();
-            s.rows.clear();
-            s.visible.clear();
-        }
+        self.as_mut().rust_mut().clear_search_state();
         unsafe { self.as_mut().end_reset_model() };
         self.as_mut().set_match_count(0);
         self.as_mut().set_files_matched(0);
         self.as_mut().set_files_scanned(0);
         self.as_mut().set_has_searched(false);
+        self.as_mut().set_status_text(QString::default());
     }
 
     fn recent_paths_json(&self) -> QString {
@@ -2065,6 +2076,44 @@ mod tests {
         assert!(token.is_cancelled());
         assert!(state.cancel_token.is_none());
         assert_eq!(state.active_generation, 42);
+    }
+
+    #[test]
+    fn clearing_search_state_removes_stale_replace_target_and_status() {
+        let mut state = SearchControllerRust {
+            status_text: QString::from("Found 1 match"),
+            match_count: 1,
+            files_matched: 1,
+            files_scanned: 2,
+            has_searched: true,
+            last_path: "/tmp/project".into(),
+            last_term: "TODO".into(),
+            last_regex: true,
+            last_case_sensitive: true,
+            ..Default::default()
+        };
+        state.append_batch(vec![ResultRow {
+            full_path: PathBuf::from("/tmp/project/a.rs"),
+            relative_path: PathBuf::from("a.rs"),
+            line: 1,
+            column: 1,
+            preview_before: String::new(),
+            preview_match: "TODO".into(),
+            preview_after: String::new(),
+        }]);
+
+        state.clear_search_state();
+
+        assert_eq!(state.row_count(), 0);
+        assert_eq!(state.match_count, 0);
+        assert_eq!(state.files_matched, 0);
+        assert_eq!(state.files_scanned, 0);
+        assert!(!state.has_searched);
+        assert!(state.status_text.is_empty());
+        assert!(state.last_path.is_empty());
+        assert!(state.last_term.is_empty());
+        assert!(!state.last_regex);
+        assert!(!state.last_case_sensitive);
     }
 
     #[test]

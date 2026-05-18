@@ -444,9 +444,27 @@ fn ensure_user_desktop_integration() {
 }
 
 fn desktop_exec_token(path: &str) -> String {
-    let needs_quotes = path
-        .bytes()
-        .any(|b| b.is_ascii_whitespace() || matches!(b, b'"' | b'\\' | b'`' | b'$'));
+    let needs_quotes = path.bytes().any(|b| {
+        b.is_ascii_whitespace()
+            || matches!(
+                b,
+                b'"' | b'\''
+                    | b'\\'
+                    | b'>'
+                    | b'<'
+                    | b'~'
+                    | b'|'
+                    | b'&'
+                    | b';'
+                    | b'$'
+                    | b'*'
+                    | b'?'
+                    | b'#'
+                    | b'('
+                    | b')'
+                    | b'`'
+            )
+    });
     let mut escaped = String::with_capacity(path.len());
     for ch in path.chars() {
         match ch {
@@ -542,5 +560,10 @@ mod tests {
     #[test]
     fn desktop_exec_token_escapes_field_codes_and_quotes() {
         assert_eq!(desktop_exec_token("/tmp/100%/a\"b/grexa"), "\"/tmp/100%%/a\\\"b/grexa\"");
+    }
+
+    #[test]
+    fn desktop_exec_token_quotes_reserved_desktop_entry_characters() {
+        assert_eq!(desktop_exec_token("/tmp/build&test/grexa"), "\"/tmp/build&test/grexa\"");
     }
 }

@@ -231,7 +231,8 @@ Kirigami.ScrollablePage {
                                         p.searchBar.regexEnabled = regex
                                         p.searchBar.caseSensitive = caseSensitive
                                         p.controller.resultMode = filesMode ? 1 : 0
-                                        p.controller.refreshView()
+                                        if (p.controller.busy) p.controller.cancel()
+                                        p.controller.clearResults()
                                     }
                                 })
                             }

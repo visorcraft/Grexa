@@ -6,7 +6,7 @@
 #
 
 Name:           grexa
-Version:        0.1.0
+Version:        0.3.0
 Release:        0
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 License:        GPL-3.0-only
@@ -99,5 +99,8 @@ cargo test --workspace --release --frozen
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Mon May 18 2026 VisorCraft LLC <maintainer@visorcraft.com> - 0.3.0-0
+- v0.3.0 polish and responsiveness release.
+
 * Sat May 16 2026 VisorCraft LLC <maintainer@visorcraft.com> - 0.1.0-0
 - Initial openSUSE package.

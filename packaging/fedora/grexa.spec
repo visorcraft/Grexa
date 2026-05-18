@@ -1,5 +1,5 @@
 Name:           grexa
-Version:        0.1.0
+Version:        0.3.0
 Release:        1%{?dist}
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 
@@ -84,5 +84,8 @@ appstream-util validate-relax \
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Mon May 18 2026 VisorCraft LLC <maintainer@visorcraft.com> - 0.3.0-1
+- v0.3.0 polish and responsiveness release.
+
 * Sat May 16 2026 VisorCraft LLC <maintainer@visorcraft.com> - 0.1.0-1
 - Initial Fedora package.

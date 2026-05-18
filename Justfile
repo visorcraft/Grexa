@@ -4,6 +4,10 @@ set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 fmt:
     cargo fmt --all
 
+# Check formatting without mutating the worktree.
+fmt-check:
+    cargo fmt --all -- --check
+
 # Cargo build (debug) for the entire workspace.
 build:
     cargo build --workspace
@@ -66,7 +70,7 @@ run-gui:
     cargo run -p grexa
 
 # Convenience target — everything CI does. Useful before pushing.
-ci: fmt lint test
+ci: fmt-check lint test
     @echo "ci preflight passed"
 
 # Full pre-release gate: ci + deny + audit + credits regen.

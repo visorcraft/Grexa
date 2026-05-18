@@ -4464,12 +4464,12 @@ insights.
 ### GNU General Public License v3.0 only
 
 Used by:
-- `grexa` 0.1.0
-- `grexa-ai` 0.1.0
-- `grexa-cli` 0.1.0
-- `grexa-containers` 0.1.0
-- `grexa-core` 0.1.0
-- `grexa-i18n` 0.1.0
+- `grexa` 0.3.0
+- `grexa-ai` 0.3.0
+- `grexa-cli` 0.3.0
+- `grexa-containers` 0.3.0
+- `grexa-core` 0.3.0
+- `grexa-i18n` 0.3.0
 
 ```
 GNU GENERAL PUBLIC LICENSE

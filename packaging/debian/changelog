@@ -1,3 +1,11 @@
+grexa (0.3.0-1) unstable; urgency=medium
+
+  * v0.3.0 polish and responsiveness release.
+  * Preserve per-tab result buffers across tab switches.
+  * Add Settings auto-save, responsive Search toolbar, and updated icons.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Mon, 18 May 2026 14:00:00 +0000
+
 grexa (0.1.0-1) unstable; urgency=medium
 
   * Initial alpha release.

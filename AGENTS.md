@@ -13,7 +13,7 @@ Everything goes through `just` (the wrapper around `cargo`). Direct
 `cargo` invocations are equivalent if `just` isn't installed.
 
 ```bash
-just ci             # fmt + clippy + tests — the same gate CI runs
+just ci             # fmt check + clippy + tests — the same gate CI runs
 just build          # cargo build --workspace (debug)
 just build-release  # cargo build --workspace --release
 just test           # cargo test --workspace
@@ -155,7 +155,7 @@ service `io.visorcraft.Grexa`, never on disk.
 ## Tests
 
 ```bash
-cargo test --workspace                                  # 295 tests (v0.3)
+cargo test --workspace                                  # 297 tests (v0.3)
 cargo test -p grexa-core --test gitignore_parity        # 61 cases
 cargo test -p grexa-core --test property                # 4 proptests
 cargo test -p grexa-core --test root_safety             # 3 pseudo-FS
