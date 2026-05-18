@@ -43,6 +43,33 @@ ColumnLayout {
         text: controller.lastError
     }
 
+    // -- Conversation header — small action row with a Clear button.
+    // Only visible once the conversation has at least one turn so it
+    // doesn't clutter the empty state.
+    RowLayout {
+        Layout.fillWidth: true
+        visible: messageModel.count > 0
+        spacing: app.tokens.spaceS
+
+        Controls.Label {
+            Layout.fillWidth: true
+            text: messageModel.count === 1
+                ? qsTr("1 turn")
+                : qsTr("%1 turns").arg(messageModel.count)
+            font.pixelSize: app.tokens.textCaption
+            opacity: 0.55
+        }
+        Controls.Button {
+            flat: true
+            icon.name: "edit-clear-all-symbolic"
+            text: qsTr("Clear")
+            display: Controls.AbstractButton.TextBesideIcon
+            Controls.ToolTip.text: qsTr("Reset the AI conversation. Doesn't touch your API key or stored history.")
+            Controls.ToolTip.visible: hovered
+            onClicked: messageModel.clear()
+        }
+    }
+
     // -- Conversation pane -----------------------------------------
     Rectangle {
         Layout.fillWidth: true

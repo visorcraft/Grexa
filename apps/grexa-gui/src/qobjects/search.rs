@@ -152,7 +152,6 @@ pub mod ffi {
         #[qproperty(bool, within_regex)]
         // Replace pipeline state. `replacing` is the analogue of
         // `busy` for replace operations.
-        #[qproperty(QString, replace_term)]
         #[qproperty(bool, replacing)]
         #[qproperty(QString, last_replace_summary)]
         // True once the user has clicked Search at least this session —
@@ -452,7 +451,6 @@ pub struct SearchControllerRust {
     result_mode: i32,
     within_filter: QString,
     within_regex: bool,
-    replace_term: QString,
     replacing: bool,
     last_replace_summary: QString,
     has_searched: bool,
@@ -977,7 +975,6 @@ impl ffi::SearchController {
         }
         let replacement_str = replacement.to_string();
         self.as_mut().set_replacing(true);
-        self.as_mut().set_replace_term(replacement.clone());
 
         // Build the same SearchOptions the last search used.
         let regex = self.as_ref().rust().last_regex;
@@ -1471,7 +1468,9 @@ fn finish_container_search(
             };
             pin.as_mut().set_files_matched(unique_files);
             pin.as_mut().set_status_text(QString::from(&format!(
-                "Found {added} matches in container ({unique_files} files)"
+                "Found {} in container ({})",
+                plural_count(added as usize, "match", "matches"),
+                plural_count(unique_files as usize, "file", "files"),
             )));
         }
         Err(err) => {
@@ -1510,16 +1509,18 @@ fn finish_replace(
             pin.as_mut().rust_mut().rebuild_visible();
             unsafe { pin.as_mut().end_reset_model() };
             pin.as_mut().set_status_text(QString::from(&format!(
-                "Replaced {} matches in {} files",
-                summary.matches_replaced, summary.files_modified
+                "Replaced {} in {}",
+                plural_count(summary.matches_replaced, "match", "matches"),
+                plural_count(summary.files_modified, "file", "files"),
             )));
             // Replace is always notification-worthy — it rewrites
             // files on disk, so the user wants to be told.
             notify_desktop(
                 "Replace complete",
                 &format!(
-                    "{} matches in {} files (Grexa)",
-                    summary.matches_replaced, summary.files_modified
+                    "{} in {} (Grexa)",
+                    plural_count(summary.matches_replaced, "match", "matches"),
+                    plural_count(summary.files_modified, "file", "files"),
                 ),
             );
             pin.as_mut().replace_completed(true);
@@ -1744,6 +1745,18 @@ fn percent_encode_path(s: &str) -> String {
     out
 }
 
+/// `"1 match"` / `"0 matches"` / `"5 matches"` — singular when `n == 1`.
+/// Designed for status-bar and notification strings so users don't see
+/// the awkward "1 matches" English that English-only `format!("{} matches", n)`
+/// produces.
+fn plural_count(n: usize, singular: &str, plural: &str) -> String {
+    if n == 1 {
+        format!("1 {singular}")
+    } else {
+        format!("{n} {plural}")
+    }
+}
+
 /// Fire a desktop notification via `notify-send`. Best-effort — fails
 /// silently if the binary isn't installed. We use shell-out instead
 /// of D-Bus directly so the dependency surface stays in user-space
@@ -1865,16 +1878,20 @@ fn finish_search(
                 pin.as_mut().set_recent_path_count(recent_count);
                 pin.as_mut().history_changed();
             }
+            let mc = pin.as_ref().rust().match_count as usize;
+            let fc = pin.as_ref().rust().files_matched as usize;
             let status = if cancelled {
                 format!(
-                    "Cancelled — {} matches in {} files",
-                    pin.as_ref().rust().match_count,
-                    pin.as_ref().rust().files_matched
+                    "Cancelled — {} in {}",
+                    plural_count(mc, "match", "matches"),
+                    plural_count(fc, "file", "files"),
                 )
             } else {
                 format!(
-                    "Found {} matches in {} files in {} ms",
-                    summary.matches, summary.files_matched, summary.elapsed_ms
+                    "Found {} in {} in {} ms",
+                    plural_count(summary.matches, "match", "matches"),
+                    plural_count(summary.files_matched, "file", "files"),
+                    summary.elapsed_ms,
                 )
             };
             pin.as_mut().set_status_text(QString::from(&status));
@@ -1886,8 +1903,9 @@ fn finish_search(
                 notify_desktop(
                     "Search complete",
                     &format!(
-                        "{} matches in {} files (Grexa)",
-                        summary.matches, summary.files_matched
+                        "{} in {} (Grexa)",
+                        plural_count(summary.matches, "match", "matches"),
+                        plural_count(summary.files_matched, "file", "files"),
                     ),
                 );
             }

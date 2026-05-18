@@ -19,8 +19,15 @@ Kirigami.ScrollablePage {
     globalToolBarStyle: Kirigami.ApplicationHeaderStyle.None
 
     ListModel { id: historyModel }
+    property string filterText: ""
 
     Component.onCompleted: refresh()
+
+    function rowMatchesFilter(term, path) {
+        const f = filterText.trim().toLowerCase()
+        if (f.length === 0) return true
+        return term.toLowerCase().includes(f) || path.toLowerCase().includes(f)
+    }
 
     function refresh() {
         historyModel.clear()
@@ -28,9 +35,12 @@ Kirigami.ScrollablePage {
             const arr = JSON.parse(app.searchController.historyJson())
             for (let i = 0; i < arr.length; ++i) {
                 const e = arr[i]
+                const term = e.search_term || ""
+                const path = e.search_path || ""
+                if (!rowMatchesFilter(term, path)) continue
                 historyModel.append({
-                    term: e.search_term || "",
-                    path: e.search_path || "",
+                    term: term,
+                    path: path,
                     matches: e.result_count || 0,
                     regex: e.regex_search || false,
                     caseSensitive: e.search_case_sensitive || false,
@@ -89,14 +99,49 @@ Kirigami.ScrollablePage {
             }
         }
 
+        // -- Filter row
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.leftMargin: app.tokens.spaceXL
+            Layout.rightMargin: app.tokens.spaceXL
+            Layout.topMargin: app.tokens.spaceM
+            spacing: app.tokens.spaceS
+
+            Kirigami.Icon {
+                source: "view-filter-symbolic"
+                implicitWidth: 14
+                implicitHeight: 14
+                isMask: true
+                color: Kirigami.Theme.textColor
+                opacity: 0.5
+            }
+            Controls.TextField {
+                Layout.fillWidth: true
+                placeholderText: qsTr("Filter history by term or path")
+                text: page.filterText
+                onTextEdited: { page.filterText = text; page.refresh() }
+            }
+            Controls.Button {
+                flat: true
+                icon.name: "edit-clear-symbolic"
+                display: Controls.AbstractButton.IconOnly
+                enabled: page.filterText.length > 0
+                onClicked: { page.filterText = ""; page.refresh() }
+            }
+        }
+
         // -- Empty state
         Kirigami.PlaceholderMessage {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: app.tokens.spaceXL * 2
             visible: historyModel.count === 0
             icon.name: "history-symbolic"
-            text: qsTr("No search history yet")
-            explanation: qsTr("Run a search from the Search page and it'll land here.")
+            text: page.filterText.length > 0
+                ? qsTr("No history entries match “%1”").arg(page.filterText)
+                : qsTr("No search history yet")
+            explanation: page.filterText.length > 0
+                ? qsTr("Try a shorter filter, or clear it to see every saved search.")
+                : qsTr("Run a search from the Search page and it'll land here.")
         }
 
         // -- List

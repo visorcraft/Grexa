@@ -18,8 +18,17 @@ Kirigami.ScrollablePage {
     globalToolBarStyle: Kirigami.ApplicationHeaderStyle.None
 
     ListModel { id: profilesModel }
+    property string filterText: ""
 
     Component.onCompleted: refresh()
+
+    function rowMatchesFilter(name, term, path) {
+        const f = filterText.trim().toLowerCase()
+        if (f.length === 0) return true
+        return name.toLowerCase().includes(f)
+            || term.toLowerCase().includes(f)
+            || path.toLowerCase().includes(f)
+    }
 
     function refresh() {
         profilesModel.clear()
@@ -27,10 +36,14 @@ Kirigami.ScrollablePage {
             const arr = JSON.parse(app.searchController.profilesJson())
             for (let i = 0; i < arr.length; ++i) {
                 const p = arr[i]
+                const name = p.name || ""
+                const term = (p.search_options && p.search_options.search_term) || ""
+                const path = (p.search_options && p.search_options.path) || ""
+                if (!rowMatchesFilter(name, term, path)) continue
                 profilesModel.append({
-                    name: p.name || "",
-                    term: (p.search_options && p.search_options.search_term) || "",
-                    path: (p.search_options && p.search_options.path) || "",
+                    name: name,
+                    term: term,
+                    path: path,
                     regex: (p.search_options && p.search_options.regex) || false,
                     caseSensitive: (p.search_options && p.search_options.case_sensitive) || false,
                     filesMode: p.files_search || false
@@ -86,13 +99,48 @@ Kirigami.ScrollablePage {
             }
         }
 
+        // -- Filter row
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.leftMargin: app.tokens.spaceXL
+            Layout.rightMargin: app.tokens.spaceXL
+            Layout.topMargin: app.tokens.spaceM
+            spacing: app.tokens.spaceS
+
+            Kirigami.Icon {
+                source: "view-filter-symbolic"
+                implicitWidth: 14
+                implicitHeight: 14
+                isMask: true
+                color: Kirigami.Theme.textColor
+                opacity: 0.5
+            }
+            Controls.TextField {
+                Layout.fillWidth: true
+                placeholderText: qsTr("Filter profiles by name, term, or path")
+                text: page.filterText
+                onTextEdited: { page.filterText = text; page.refresh() }
+            }
+            Controls.Button {
+                flat: true
+                icon.name: "edit-clear-symbolic"
+                display: Controls.AbstractButton.IconOnly
+                enabled: page.filterText.length > 0
+                onClicked: { page.filterText = ""; page.refresh() }
+            }
+        }
+
         Kirigami.PlaceholderMessage {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: app.tokens.spaceXL * 2
             visible: profilesModel.count === 0
             icon.name: "document-save-symbolic"
-            text: qsTr("No saved profiles")
-            explanation: qsTr("Open the Search page, fill in path + term + flags, then save the form as a named profile.")
+            text: page.filterText.length > 0
+                ? qsTr("No profiles match “%1”").arg(page.filterText)
+                : qsTr("No saved profiles")
+            explanation: page.filterText.length > 0
+                ? qsTr("Try a shorter filter, or clear it to see every saved profile.")
+                : qsTr("Open the Search page, fill in path + term + flags, then save the form as a named profile.")
         }
 
         ColumnLayout {

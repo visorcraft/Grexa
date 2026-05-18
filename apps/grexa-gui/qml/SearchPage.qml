@@ -234,70 +234,129 @@ Kirigami.Page {
                 anchors.rightMargin: app.tokens.spaceL
                 spacing: app.tokens.spaceXS
 
-                Repeater {
-                    model: tabsModel
-                    delegate: Rectangle {
-                        id: tabChip
-                        Layout.preferredHeight: 26
-                        Layout.alignment: Qt.AlignVCenter
-                        radius: app.tokens.radiusPill
-                        color: index === page.activeTab
-                            ? app.tokens.surface2
-                            : (tabHover.containsMouse
-                                ? app.tokens.surface1
-                                : "transparent")
-                        border.color: index === page.activeTab
-                            ? app.tokens.accent : "transparent"
-                        border.width: 1
-                        implicitWidth: tabRow.implicitWidth + app.tokens.spaceL * 2
-                        Behavior on color { ColorAnimation { duration: app.tokens.durationSnap } }
+                // Horizontally-scrollable tab strip. When tabs
+                // overflow the available width, Flickable lets the
+                // user pan; we also auto-scroll on activeTab change
+                // so the focused tab stays on screen.
+                Flickable {
+                    id: tabFlick
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    contentWidth: tabStrip.implicitWidth
+                    contentHeight: height
+                    clip: true
+                    interactive: contentWidth > width
+                    boundsBehavior: Flickable.StopAtBounds
+                    flickableDirection: Flickable.HorizontalFlick
 
-                        RowLayout {
-                            id: tabRow
-                            anchors.fill: parent
-                            anchors.leftMargin: app.tokens.spaceM
-                            anchors.rightMargin: app.tokens.spaceS
-                            spacing: app.tokens.spaceXS
-                            Controls.Label {
-                                text: model.label
-                                font.pixelSize: app.tokens.textCaption + 1
-                                font.weight: index === page.activeTab
-                                    ? app.tokens.weightSemibold : app.tokens.weightMedium
-                                color: index === page.activeTab
-                                    ? app.tokens.accent : Kirigami.Theme.textColor
-                                opacity: index === page.activeTab ? 1.0 : 0.75
-                            }
-                            Controls.Button {
-                                flat: true
-                                icon.name: "window-close-symbolic"
-                                display: Controls.AbstractButton.IconOnly
-                                Layout.preferredWidth: 18
-                                Layout.preferredHeight: 18
-                                visible: tabsModel.count > 1
-                                    && (index === page.activeTab || tabHover.containsMouse)
-                                onClicked: page.closeTab(index)
-                            }
+                    function ensureActiveVisible() {
+                        if (page.activeTab < 0 || page.activeTab >= tabRepeater.count) return
+                        const item = tabRepeater.itemAt(page.activeTab)
+                        if (!item) return
+                        const left = item.x
+                        const right = item.x + item.width
+                        if (left < tabFlick.contentX) {
+                            tabFlick.contentX = Math.max(0, left - app.tokens.spaceM)
+                        } else if (right > tabFlick.contentX + tabFlick.width) {
+                            tabFlick.contentX = right - tabFlick.width + app.tokens.spaceM
                         }
-                        MouseArea {
-                            id: tabHover
-                            anchors.fill: parent
-                            acceptedButtons: Qt.LeftButton
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                // Short-circuit clicks on the already-
-                                // active tab. `persistActiveTab` cancels
-                                // an in-flight search; switching to the
-                                // tab you're already on shouldn't have
-                                // a side effect like that.
-                                if (index === page.activeTab) return
-                                page.persistActiveTab()
-                                page.loadTab(index)
+                    }
+                    Connections {
+                        target: page
+                        function onActiveTabChanged() {
+                            Qt.callLater(tabFlick.ensureActiveVisible)
+                        }
+                    }
+                    onContentWidthChanged: Qt.callLater(ensureActiveVisible)
+                    // Wheel-to-scroll-horizontally on Linux desktops
+                    // where the trackpad/mouse only emits vertical.
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.NoButton
+                        onWheel: function(wheel) {
+                            const dx = wheel.angleDelta.y || wheel.angleDelta.x
+                            tabFlick.contentX = Math.max(0,
+                                Math.min(tabFlick.contentWidth - tabFlick.width,
+                                         tabFlick.contentX - dx))
+                            wheel.accepted = true
+                        }
+                    }
+
+                    Row {
+                        id: tabStrip
+                        height: parent.height
+                        spacing: app.tokens.spaceXS
+
+                        Repeater {
+                            id: tabRepeater
+                            model: tabsModel
+                            delegate: Rectangle {
+                                id: tabChip
+                                height: 26
+                                anchors.verticalCenter: parent.verticalCenter
+                                radius: app.tokens.radiusPill
+                                color: index === page.activeTab
+                                    ? app.tokens.surface2
+                                    : (tabHover.containsMouse
+                                        ? app.tokens.surface1
+                                        : "transparent")
+                                border.color: index === page.activeTab
+                                    ? app.tokens.accent : "transparent"
+                                border.width: 1
+                                implicitWidth: tabRow.implicitWidth + app.tokens.spaceL * 2
+                                Behavior on color { ColorAnimation { duration: app.tokens.durationSnap } }
+
+                                RowLayout {
+                                    id: tabRow
+                                    anchors.fill: parent
+                                    anchors.leftMargin: app.tokens.spaceM
+                                    anchors.rightMargin: app.tokens.spaceS
+                                    spacing: app.tokens.spaceXS
+                                    Controls.Label {
+                                        text: model.label
+                                        font.pixelSize: app.tokens.textCaption + 1
+                                        font.weight: index === page.activeTab
+                                            ? app.tokens.weightSemibold : app.tokens.weightMedium
+                                        color: index === page.activeTab
+                                            ? app.tokens.accent : Kirigami.Theme.textColor
+                                        opacity: index === page.activeTab ? 1.0 : 0.75
+                                    }
+                                    Controls.Button {
+                                        flat: true
+                                        icon.name: "window-close-symbolic"
+                                        display: Controls.AbstractButton.IconOnly
+                                        Layout.preferredWidth: 18
+                                        Layout.preferredHeight: 18
+                                        visible: tabsModel.count > 1
+                                            && (index === page.activeTab || tabHover.containsMouse)
+                                        onClicked: page.closeTab(index)
+                                    }
+                                }
+                                MouseArea {
+                                    id: tabHover
+                                    anchors.fill: parent
+                                    acceptedButtons: Qt.LeftButton
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        // Short-circuit clicks on the
+                                        // already-active tab.
+                                        // `persistActiveTab` cancels an
+                                        // in-flight search; switching to
+                                        // the tab you're already on
+                                        // shouldn't have a side effect.
+                                        if (index === page.activeTab) return
+                                        page.persistActiveTab()
+                                        page.loadTab(index)
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
+                // "+" stays outside the Flickable so it's always
+                // reachable even when the tab strip has scrolled.
                 Controls.Button {
                     flat: true
                     icon.name: "list-add-symbolic"
@@ -582,7 +641,13 @@ Kirigami.Page {
                     Controls.Label {
                         id: matchCountLabel
                         Layout.alignment: Qt.AlignVCenter
-                        text: qsTr("%1 matches · %2 files").arg(page.controller.matchCount).arg(page.controller.filesMatched)
+                        text: {
+                            const m = page.controller.matchCount
+                            const f = page.controller.filesMatched
+                            const mTxt = m === 1 ? qsTr("1 match") : qsTr("%1 matches").arg(m)
+                            const fTxt = f === 1 ? qsTr("1 file")  : qsTr("%1 files").arg(f)
+                            return mTxt + " · " + fTxt
+                        }
                         font.pixelSize: app.tokens.textCaption + 1
                         font.weight: app.tokens.weightSemibold
                         color: app.tokens.accent
@@ -734,15 +799,23 @@ Kirigami.Page {
                 keyNavigationEnabled: true
                 keyNavigationWraps: false
 
-                // Space on the focused row opens the context preview —
-                // mirrors Grex's keyboard-friendly result navigation.
+                // Keyboard navigation on a focused row:
+                //   Space  — open the context preview (matches Grex)
+                //   Enter  — open the file in the configured editor
+                //            jumping to the match's line
                 Keys.onPressed: function(event) {
-                    if (event.key === Qt.Key_Space && currentIndex >= 0) {
+                    if (currentIndex < 0) return
+                    if (event.key === Qt.Key_Space) {
                         const path = page.controller.rowFullPath(currentIndex)
                         const lineRaw = model.data(model.index(currentIndex, 0), 0x0102) || "0"
                         contextPreview.path = path
                         contextPreview.lineNumber = parseInt(String(lineRaw), 10)
                         contextPreview.open()
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                        const path = page.controller.rowFullPath(currentIndex)
+                        const lineRaw = model.data(model.index(currentIndex, 0), 0x0102) || "0"
+                        page.controller.openInEditor(path, parseInt(String(lineRaw), 10))
                         event.accepted = true
                     }
                 }
@@ -1182,6 +1255,15 @@ Kirigami.Page {
                 id: replacementField
                 Layout.fillWidth: true
                 placeholderText: qsTr("Replacement text (regex captures: $1, ${name})")
+                // Enter commits the replace when the Replace All
+                // button would be enabled. Esc closes the dialog
+                // (Qt default).
+                Keys.onReturnPressed: function(event) {
+                    if (!page.controller.replacing && text.length > 0) {
+                        page.controller.startReplace(text)
+                        event.accepted = true
+                    }
+                }
             }
 
             Controls.Label {
@@ -1223,11 +1305,14 @@ Kirigami.Page {
             text: {
                 try {
                     const r = JSON.parse(page.controller.lastReplaceSummary || "{}")
-                    return qsTr("Modified %1 files · %2 matches replaced · %3 failures · %4 ms")
-                        .arg(r.files_modified || 0)
-                        .arg(r.matches_replaced || 0)
-                        .arg(r.failure_count || 0)
-                        .arg(r.elapsed_ms || 0)
+                    const fm = r.files_modified || 0
+                    const mr = r.matches_replaced || 0
+                    const fc = r.failure_count || 0
+                    const ms = r.elapsed_ms || 0
+                    const fmTxt = fm === 1 ? qsTr("1 file modified")    : qsTr("%1 files modified").arg(fm)
+                    const mrTxt = mr === 1 ? qsTr("1 match replaced")   : qsTr("%1 matches replaced").arg(mr)
+                    const fcTxt = fc === 1 ? qsTr("1 failure")          : qsTr("%1 failures").arg(fc)
+                    return fmTxt + " · " + mrTxt + " · " + fcTxt + " · " + ms + " ms"
                 } catch (e) {
                     return qsTr("Replace finished.")
                 }
