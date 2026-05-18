@@ -25,6 +25,22 @@ Kirigami.ScrollablePage {
     Kirigami.Theme.highlightColor: app.tokens.accent
     Kirigami.Theme.highlightedTextColor: app.tokens.accentText
 
+    palette.window:          app.tokens.surface0
+    palette.windowText:      app.tokens.textPrimary
+    palette.base:            app.tokens.surface1
+    palette.alternateBase:   app.tokens.surface2
+    palette.text:            app.tokens.textPrimary
+    palette.button:          app.tokens.surface1
+    palette.buttonText:      app.tokens.textPrimary
+    palette.brightText:      app.tokens.accentText
+    palette.highlight:       app.tokens.accent
+    palette.highlightedText: app.tokens.accentText
+    palette.toolTipBase:     app.tokens.surface2
+    palette.toolTipText:     app.tokens.textPrimary
+    palette.placeholderText: Qt.rgba(app.tokens.textPrimary.r,
+                                     app.tokens.textPrimary.g,
+                                     app.tokens.textPrimary.b, 0.55)
+
     readonly property var features: [
         { icon: "edit-find-symbolic",        title: qsTr("Fast content search"),
           body: qsTr("Streams matches as files are scanned — no waiting for the whole tree.") },
@@ -338,10 +354,10 @@ Kirigami.ScrollablePage {
                         }
                     }
 
-                    Controls.Button {
+                    AppFlatButton {
                         Layout.alignment: Qt.AlignVCenter
-                        flat: true
                         icon.name: "go-next-symbolic"
+                        icon.color: app.tokens.textPrimary
                         text: qsTr("Visit Grex")
                         display: Controls.AbstractButton.TextBesideIcon
                         onClicked: Qt.openUrlExternally("https://github.com/visorcraft/grex")
@@ -357,16 +373,16 @@ Kirigami.ScrollablePage {
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: app.tokens.spaceM
-                    Controls.Button {
-                        flat: true
+                    AppFlatButton {
                         icon.name: "document-edit"
+                        icon.color: app.tokens.textPrimary
                         text: qsTr("CREDITS.md")
                         display: Controls.AbstractButton.TextBesideIcon
                         onClicked: Qt.openUrlExternally("https://github.com/visorcraft/grexa/blob/main/CREDITS.md")
                     }
-                    Controls.Button {
-                        flat: true
+                    AppFlatButton {
                         icon.name: "view-list-text"
+                        icon.color: app.tokens.textPrimary
                         text: qsTr("Transitive list")
                         display: Controls.AbstractButton.TextBesideIcon
                         onClicked: Qt.openUrlExternally("https://github.com/visorcraft/grexa/blob/main/docs/credits-third-party.md")

@@ -63,9 +63,9 @@ ColumnLayout {
             font.pixelSize: app.tokens.textCaption
             opacity: 0.55
         }
-        Controls.Button {
-            flat: true
+        AppFlatButton {
             icon.name: "edit-clear-all-symbolic"
+            icon.color: app.tokens.textPrimary
             text: qsTr("Clear")
             display: Controls.AbstractButton.TextBesideIcon
             Controls.ToolTip.text: qsTr("Clear the chat panel. Doesn't touch your API key or stored history.")
@@ -175,6 +175,7 @@ ColumnLayout {
                 width: parent.width - 2 * app.tokens.spaceXL
                 visible: messageModel.count === 0 && !controller.busy && panel.aiEnabled
                 icon.name: "tools-symbolic"
+                icon.color: app.tokens.textPrimary
                 text: qsTr("Ask AI for help shaping a search")
                 explanation: qsTr("Describe what you're looking for in plain English. The model will suggest a path, term, and flags.")
             }

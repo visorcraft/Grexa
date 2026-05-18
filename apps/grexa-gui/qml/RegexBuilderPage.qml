@@ -26,6 +26,22 @@ Kirigami.Page {
     Kirigami.Theme.highlightColor: app.tokens.accent
     Kirigami.Theme.highlightedTextColor: app.tokens.accentText
 
+    palette.window:          app.tokens.surface0
+    palette.windowText:      app.tokens.textPrimary
+    palette.base:            app.tokens.surface1
+    palette.alternateBase:   app.tokens.surface2
+    palette.text:            app.tokens.textPrimary
+    palette.button:          app.tokens.surface1
+    palette.buttonText:      app.tokens.textPrimary
+    palette.brightText:      app.tokens.accentText
+    palette.highlight:       app.tokens.accent
+    palette.highlightedText: app.tokens.accentText
+    palette.toolTipBase:     app.tokens.surface2
+    palette.toolTipText:     app.tokens.textPrimary
+    palette.placeholderText: Qt.rgba(app.tokens.textPrimary.r,
+                                     app.tokens.textPrimary.g,
+                                     app.tokens.textPrimary.b, 0.55)
+
     property var controller: app.regexController
     property int activePreset: -1
 
@@ -254,7 +270,7 @@ Kirigami.Page {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: app.tokens.spaceS
-                Controls.TextField {
+                AppTextField {
                     id: patternField
                     Layout.fillWidth: true
                     placeholderText: qsTr("e.g.  fn\\s+\\w+_test")
@@ -313,10 +329,10 @@ Kirigami.Page {
                         opacity: 0.5
                     }
                     Item { Layout.fillWidth: true }
-                    Controls.Button {
+                    AppFlatButton {
                         visible: sampleArea.text.length > 0
-                        flat: true
                         icon.name: "edit-clear-symbolic"
+                        icon.color: app.tokens.textPrimary
                         text: qsTr("Clear")
                         display: Controls.AbstractButton.TextBesideIcon
                         font.pixelSize: app.tokens.textCaption

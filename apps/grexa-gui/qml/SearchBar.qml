@@ -85,7 +85,7 @@ Item {
                 Behavior on color { ColorAnimation { duration: app.tokens.durationSnap } }
             }
 
-            Controls.ComboBox {
+            AppComboBox {
                 id: pathField
                 editable: true
                 textRole: "pathText"
@@ -116,9 +116,9 @@ Item {
                             elide: Text.ElideMiddle
                             font.pixelSize: app.tokens.textBody
                         }
-                        Controls.Button {
-                            flat: true
+                        AppFlatButton {
                             icon.name: "edit-delete-symbolic"
+                            icon.color: app.tokens.textPrimary
                             display: Controls.AbstractButton.IconOnly
                             // Hover-only "forget" affordance. Bind to
                             // the delegate's own `hovered` via the
@@ -143,9 +143,9 @@ Item {
                 }
             }
 
-            Controls.Button {
-                flat: true
+            AppFlatButton {
                 icon.name: "folder-open-symbolic"
+                icon.color: app.tokens.textPrimary
                 display: Controls.AbstractButton.IconOnly
                 Layout.preferredWidth: 32
                 Layout.preferredHeight: 32
@@ -175,7 +175,7 @@ Item {
                 Behavior on color { ColorAnimation { duration: app.tokens.durationSnap } }
             }
 
-            Controls.TextField {
+            AppTextField {
                 id: termField
                 Layout.fillWidth: true
                 Layout.leftMargin: app.tokens.spaceS

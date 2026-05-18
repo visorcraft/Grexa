@@ -26,6 +26,22 @@ Kirigami.Page {
     Kirigami.Theme.highlightColor: app.tokens.accent
     Kirigami.Theme.highlightedTextColor: app.tokens.accentText
 
+    palette.window:          app.tokens.surface0
+    palette.windowText:      app.tokens.textPrimary
+    palette.base:            app.tokens.surface1
+    palette.alternateBase:   app.tokens.surface2
+    palette.text:            app.tokens.textPrimary
+    palette.button:          app.tokens.surface1
+    palette.buttonText:      app.tokens.textPrimary
+    palette.brightText:      app.tokens.accentText
+    palette.highlight:       app.tokens.accent
+    palette.highlightedText: app.tokens.accentText
+    palette.toolTipBase:     app.tokens.surface2
+    palette.toolTipText:     app.tokens.textPrimary
+    palette.placeholderText: Qt.rgba(app.tokens.textPrimary.r,
+                                     app.tokens.textPrimary.g,
+                                     app.tokens.textPrimary.b, 0.55)
+
     readonly property SearchController controller: app.searchController
     property alias searchBar: searchBarControl
 
@@ -359,9 +375,9 @@ Kirigami.Page {
                                             ? app.tokens.accent : Kirigami.Theme.textColor
                                         opacity: index === page.activeTab ? 1.0 : 0.75
                                     }
-                                    Controls.Button {
-                                        flat: true
+                                    AppFlatButton {
                                         icon.name: "window-close-symbolic"
+                                        icon.color: app.tokens.textPrimary
                                         display: Controls.AbstractButton.IconOnly
                                         Layout.preferredWidth: 18
                                         Layout.preferredHeight: 18
@@ -377,9 +393,9 @@ Kirigami.Page {
 
                 // "+" stays outside the Flickable so it's always
                 // reachable even when the tab strip has scrolled.
-                Controls.Button {
-                    flat: true
+                AppFlatButton {
                     icon.name: "list-add-symbolic"
+                    icon.color: app.tokens.textPrimary
                     display: Controls.AbstractButton.IconOnly
                     Layout.preferredWidth: 26
                     Layout.preferredHeight: 26
@@ -444,7 +460,7 @@ Kirigami.Page {
             // populates `containersModel`. Gated on the Settings
             // toggle so the dropdown stays minimal when the user
             // hasn't opted into container search.
-            Controls.ComboBox {
+            AppComboBox {
                 id: targetSelector
                 width: 220
                 model: ListModel {
@@ -532,11 +548,11 @@ Kirigami.Page {
             // button. The declarative `checked: filterDrawer.opened`
             // form fights the `checkable: true` auto-toggle — don't
             // use it.
-            Controls.Button {
+            AppFlatButton {
                 id: filterToggle
-                flat: true
                 checkable: true
                 icon.name: "view-filter-symbolic"
+                icon.color: app.tokens.textPrimary
                 text: qsTr("Filters")
                 display: Controls.AbstractButton.TextBesideIcon
                 onCheckedChanged: checked ? filterDrawer.open() : filterDrawer.close()
@@ -544,9 +560,9 @@ Kirigami.Page {
 
             // Save current search params as a named profile. The
             // profile shows up under the Profiles nav entry.
-            Controls.Button {
-                flat: true
+            AppFlatButton {
                 icon.name: "bookmark-new-symbolic"
+                icon.color: app.tokens.textPrimary
                 text: qsTr("Save profile…")
                 display: Controls.AbstractButton.TextBesideIcon
                 enabled: searchBar.pathText.length > 0 && searchBar.termText.length > 0
@@ -556,9 +572,9 @@ Kirigami.Page {
             // Export menu — CSV / JSON / Markdown writes the visible
             // rows (after within-filter + files-mode dedup) to a
             // path chosen by the user.
-            Controls.Button {
-                flat: true
+            AppFlatButton {
                 icon.name: "document-save-symbolic"
+                icon.color: app.tokens.textPrimary
                 text: qsTr("Export…")
                 display: Controls.AbstractButton.TextBesideIcon
                 enabled: page.controller.matchCount > 0 && !page.controller.busy
@@ -586,36 +602,36 @@ Kirigami.Page {
 
             // Replace button → opens the replace dialog. Disabled for
             // container targets and before any search has run.
-            Controls.Button {
-                flat: true
+            AppFlatButton {
                 icon.name: "edit-find-replace-symbolic"
+                icon.color: app.tokens.textPrimary
                 text: qsTr("Replace…")
                 display: Controls.AbstractButton.TextBesideIcon
                 enabled: page.controller.targetKind === 0 && page.controller.hasSearched && !page.controller.busy
                 onClicked: replaceDialog.open()
             }
 
-            Controls.Button {
-                flat: true
+            AppFlatButton {
                 icon.name: "process-stop-symbolic"
+                icon.color: app.tokens.textPrimary
                 text: qsTr("Stop")
                 display: Controls.AbstractButton.TextBesideIcon
                 enabled: page.controller.busy
                 onClicked: page.controller.cancel()
             }
-            Controls.Button {
-                flat: true
+            AppFlatButton {
                 icon.name: "edit-clear-symbolic"
+                icon.color: app.tokens.textPrimary
                 text: qsTr("Clear")
                 display: Controls.AbstractButton.TextBesideIcon
                 enabled: !page.controller.busy && page.controller.matchCount > 0
                 onClicked: page.controller.clearResults()
             }
-            Controls.Button {
+            AppFlatButton {
                 id: aiToggle
-                flat: true
                 checkable: true
                 icon.name: "tools-symbolic"
+                icon.color: app.tokens.textPrimary
                 text: qsTr("AI assist")
                 display: Controls.AbstractButton.TextBesideIcon
                 enabled: app.settingsController.aiSearchEnabled
@@ -698,7 +714,7 @@ Kirigami.Page {
                 color: Kirigami.Theme.textColor
                 opacity: 0.5
             }
-            Controls.TextField {
+            AppTextField {
                 id: withinField
                 Layout.fillWidth: true
                 placeholderText: qsTr("Filter results — substring or regex")
@@ -708,7 +724,7 @@ Kirigami.Page {
                     page.refreshView()
                 }
             }
-            Controls.CheckBox {
+            AppCheckBox {
                 text: qsTr("regex")
                 checked: page.controller.withinRegex
                 onToggled: {
@@ -716,9 +732,9 @@ Kirigami.Page {
                     page.refreshView()
                 }
             }
-            Controls.Button {
-                flat: true
+            AppFlatButton {
                 icon.name: "edit-clear-symbolic"
+                icon.color: app.tokens.textPrimary
                 display: Controls.AbstractButton.IconOnly
                 Controls.ToolTip.text: qsTr("Clear filter")
                 Controls.ToolTip.visible: hovered
@@ -892,6 +908,7 @@ Kirigami.Page {
                 width: parent.width - 2 * app.tokens.spaceXL
                 visible: resultList.count === 0 && !page.controller.busy && page.controller.hasSearched
                 icon.name: "edit-find-symbolic"
+                icon.color: app.tokens.textPrimary
                 text: qsTr("No matches found")
                 explanation: page.controller.withinFilter.length > 0
                     ? qsTr("The result filter '%1' hid every row. Clear it to see the raw matches, or widen the search.").arg(page.controller.withinFilter)
@@ -899,6 +916,7 @@ Kirigami.Page {
                 helpfulAction: Kirigami.Action {
                     text: qsTr("Open Filters")
                     icon.name: "view-filter-symbolic"
+                    icon.color: app.tokens.textPrimary
                     onTriggered: filterDrawer.open()
                 }
             }
@@ -1026,7 +1044,7 @@ Kirigami.Page {
                 font.pixelSize: app.tokens.textCaption
                 opacity: 0.7
             }
-            Controls.TextField {
+            AppTextField {
                 id: profileNameField
                 Layout.fillWidth: true
                 placeholderText: qsTr("e.g. “TODOs in ~/code”")
@@ -1043,6 +1061,7 @@ Kirigami.Page {
                     id: saveButton
                     text: qsTr("Save")
                     icon.name: "document-save-symbolic"
+                    icon.color: app.tokens.textPrimary
                     enabled: profileNameField.text.trim().length > 0
                     function commit() {
                         if (!enabled) return
@@ -1144,9 +1163,9 @@ Kirigami.Page {
                             font.weight: app.tokens.weightBold
                             Layout.fillWidth: true
                         }
-                        Controls.Button {
-                            flat: true
+                        AppFlatButton {
                             icon.name: "window-close-symbolic"
+                            icon.color: app.tokens.textPrimary
                             display: Controls.AbstractButton.IconOnly
                             onClicked: filterDrawer.close()
                         }
@@ -1159,32 +1178,32 @@ Kirigami.Page {
                         wrapMode: Text.WordWrap
                     }
 
-                    Controls.CheckBox {
+                    AppCheckBox {
                         text: qsTr("Respect .gitignore")
                         checked: app.settingsController.respectGitignore
                         onToggled: { app.settingsController.respectGitignore = checked; app.settingsController.apply() }
                     }
-                    Controls.CheckBox {
+                    AppCheckBox {
                         text: qsTr("Include hidden files (dotfiles)")
                         checked: app.settingsController.includeHidden
                         onToggled: { app.settingsController.includeHidden = checked; app.settingsController.apply() }
                     }
-                    Controls.CheckBox {
+                    AppCheckBox {
                         text: qsTr("Include binary / extracted docs")
                         checked: app.settingsController.includeBinary
                         onToggled: { app.settingsController.includeBinary = checked; app.settingsController.apply() }
                     }
-                    Controls.CheckBox {
+                    AppCheckBox {
                         text: qsTr("Include system files")
                         checked: app.settingsController.includeSystemFiles
                         onToggled: { app.settingsController.includeSystemFiles = checked; app.settingsController.apply() }
                     }
-                    Controls.CheckBox {
+                    AppCheckBox {
                         text: qsTr("Include subfolders (recursive)")
                         checked: app.settingsController.includeSubfolders
                         onToggled: { app.settingsController.includeSubfolders = checked; app.settingsController.apply() }
                     }
-                    Controls.CheckBox {
+                    AppCheckBox {
                         text: qsTr("Follow symbolic links")
                         checked: app.settingsController.includeSymbolicLinks
                         onToggled: { app.settingsController.includeSymbolicLinks = checked; app.settingsController.apply() }
@@ -1196,7 +1215,7 @@ Kirigami.Page {
                         opacity: 0.65
                         Layout.topMargin: app.tokens.spaceS
                     }
-                    Controls.TextField {
+                    AppTextField {
                         Layout.fillWidth: true
                         placeholderText: "*.rs|*.toml|-target*"
                         text: app.settingsController.defaultMatchFiles
@@ -1211,7 +1230,7 @@ Kirigami.Page {
                         font.pixelSize: app.tokens.textCaption
                         opacity: 0.65
                     }
-                    Controls.TextField {
+                    AppTextField {
                         Layout.fillWidth: true
                         placeholderText: "node_modules, target, .venv"
                         text: app.settingsController.defaultExcludeDirs
@@ -1272,7 +1291,7 @@ Kirigami.Page {
                 font.pixelSize: app.tokens.textCaption
                 opacity: 0.65
             }
-            Controls.TextField {
+            AppTextField {
                 id: replacementField
                 Layout.fillWidth: true
                 placeholderText: qsTr("Replacement text (regex captures: $1, ${name})")
@@ -1305,6 +1324,7 @@ Kirigami.Page {
                 PrimaryButton {
                     text: page.controller.replacing ? qsTr("Replacing…") : qsTr("Replace All")
                     icon.name: "edit-find-replace-symbolic"
+                    icon.color: app.tokens.textPrimary
                     enabled: !page.controller.replacing
                     onClicked: page.controller.startReplace(replacementField.text)
                 }
@@ -1385,9 +1405,9 @@ Kirigami.Page {
                         font.weight: app.tokens.weightBold
                         Layout.fillWidth: true
                     }
-                    Controls.Button {
-                        flat: true
+                    AppFlatButton {
                         icon.name: "window-close-symbolic"
+                        icon.color: app.tokens.textPrimary
                         display: Controls.AbstractButton.IconOnly
                         onClicked: aiDrawer.close()
                     }

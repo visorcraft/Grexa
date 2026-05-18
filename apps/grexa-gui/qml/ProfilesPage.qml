@@ -25,6 +25,22 @@ Kirigami.ScrollablePage {
     Kirigami.Theme.highlightColor: app.tokens.accent
     Kirigami.Theme.highlightedTextColor: app.tokens.accentText
 
+    palette.window:          app.tokens.surface0
+    palette.windowText:      app.tokens.textPrimary
+    palette.base:            app.tokens.surface1
+    palette.alternateBase:   app.tokens.surface2
+    palette.text:            app.tokens.textPrimary
+    palette.button:          app.tokens.surface1
+    palette.buttonText:      app.tokens.textPrimary
+    palette.brightText:      app.tokens.accentText
+    palette.highlight:       app.tokens.accent
+    palette.highlightedText: app.tokens.accentText
+    palette.toolTipBase:     app.tokens.surface2
+    palette.toolTipText:     app.tokens.textPrimary
+    palette.placeholderText: Qt.rgba(app.tokens.textPrimary.r,
+                                     app.tokens.textPrimary.g,
+                                     app.tokens.textPrimary.b, 0.55)
+
     ListModel { id: profilesModel }
     property string filterText: ""
 
@@ -106,9 +122,9 @@ Kirigami.ScrollablePage {
                         opacity: 0.6
                     }
                 }
-                Controls.Button {
-                    flat: true
+                AppFlatButton {
                     icon.name: "view-refresh"
+                    icon.color: app.tokens.textPrimary
                     text: qsTr("Refresh")
                     display: Controls.AbstractButton.TextBesideIcon
                     onClicked: page.refresh()
@@ -132,15 +148,15 @@ Kirigami.ScrollablePage {
                 color: Kirigami.Theme.textColor
                 opacity: 0.5
             }
-            Controls.TextField {
+            AppTextField {
                 Layout.fillWidth: true
                 placeholderText: qsTr("Filter profiles by name, term, or path")
                 text: page.filterText
                 onTextEdited: { page.filterText = text; filterDebounce.restart() }
             }
-            Controls.Button {
-                flat: true
+            AppFlatButton {
                 icon.name: "edit-clear-symbolic"
+                icon.color: app.tokens.textPrimary
                 display: Controls.AbstractButton.IconOnly
                 enabled: page.filterText.length > 0
                 onClicked: { page.filterText = ""; filterDebounce.stop(); page.refresh() }
@@ -152,6 +168,7 @@ Kirigami.ScrollablePage {
             Layout.topMargin: app.tokens.spaceXL * 2
             visible: profilesModel.count === 0
             icon.name: "document-save-symbolic"
+            icon.color: app.tokens.textPrimary
             text: page.filterText.length > 0
                 ? qsTr("No profiles match “%1”").arg(page.filterText)
                 : qsTr("No saved profiles")
@@ -204,9 +221,9 @@ Kirigami.ScrollablePage {
                                 elide: Text.ElideMiddle
                             }
                         }
-                        Controls.Button {
-                            flat: true
+                        AppFlatButton {
                             icon.name: "edit-find-symbolic"
+                            icon.color: app.tokens.textPrimary
                             text: qsTr("Open")
                             display: Controls.AbstractButton.TextBesideIcon
                             onClicked: {
@@ -230,9 +247,9 @@ Kirigami.ScrollablePage {
                                 })
                             }
                         }
-                        Controls.Button {
-                            flat: true
+                        AppFlatButton {
                             icon.name: "edit-delete-symbolic"
+                            icon.color: app.tokens.textPrimary
                             display: Controls.AbstractButton.IconOnly
                             Controls.ToolTip.text: qsTr("Delete profile")
                             Controls.ToolTip.visible: hovered

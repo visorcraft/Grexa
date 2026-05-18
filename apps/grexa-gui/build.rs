@@ -26,6 +26,11 @@ fn main() {
                 "qml/Card.qml",
                 "qml/SearchBar.qml",
                 "qml/FlagChip.qml",
+                "qml/AppTextField.qml",
+                "qml/AppComboBox.qml",
+                "qml/AppCheckBox.qml",
+                "qml/AppSpinBox.qml",
+                "qml/AppFlatButton.qml",
             ]),
     )
     // Bundle brand + illustration assets at

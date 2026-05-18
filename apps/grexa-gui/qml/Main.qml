@@ -66,6 +66,14 @@ Kirigami.ApplicationWindow {
     Component.onCompleted: {
         app.raise()
         app.requestActivate()
+        // GREXA_INITIAL_PAGE env var lets dev/QA jump to a specific
+        // page on launch — used for screenshot validation across the
+        // theme palette.
+        const initial = Qt.application.arguments && Qt.application.arguments.length > 1
+            ? Qt.application.arguments[1] : ""
+        if (initial && ["search","regex","history","profiles","settings","about"].indexOf(initial) !== -1) {
+            app.goTo(initial)
+        }
         // Surface a recovery dialog if the previous run left a
         // partial replace journal behind. Gated on the user opt-in
         // toggle in Settings → Replace.
@@ -96,14 +104,19 @@ Kirigami.ApplicationWindow {
     // override and Qt severs the binding loop, leaving every
     // surface stuck on its initial value (the exact symptom the
     // user hits: "Light saved but reopen doesn't apply").
-    Item {
+    // Snapshot of the host palette captured *before* our QML
+    // overrides cascade. `Kirigami.Theme.inherit: false` would zero
+    // every color (Theme has no values without inheritance), so we
+    // read from Qt's application palette instead — that holds the
+    // platform/KDE colors regardless of our window-level overrides.
+    QtObject {
         id: hostTheme
-        visible: false
-        Kirigami.Theme.inherit: false
-        Kirigami.Theme.colorSet: Kirigami.Theme.Window
-        readonly property color background: Kirigami.Theme.backgroundColor
-        readonly property color textColor:  Kirigami.Theme.textColor
-        readonly property color highlight:  Kirigami.Theme.highlightColor
+        readonly property color background: Qt.application.palette
+            ? Qt.application.palette.window : "#1A1A1A"
+        readonly property color textColor: Qt.application.palette
+            ? Qt.application.palette.windowText : "#F5F5F5"
+        readonly property color highlight: Qt.application.palette
+            ? Qt.application.palette.highlight : "#2D7FF9"
     }
 
     title: qsTr("Grexa")
