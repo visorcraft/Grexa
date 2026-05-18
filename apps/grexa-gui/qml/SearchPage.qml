@@ -439,13 +439,17 @@ Kirigami.Page {
                 }
             }
 
-            // Filter button → opens the filter drawer.
+            // Filter button → toggles the filter drawer. When the
+            // drawer is already open, a second click closes it
+            // (matches the AI-assist toggle pattern below).
             Controls.Button {
                 flat: true
+                checkable: true
+                checked: filterDrawer.opened
                 icon.name: "view-filter-symbolic"
                 text: qsTr("Filters")
                 display: Controls.AbstractButton.TextBesideIcon
-                onClicked: filterDrawer.open()
+                onClicked: filterDrawer.opened ? filterDrawer.close() : filterDrawer.open()
             }
 
             // Save current search params as a named profile. The
