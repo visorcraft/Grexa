@@ -716,21 +716,23 @@ All four v1.0 "nice-to-haves" have shipped:
   Qt event loop (verified with `QT_QPA_PLATFORM=offscreen`). The
   qmetaobject crate is no longer pulled in by `apps/grexa-gui`.
 
-## Phase 20 - GUI Bridge Wiring Gaps (2026-05-17 re-audit, mostly closed 2026-05-17)
+## Phase 20 - GUI Bridge Wiring Gaps (2026-05-17 re-audit, closed 2026-05-18 in v0.2)
 
 A live audit against the running `grexa` binary found these surfaces
 ticked in earlier phases but never actually wired through QML. The
-critical, high, and medium tracks are now wired (commit unlanded; see
-the active branch); tab management and the profile/history/export UI
-remain deferred to a follow-up because they require a multi-page
-restructure and the audit didn't flag them as blocking.
+v0.2 release closed every row in this phase. The only carry-forward
+is "true per-tab result-row isolation" — in-session tabs ship in
+v0.2 (Ctrl+T / Ctrl+W with form reload), but preserving the result
+buffer across tab switches requires multiple SearchControllers or a
+tabbed model and is tracked for v0.3.
 
-Status as of 2026-05-17 (post-rewire):
+Status as of 2026-05-18 (post-v0.2):
 
 - **Critical** (7 items) — done.
-- **High** (4 of 5 items) — done; tab UI deferred.
+- **High** (5 items) — done; per-tab result isolation lifted to v0.3.
 - **Medium** (5 items) — done.
-- **Low** (3 items) — deferred.
+- **Low** (4 items) — done (Profiles UI, History UI, Export UI, filter
+  pane animations all shipped in v0.2).
 
 Order is roughly "blocks daily use" → "polish". Each row is a single
 implementation task; sub-bullets list the concrete bridge work.
@@ -829,11 +831,14 @@ implementation task; sub-bullets list the concrete bridge work.
 
 ### High priority
 
-- [ ] **Tab management UI — open / close / rename / per-tab
-      isolation.** *Deferred — requires a multi-page restructure of
-      Main.qml and the result-model projection through an active tab
-      id. The workspace + tab core is already in place; this is a
-      pure UI gap. Tracked here so it doesn't get re-ticked silently.*
+- [x] **Tab management UI — open / close / rename / per-tab
+      isolation.** (v0.2 ships in-session tabs as a `ListModel`-driven
+      pill bar above the search bar in `SearchPage.qml`; Ctrl+T /
+      Ctrl+W in `Main.qml`. Switching tabs reloads the form. **True
+      per-tab result-row isolation** — preserving the result buffer
+      across tab switches — remains a v0.3 architectural change
+      requiring multiple SearchControllers or a tabbed model. Today
+      the result list belongs to whichever tab last ran a search.)
 
 - [x] **Recent path AutoSuggest — explicit add + remove.** (`addRecentPath` + `removeRecentPath` invokables in `search.rs`; combobox delegate in `SearchBar.qml` shows a hover-only "×" per row.)
 
@@ -871,18 +876,18 @@ implementation task; sub-bullets list the concrete bridge work.
 
 ### Low priority / polish
 
-- [ ] **Profiles UI.** *Deferred — `SearchProfileStore` is reachable
-      from Rust but the QML page doesn't exist. Profiles are
-      power-user functionality and the audit didn't flag them as
-      blocking. Track in this section so the deferral is explicit.*
+- [x] **Profiles UI.** (`apps/grexa-gui/qml/ProfilesPage.qml` —
+      lists every `SearchProfileStore` entry with Open / Delete; new
+      "Save profile…" affordance on the Search toolbar. `profiles_json`
+      / `save_profile` / `delete_profile` invokables on `SearchController`.)
 
-- [ ] **History UI.** *Deferred — `SearchHistoryStore` is wired and
-      the auto-grow path already exercises it. Adding a "History"
-      page is a v0.2 enhancement.*
+- [x] **History UI.** (`apps/grexa-gui/qml/HistoryPage.qml` — lists
+      every `SearchHistoryStore` entry with Open / Remove. `history_json`
+      / `record_history` / `remove_history_entry` invokables.)
 
-- [ ] **Export UI.** *Deferred — the CLI's `--format=json,csv,md`
-      already covers the contract. Adding a GUI "Export…" entry
-      to the result row context menu is a v0.2 enhancement.*
+- [x] **Export UI.** (Toolbar "Export…" menu in `SearchPage.qml` writes
+      visible rows to CSV / JSON / Markdown via the new
+      `export_results` invokable + `Dialogs.FileDialog` save-as.)
 
 - [x] **Drawer-style filter pane animations.** (Filter drawer exists
       and uses Qt's default slide animation; honors the new
