@@ -716,23 +716,26 @@ All four v1.0 "nice-to-haves" have shipped:
   Qt event loop (verified with `QT_QPA_PLATFORM=offscreen`). The
   qmetaobject crate is no longer pulled in by `apps/grexa-gui`.
 
-## Phase 20 - GUI Bridge Wiring Gaps (2026-05-17 re-audit, closed 2026-05-18 in v0.2)
+## Phase 20 - GUI Bridge Wiring Gaps (2026-05-17 re-audit, fully closed 2026-05-18)
 
 A live audit against the running `grexa` binary found these surfaces
 ticked in earlier phases but never actually wired through QML. The
-v0.2 release closed every row in this phase. The only carry-forward
-is "true per-tab result-row isolation" — in-session tabs ship in
-v0.2 (Ctrl+T / Ctrl+W with form reload), but preserving the result
-buffer across tab switches requires multiple SearchControllers or a
-tabbed model and is tracked for v0.3.
+v0.2 release closed every row in this phase. The "true per-tab
+result-row isolation" follow-up landed in the same v0.2 line —
+each tab carries a stable monotonic id, and the SearchController
+keeps a `HashMap<i32, TabSnapshot>` so switching tabs preserves the
+full result buffer (rows + counters + status + within-filter
+state). See `save_tab_snapshot` / `restore_tab_snapshot` /
+`drop_tab_snapshot` in `apps/grexa-gui/src/qobjects/search.rs`.
 
-Status as of 2026-05-18 (post-v0.2):
+Status as of 2026-05-18 (post-v0.2 + per-tab):
 
 - **Critical** (7 items) — done.
-- **High** (5 items) — done; per-tab result isolation lifted to v0.3.
+- **High** (5 items) — done.
 - **Medium** (5 items) — done.
-- **Low** (4 items) — done (Profiles UI, History UI, Export UI, filter
-  pane animations all shipped in v0.2).
+- **Low** (4 items) — done.
+
+No carry-forwards.
 
 Order is roughly "blocks daily use" → "polish". Each row is a single
 implementation task; sub-bullets list the concrete bridge work.
@@ -832,13 +835,17 @@ implementation task; sub-bullets list the concrete bridge work.
 ### High priority
 
 - [x] **Tab management UI — open / close / rename / per-tab
-      isolation.** (v0.2 ships in-session tabs as a `ListModel`-driven
+      isolation.** v0.2 ships in-session tabs as a `ListModel`-driven
       pill bar above the search bar in `SearchPage.qml`; Ctrl+T /
-      Ctrl+W in `Main.qml`. Switching tabs reloads the form. **True
-      per-tab result-row isolation** — preserving the result buffer
-      across tab switches — remains a v0.3 architectural change
-      requiring multiple SearchControllers or a tabbed model. Today
-      the result list belongs to whichever tab last ran a search.)
+      Ctrl+W in `Main.qml`. Each tab carries a stable monotonic
+      `tabId`. **True per-tab result-row isolation** landed in the
+      same release: switching tabs calls `save_tab_snapshot(prev)`
+      then `restore_tab_snapshot(next)` against a Rust-side
+      `HashMap<i32, TabSnapshot>` keyed by `tabId` — the row buffer,
+      counters, within-filter, target, and status text all survive
+      the round-trip. The view projection (`visible`) is rebuilt
+      on restore so it stays consistent with whatever the user did
+      to filters / result-mode while a different tab was active.
 
 - [x] **Recent path AutoSuggest — explicit add + remove.** (`addRecentPath` + `removeRecentPath` invokables in `search.rs`; combobox delegate in `SearchBar.qml` shows a hover-only "×" per row.)
 

@@ -67,15 +67,21 @@ Kirigami.Page {
     property var runtimesList: []
 
     // -- In-session search tabs --------------------------------------
-    // Each tab is a saved {label, path, term, regex, caseSensitive,
-    // withinFilter, resultMode} snapshot. Switching tabs reloads the
-    // form; running the search streams rows into the active tab.
-    // Full per-tab result-row isolation is a v0.3 architectural
-    // change (multiple SearchControllers or tabbed model); for now
-    // the result list belongs to whichever tab last ran a search.
+    // Each tab carries a stable monotonic `tabId` and the form fields
+    // {label, path, term, regex, caseSensitive, withinFilter,
+    // resultMode}. Switching tabs:
+    //   1. Saves the outgoing tab's full result buffer via the Rust
+    //      controller's `save_tab_snapshot(prev_tab_id)`.
+    //   2. Reloads the incoming tab's form fields.
+    //   3. Calls `restore_tab_snapshot(next_tab_id)` so the result
+    //      list re-populates with that tab's rows (or empties for a
+    //      fresh tab).
+    // The snapshot store lives Rust-side as a HashMap keyed by the
+    // stable id, so re-ordered or closed tabs don't desync.
     ListModel {
         id: tabsModel
         ListElement {
+            tabId: 1
             label: "Search 1"
             tabPath: ""
             tabTerm: ""
@@ -86,11 +92,26 @@ Kirigami.Page {
         }
     }
     property int activeTab: 0
+    property int nextTabId: 2
+
+    function activeTabId() {
+        if (activeTab < 0 || activeTab >= tabsModel.count) return 0
+        return tabsModel.get(activeTab).tabId
+    }
 
     function persistActiveTab() {
         if (activeTab < 0 || activeTab >= tabsModel.count) return
+        // Cancel any in-flight search so its worker doesn't queue
+        // hops that would land in the next tab's model after the
+        // restore. The bumped generation in start_search makes
+        // re-running safe; this just stops the stale stream.
+        if (page.controller.busy) {
+            page.controller.cancel()
+        }
+        const cur = tabsModel.get(activeTab)
         tabsModel.set(activeTab, {
-            label: tabsModel.get(activeTab).label,
+            tabId: cur.tabId,
+            label: cur.label,
             tabPath: searchBar.pathText,
             tabTerm: searchBar.termText,
             tabRegex: searchBar.regexEnabled,
@@ -98,6 +119,8 @@ Kirigami.Page {
             tabResultMode: page.controller.resultMode,
             tabWithin: page.controller.withinFilter
         })
+        // Snapshot the result rows + counters into the Rust map.
+        page.controller.saveTabSnapshot(cur.tabId)
     }
 
     function loadTab(idx) {
@@ -107,18 +130,20 @@ Kirigami.Page {
         searchBar.termText = t.tabTerm
         searchBar.regexEnabled = t.tabRegex
         searchBar.caseSensitive = t.tabCase
-        page.controller.resultMode = t.tabResultMode
-        page.controller.withinFilter = t.tabWithin
-        page.controller.clearResults()
-        page.refreshView()
+        // Restore from the Rust snapshot store. This resets the
+        // model, reinstalls the rows, and re-emits every counter
+        // qproperty. Cleared when no snapshot exists for the id.
+        page.controller.restoreTabSnapshot(t.tabId)
         activeTab = idx
     }
 
     function openNewTab() {
         persistActiveTab()
-        const n = tabsModel.count + 1
+        const id = nextTabId
+        nextTabId += 1
         tabsModel.append({
-            label: qsTr("Search %1").arg(n),
+            tabId: id,
+            label: qsTr("Search %1").arg(id),
             tabPath: "", tabTerm: "",
             tabRegex: false, tabCase: false,
             tabResultMode: 0, tabWithin: ""
@@ -128,6 +153,8 @@ Kirigami.Page {
 
     function closeTab(idx) {
         if (tabsModel.count <= 1) return  // keep at least one
+        const closingId = tabsModel.get(idx).tabId
+        page.controller.dropTabSnapshot(closingId)
         const wasActive = (idx === activeTab)
         tabsModel.remove(idx)
         if (wasActive) {

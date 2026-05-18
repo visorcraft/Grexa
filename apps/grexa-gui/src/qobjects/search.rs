@@ -55,6 +55,34 @@ fn expand_tilde(path: &str) -> String {
 /// preview widths.
 const BATCH_SIZE: usize = 64;
 
+/// Snapshot of one tab's result buffer plus the qproperty-shaped
+/// state the tab depends on. Created on tab-switch-away and
+/// restored on tab-switch-back via the QML tab bar.
+///
+/// We keep `rows` here — `visible` is recomputed from `rows` +
+/// `result_mode` + `within_filter` on restore, so the snapshot
+/// is the canonical raw match list and the projection is
+/// re-derived. That avoids stale `visible` indices if the user
+/// flipped the within-filter while a different tab was active.
+#[derive(Debug, Clone, Default)]
+struct TabSnapshot {
+    rows: Vec<ResultRow>,
+    last_path: String,
+    last_term: String,
+    last_regex: bool,
+    last_case_sensitive: bool,
+    status_text: String,
+    match_count: i32,
+    files_matched: i32,
+    files_scanned: i32,
+    has_searched: bool,
+    result_mode: i32,
+    within_filter: String,
+    within_regex: bool,
+    target_kind: i32,
+    selected_container_id: String,
+}
+
 /// One row in the result list model.
 #[derive(Debug, Clone)]
 pub struct ResultRow {
@@ -314,6 +342,28 @@ pub mod ffi {
         #[qinvokable]
         fn delete_profile(self: &SearchController, name: &QString) -> bool;
 
+        // ---- Per-tab result-row isolation -----------------------
+
+        /// Snapshot the current row buffer + qproperty state under
+        /// `tab_id`. Called from QML before switching to a
+        /// different tab. Idempotent — overwrites any existing
+        /// snapshot for the same id.
+        #[qinvokable]
+        fn save_tab_snapshot(self: Pin<&mut SearchController>, tab_id: i32);
+
+        /// Restore a previously-saved snapshot. Resets the model,
+        /// reinstalls the rows, and re-emits the qproperty
+        /// setters so QML sees the right counter / status. When
+        /// `tab_id` has no snapshot, falls back to clearing the
+        /// model (the "fresh tab" case).
+        #[qinvokable]
+        fn restore_tab_snapshot(self: Pin<&mut SearchController>, tab_id: i32);
+
+        /// Drop a tab's snapshot. Called when the QML tab bar
+        /// closes a tab so memory doesn't leak.
+        #[qinvokable]
+        fn drop_tab_snapshot(self: Pin<&mut SearchController>, tab_id: i32);
+
         /// Fired when the recent-paths list grows or shrinks.
         #[qsignal]
         fn history_changed(self: Pin<&mut SearchController>);
@@ -421,6 +471,13 @@ pub struct SearchControllerRust {
     last_term: String,
     last_regex: bool,
     last_case_sensitive: bool,
+    /// Per-tab result-row snapshots keyed by the QML-side monotonic
+    /// tab id. Switching to a different tab calls
+    /// `save_tab_snapshot(prev)` then `restore_tab_snapshot(next)`
+    /// so each tab keeps its full result buffer. Memory cost scales
+    /// with `tabs × rows-per-tab`, which is the price of real
+    /// per-tab isolation; closing a tab drops its snapshot.
+    tab_snapshots: std::collections::HashMap<i32, TabSnapshot>,
     cancel_token: Option<CancelToken>,
     /// Monotonic counter incremented on every `start_search`. Late
     /// `thread.queue` hops from a prior worker compare their captured
@@ -1033,6 +1090,125 @@ impl ffi::SearchController {
     fn delete_profile(&self, name: &QString) -> bool {
         let name_str = name.to_string();
         with_workspace(|w| w.profiles.remove(&name_str).is_ok())
+    }
+
+    fn save_tab_snapshot(mut self: Pin<&mut Self>, tab_id: i32) {
+        // Build each field via separate accessors so the `rust()`
+        // temporary doesn't outlive the struct-literal expression.
+        let snapshot = TabSnapshot {
+            rows: self.as_ref().rust().rows.clone(),
+            last_path: self.as_ref().rust().last_path.clone(),
+            last_term: self.as_ref().rust().last_term.clone(),
+            last_regex: self.as_ref().rust().last_regex,
+            last_case_sensitive: self.as_ref().rust().last_case_sensitive,
+            status_text: self.as_ref().rust().status_text.to_string(),
+            match_count: self.as_ref().rust().match_count,
+            files_matched: self.as_ref().rust().files_matched,
+            files_scanned: self.as_ref().rust().files_scanned,
+            has_searched: self.as_ref().rust().has_searched,
+            result_mode: self.as_ref().rust().result_mode,
+            within_filter: self.as_ref().rust().within_filter.to_string(),
+            within_regex: self.as_ref().rust().within_regex,
+            target_kind: self.as_ref().rust().target_kind,
+            selected_container_id: self.as_ref().rust().selected_container_id.to_string(),
+        };
+        self.as_mut()
+            .rust_mut()
+            .tab_snapshots
+            .insert(tab_id, snapshot);
+    }
+
+    fn restore_tab_snapshot(mut self: Pin<&mut Self>, tab_id: i32) {
+        // Pull the snapshot out so we can hold the model lock
+        // while we mutate. `remove` is fine here — `save` will
+        // re-insert when the user switches away again.
+        let snap_opt = self.as_mut().rust_mut().tab_snapshots.remove(&tab_id);
+
+        unsafe { self.as_mut().begin_reset_model() };
+        {
+            let mut s = self.as_mut().rust_mut();
+            match snap_opt {
+                Some(snap) => {
+                    s.rows = snap.rows;
+                    s.last_path = snap.last_path;
+                    s.last_term = snap.last_term;
+                    s.last_regex = snap.last_regex;
+                    s.last_case_sensitive = snap.last_case_sensitive;
+                    s.result_mode = snap.result_mode;
+                    s.within_filter = QString::from(&snap.within_filter);
+                    s.within_regex = snap.within_regex;
+                    s.target_kind = snap.target_kind;
+                    s.selected_container_id = QString::from(&snap.selected_container_id);
+                    // Re-project: the visible vec is derived from
+                    // rows + result_mode + within_filter on every
+                    // restore, never persisted to the snapshot. This
+                    // keeps the projection consistent if the user
+                    // changed view rules while a different tab was
+                    // active.
+                    s.rebuild_visible();
+                    // Re-stash the snapshot's qproperty-shaped
+                    // counters into the Rust struct so the setters
+                    // below pick them up.
+                    s.match_count = snap.match_count;
+                    s.files_matched = snap.files_matched;
+                    s.files_scanned = snap.files_scanned;
+                    s.has_searched = snap.has_searched;
+                    s.status_text = QString::from(&snap.status_text);
+                }
+                None => {
+                    // No snapshot yet — treat as a fresh tab.
+                    s.rows.clear();
+                    s.visible.clear();
+                    s.last_path.clear();
+                    s.last_term.clear();
+                    s.last_regex = false;
+                    s.last_case_sensitive = false;
+                    s.match_count = 0;
+                    s.files_matched = 0;
+                    s.files_scanned = 0;
+                    s.has_searched = false;
+                    s.status_text = QString::default();
+                    s.result_mode = 0;
+                    s.within_filter = QString::default();
+                    s.within_regex = false;
+                    s.target_kind = 0;
+                    s.selected_container_id = QString::default();
+                }
+            }
+        }
+        unsafe { self.as_mut().end_reset_model() };
+
+        // Re-emit every qproperty setter so QML observers
+        // (status pill, counters, target dropdown, within input)
+        // pick up the restored values. We sample each field via
+        // its own `rust()` call so the temporary's lifetime is
+        // bounded to a single statement (cxx-qt's `rust()` returns
+        // a short-lived reference).
+        let status = self.as_ref().rust().status_text.clone();
+        let mc = self.as_ref().rust().match_count;
+        let fm = self.as_ref().rust().files_matched;
+        let fs = self.as_ref().rust().files_scanned;
+        let hs = self.as_ref().rust().has_searched;
+        let rm = self.as_ref().rust().result_mode;
+        let wf = self.as_ref().rust().within_filter.clone();
+        let wr = self.as_ref().rust().within_regex;
+        let tk = self.as_ref().rust().target_kind;
+        let sci = self.as_ref().rust().selected_container_id.clone();
+
+        self.as_mut().set_status_text(status);
+        self.as_mut().set_match_count(mc);
+        self.as_mut().set_files_matched(fm);
+        self.as_mut().set_files_scanned(fs);
+        self.as_mut().set_has_searched(hs);
+        self.as_mut().set_result_mode(rm);
+        self.as_mut().set_within_filter(wf);
+        self.as_mut().set_within_regex(wr);
+        self.as_mut().set_target_kind(tk);
+        self.as_mut().set_selected_container_id(sci);
+    }
+
+    fn drop_tab_snapshot(mut self: Pin<&mut Self>, tab_id: i32) {
+        self.as_mut().rust_mut().tab_snapshots.remove(&tab_id);
     }
 
     fn export_results(&self, dest_path: &QString, format: i32) -> QString {
