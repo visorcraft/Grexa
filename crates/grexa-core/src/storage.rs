@@ -131,6 +131,7 @@ pub enum ThemePreference {
     Subspace = 9,
     Tiefling = 10,
     Vibes = 11,
+    OledBlack = 12,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -821,6 +822,18 @@ mod tests {
     }
 
     #[test]
+    fn settings_export_uses_grexa_oled_black_extension_value() {
+        let (_dir, paths) = make_paths();
+        let store = SettingsStore::new(&paths);
+        let mut settings = store.load().unwrap();
+        settings.theme_preference = ThemePreference::OledBlack;
+        store.save(&settings).unwrap();
+
+        let json = store.export_json().unwrap();
+        assert!(json.contains("\"theme_preference\": 12"));
+    }
+
+    #[test]
     fn settings_import_updates_provided_fields() {
         let (_dir, paths) = make_paths();
         let store = SettingsStore::new(&paths);
@@ -969,6 +982,20 @@ mod tests {
             let imported = store.import_json(&exported).unwrap();
             assert_eq!(imported.theme_preference, theme);
         }
+    }
+
+    #[test]
+    fn settings_export_import_round_trip_oled_black_theme() {
+        let (_dir, paths) = make_paths();
+        let store = SettingsStore::new(&paths);
+        let mut settings = store.load().unwrap();
+        settings.theme_preference = ThemePreference::OledBlack;
+        store.save(&settings).unwrap();
+
+        let exported = store.export_json().unwrap();
+        store.delete().unwrap();
+        let imported = store.import_json(&exported).unwrap();
+        assert_eq!(imported.theme_preference, ThemePreference::OledBlack);
     }
 
     // ------------------------------------------------------------------

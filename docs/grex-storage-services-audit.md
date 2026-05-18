@@ -152,11 +152,13 @@ Grexa import rules:
 - `3..=11` map to Grexa's high-contrast / accent theme set; the existing
   Grex names are kept as theme identifiers so user-visible labels can be
   preserved or rebranded per Linux design guidance.
+- `12` (`OledBlack`) is a Grexa-only extension that maps to an OLED-oriented
+  Dark-derived palette with true black app surfaces.
 - Imported themes that have no Grexa counterpart fall back to "Follow KDE
   color scheme" and the importer logs a one-time notice.
 
-Grexa's `DefaultSettings` does not yet include a `theme_preference` field.
-Adding it is a near-term task; until then, theme import is a no-op.
+Grexa's `DefaultSettings` includes `theme_preference`, so import/export
+persists the selected theme value.
 
 ### Window Geometry
 

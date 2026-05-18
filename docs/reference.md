@@ -82,7 +82,7 @@ Defaults match the `Default` impl.
 | `use_file_index` | bool | `false` | Default Baloo seed flag. |
 | `enable_container_search` | bool | `false` | Show container target dropdown. |
 | `size_unit` | enum | `KB` | `KB` / `MB` / `GB`. |
-| `theme_preference` | u8 | `0` | Grex integer encoding (0…11). |
+| `theme_preference` | u8 | `0` | Grex integer encoding (0…11), plus Grexa-only `12` = OLED Black. |
 | `ui_language` | string | `"en-US"` | BCP-47 tag fed to `Locale::from_tag`. |
 | `string_comparison_mode` | enum | `Ordinal` | `Ordinal` / `CurrentCulture` / `InvariantCulture`. |
 | `unicode_normalization_mode` | enum | `None` | `None` / `FormC` / `FormD` / `FormKC` / `FormKD`. |

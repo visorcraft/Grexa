@@ -82,6 +82,7 @@ counterpart is documented in `grex-storage-services-audit.md` and
 | `ThemePreference.System`                                        | Mapped to "Follow KDE color scheme". |
 | `ThemePreference.Light` / `.Dark`                               | Mapped to Grexa Light / Grexa Dark. |
 | High-contrast / accent themes (`GentleGecko` … `Vibes`)         | Theme identifiers preserved on disk for round-trip; user-visible labels can be rebranded per Linux design guidance. |
+| Grexa-only OLED Black theme                                      | Added as `ThemePreference.OledBlack = 12`; uses true black app surfaces while preserving Grex-compatible `0..11` values. |
 | Fluent acrylic / Mica backdrop effects                          | Removed. |
 | Per-window position persistence                                 | Removed from the schema. Linux leaves placement to the window manager. Imports drop `WindowX`/`WindowY` and accept width/height only when ≥ 400px. |
 

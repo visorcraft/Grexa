@@ -85,15 +85,18 @@ QtObject {
     //   text      — primary text color (must read on bg)
     //   accent    — active row, primary button, focus ring, selection
     //
-    // Themes 0/1/2 (System/Light/Dark) intentionally return null for
-    // bg/secondary/tertiary so the host Kirigami palette stays in
-    // charge of the chrome — only the accent is forced for those.
+    // System returns null so the host Kirigami palette stays in
+    // charge. Light/Dark pin the canvas and text while deriving
+    // raised surfaces from the same tint math as System. Theme 12
+    // (OLED Black) is Grexa-only: it follows Dark's accent and text
+    // treatment but pins the canvas to true black.
     //
     // Index map (matches SettingsPage.qml's ComboBox and the
     // ThemePreference enum on the Rust side):
     //   0 Follow system  3 Gentle Gecko  6 Dreams      9 Subspace
     //   1 Light          4 Black Knight  7 Paranoid   10 Tiefling
     //   2 Dark           5 Diamond       8 Red Velvet 11 Vibes
+    //  12 OLED Black
     readonly property int themeIdx: app.settingsController
         ? app.settingsController.theme : 0
 
@@ -110,7 +113,7 @@ QtObject {
             case 5: return "#2D5B67"; case 6: return "#210B4B"
             case 7: return "#1D1D4E"; case 8: return "#1A0F0F"
             case 9: return "#2E1A47"; case 10: return "#3A0A4D"
-            case 11: return "#0F0F1E"
+            case 11: return "#0F0F1E"; case 12: return "#000000"
             default: return null  // System: use host
         }
     }
@@ -120,7 +123,7 @@ QtObject {
             case 5: return "#4F7F8C"; case 6: return "#3F1C6D"
             case 7: return "#3F3F88"; case 8: return "#3C1414"
             case 9: return "#4A2A6A"; case 10: return "#711D9A"
-            case 11: return "#1E1E3C"
+            case 11: return "#1E1E3C"; case 12: return "#050505"
             default: return null
         }
     }
@@ -130,7 +133,7 @@ QtObject {
             case 5: return "#7CA2B1"; case 6: return "#6A2A98"
             case 7: return "#5F5FBF"; case 8: return "#8B2323"
             case 9: return "#794B8B"; case 10: return "#A42DB4"
-            case 11: return "#CC00FF"
+            case 11: return "#CC00FF"; case 12: return "#111111"
             default: return null
         }
     }
@@ -141,7 +144,7 @@ QtObject {
             case 5: return "#B9DAE9"; case 6: return "#FF3D94"
             case 7: return "#D2D2F4"; case 8: return "#FFDCDC"
             case 9: return "#E2C7E6"; case 10: return "#F9C54E"
-            case 11: return "#00FFCC"
+            case 11: return "#00FFCC"; case 12: return "#F5F5F5"
             default: return null
         }
     }
@@ -151,7 +154,7 @@ QtObject {
             case 5:  return "#A5C5D5"; case 6:  return "#B5307E"
             case 7:  return "#9A9AE0"; case 8:  return "#DC3C3C"
             case 9:  return "#B77BB4"; case 10: return "#FF5C8A"
-            case 11: return "#FFCC00"
+            case 11: return "#FFCC00"; case 12: return "#2D7FF9"
             default: return "#2D7FF9"
         }
     }
@@ -271,7 +274,7 @@ QtObject {
     //   0 (System): luminance of Kirigami.Theme.backgroundColor
     //   1 (Light) : forced false
     //   2 (Dark)  : forced true
-    //   3..11     : dark-leaning custom palettes — forced true so the
+    //   3..12     : dark-leaning custom palettes — forced true so the
     //               surface tints / separators bias the right
     //               direction until each variant defines its own
     //               color stops.
@@ -282,7 +285,7 @@ QtObject {
         const pref = app.settingsController ? app.settingsController.theme : 0
         if (pref === 1) return false
         if (pref === 2) return true
-        if (pref >= 3 && pref <= 11) return true
+        if (pref >= 3 && pref <= 12) return true
         // System: probe the host palette via the snapshot reader so
         // we don't loop back through our own override.
         const c = app.hostTheme ? app.hostTheme.background : Qt.rgba(0.1, 0.1, 0.1, 1)

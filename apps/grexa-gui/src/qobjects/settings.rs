@@ -174,6 +174,7 @@ fn theme_to_i32(t: ThemePreference) -> i32 {
         ThemePreference::Subspace => 9,
         ThemePreference::Tiefling => 10,
         ThemePreference::Vibes => 11,
+        ThemePreference::OledBlack => 12,
     }
 }
 
@@ -190,6 +191,7 @@ fn theme_from_i32(v: i32) -> ThemePreference {
         9 => ThemePreference::Subspace,
         10 => ThemePreference::Tiefling,
         11 => ThemePreference::Vibes,
+        12 => ThemePreference::OledBlack,
         _ => ThemePreference::System,
     }
 }
@@ -303,7 +305,7 @@ mod tests {
 
     #[test]
     fn theme_round_trip_covers_all_variants() {
-        for v in 0..=11 {
+        for v in 0..=12 {
             let t = theme_from_i32(v);
             assert_eq!(theme_to_i32(t), v, "variant {v} did not round-trip");
         }

@@ -26,9 +26,9 @@ Kirigami.ApplicationWindow {
     // Theme so Pages, Cards, Labels, and Controls pick up the
     // canvas / text / highlight colors. With `inherit: false` we
     // override the host palette; descendants then inherit OURS
-    // unless they re-override locally. Themes 0/1/2 (System / Light
-    // / Dark) skip the bg + text overrides so the host Kirigami
-    // theme keeps owning the chrome.
+    // unless they re-override locally. System derives from the host
+    // palette; Light, Dark, and named variants pin app-local colors
+    // through DesignTokens.
     Kirigami.Theme.inherit: false
     Kirigami.Theme.colorSet: Kirigami.Theme.Window
     Kirigami.Theme.backgroundColor: tokens.surface0

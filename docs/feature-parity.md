@@ -126,7 +126,7 @@ Status legend:
 | Search history cap 20 + 7-field dedupe key (matching Grex byte-for-byte) | ✅ | `SearchHistoryStore` + `RecentSearch::key`. |
 | Search profiles upsert + move-to-top | ✅ | `SearchProfileStore`. |
 | JSON import/export with merge rules | ✅ | `SettingsStore::import_json`/`export_json`. |
-| Theme preference (12 variants) | ✅ | `ThemePreference` enum; Grex integer encoding preserved. |
+| Theme preference (13 variants) | ✅ | `ThemePreference` enum; Grex integer encoding preserved for `0…11`, with Grexa-only OLED Black at `12`. |
 | Settings UI sections | ✅ | `apps/grexa-gui/qml/SettingsPage.qml`; auto-save on change as of v0.3 (no Apply button). |
 | API key in keyring (never plaintext) | ✅ | `grexa_ai::secret`. |
 | Restore defaults | ✅ | `SettingsStore::delete`. |

@@ -227,6 +227,7 @@ Kirigami.ScrollablePage {
                             qsTr("Diamond"), qsTr("Dreams"), qsTr("Paranoid"),
                             qsTr("Red Velvet"), qsTr("Subspace"),
                             qsTr("Tiefling"), qsTr("Vibes"),
+                            qsTr("OLED Black"),
                         ]
                         currentIndex: page.settings.theme
                         onActivated: { page.settings.theme = currentIndex; page.commit() }
