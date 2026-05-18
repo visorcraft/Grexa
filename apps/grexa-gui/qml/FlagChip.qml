@@ -50,10 +50,13 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: {
-            root.checked = !root.checked
-            root.toggled()
-        }
+        // Emit `toggled()` only — the parent owns the boolean state
+        // and the `checked: <parent.flag>` declarative binding flows
+        // the new value back. Imperatively assigning `root.checked`
+        // here would break that binding, so any future external
+        // change to the parent's flag wouldn't propagate to the
+        // chip's visual state.
+        onClicked: root.toggled()
     }
 
     Controls.ToolTip.text: root.tooltip

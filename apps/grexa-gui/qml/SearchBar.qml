@@ -192,14 +192,14 @@ Item {
                 label: ".*"
                 tooltip: qsTr("Regex")
                 checked: root.regexEnabled
-                onToggled: root.regexEnabled = checked
+                onToggled: root.regexEnabled = !root.regexEnabled
             }
             FlagChip {
                 id: caseChip
                 label: "Aa"
                 tooltip: qsTr("Case-sensitive")
                 checked: root.caseSensitive
-                onToggled: root.caseSensitive = checked
+                onToggled: root.caseSensitive = !root.caseSensitive
             }
 
             // Vertical divider before primary action

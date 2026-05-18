@@ -285,6 +285,12 @@ Kirigami.Page {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
+                                // Short-circuit clicks on the already-
+                                // active tab. `persistActiveTab` cancels
+                                // an in-flight search; switching to the
+                                // tab you're already on shouldn't have
+                                // a side effect like that.
+                                if (index === page.activeTab) return
                                 page.persistActiveTab()
                                 page.loadTab(index)
                             }
@@ -439,17 +445,22 @@ Kirigami.Page {
                 }
             }
 
-            // Filter button → toggles the filter drawer. When the
-            // drawer is already open, a second click closes it
-            // (matches the AI-assist toggle pattern below).
+            // Filter button → toggles the filter drawer. Mirrors the
+            // AI-assist toggle pattern below: button drives the
+            // drawer via `onCheckedChanged`, and the drawer's
+            // `onOpened` / `onClosed` callbacks sync `checked` back
+            // so an Esc-to-close or click-outside un-presses the
+            // button. The declarative `checked: filterDrawer.opened`
+            // form fights the `checkable: true` auto-toggle — don't
+            // use it.
             Controls.Button {
+                id: filterToggle
                 flat: true
                 checkable: true
-                checked: filterDrawer.opened
                 icon.name: "view-filter-symbolic"
                 text: qsTr("Filters")
                 display: Controls.AbstractButton.TextBesideIcon
-                onClicked: filterDrawer.opened ? filterDrawer.close() : filterDrawer.open()
+                onCheckedChanged: checked ? filterDrawer.open() : filterDrawer.close()
             }
 
             // Save current search params as a named profile. The
@@ -472,7 +483,11 @@ Kirigami.Page {
                 text: qsTr("Export…")
                 display: Controls.AbstractButton.TextBesideIcon
                 enabled: page.controller.matchCount > 0 && !page.controller.busy
-                onClicked: exportMenu.popup()
+                // Toggle the menu — closing on a second click
+                // matches user intuition. `popup()` is a no-op when
+                // the menu is already visible, so we have to
+                // dismiss it explicitly.
+                onClicked: exportMenu.visible ? exportMenu.dismiss() : exportMenu.popup()
                 Controls.Menu {
                     id: exportMenu
                     Controls.MenuItem {
@@ -1006,6 +1021,11 @@ Kirigami.Page {
         dim: false
         width: Math.min(page.width * 0.42, 480)
         height: page.height
+        // Bidirectional sync with the toolbar's Filters toggle so
+        // an Esc / click-outside un-presses the button. Mirrors
+        // aiDrawer's pattern.
+        onClosed: filterToggle.checked = false
+        onOpened: filterToggle.checked = true
 
         Rectangle {
             anchors.fill: parent

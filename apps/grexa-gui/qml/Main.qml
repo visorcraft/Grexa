@@ -113,14 +113,17 @@ Kirigami.ApplicationWindow {
         context: Qt.ApplicationShortcut
         onActivated: app.goTo("about")
     }
+    // Esc only intercepts when a search is in flight — otherwise it
+    // falls through to Qt's default popup/dialog/drawer close
+    // handling. Without this gate, an Esc with a drawer open does
+    // nothing (the Shortcut consumes the event, finds `busy` is
+    // false, and exits silently — making the drawer's Esc-to-close
+    // contract feel broken).
     Shortcut {
         sequence: StandardKey.Cancel
         context: Qt.ApplicationShortcut
-        onActivated: {
-            if (app.searchController.busy) {
-                app.searchController.cancel()
-            }
-        }
+        enabled: app.searchController.busy
+        onActivated: app.searchController.cancel()
     }
     Shortcut {
         sequence: StandardKey.Quit
@@ -157,6 +160,10 @@ Kirigami.ApplicationWindow {
     }
 
     function goTo(key) {
+        // Short-circuit: re-clicking the active nav item would
+        // otherwise tear down + rebuild the current page and lose
+        // form state (e.g. typed search term, scroll position).
+        if (key === currentPageKey) return
         currentPageKey = key
         switch (key) {
             case "search":   app.pageStack.replace(searchPage); break
