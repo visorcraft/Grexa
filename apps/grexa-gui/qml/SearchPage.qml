@@ -39,6 +39,19 @@ Kirigami.Page {
 
     function launchSearch() {
         if (searchBar.pathText.length === 0 || searchBar.termText.length === 0) return
+        page.persistActiveTab()
+        // Auto-rename the active tab so it reads like the search.
+        if (activeTab >= 0 && activeTab < tabsModel.count) {
+            const cur = tabsModel.get(activeTab)
+            tabsModel.set(activeTab, {
+                label: searchBar.termText.length > 22
+                    ? searchBar.termText.substring(0, 20) + "…"
+                    : searchBar.termText,
+                tabPath: cur.tabPath, tabTerm: cur.tabTerm,
+                tabRegex: cur.tabRegex, tabCase: cur.tabCase,
+                tabResultMode: cur.tabResultMode, tabWithin: cur.tabWithin
+            })
+        }
         controller.startSearch(searchBar.pathText, searchBar.termText,
                                searchBar.regexEnabled, searchBar.caseSensitive, false)
     }
@@ -52,6 +65,78 @@ Kirigami.Page {
     ListModel { id: recentPaths }
     ListModel { id: containersModel }
     property var runtimesList: []
+
+    // -- In-session search tabs --------------------------------------
+    // Each tab is a saved {label, path, term, regex, caseSensitive,
+    // withinFilter, resultMode} snapshot. Switching tabs reloads the
+    // form; running the search streams rows into the active tab.
+    // Full per-tab result-row isolation is a v0.3 architectural
+    // change (multiple SearchControllers or tabbed model); for now
+    // the result list belongs to whichever tab last ran a search.
+    ListModel {
+        id: tabsModel
+        ListElement {
+            label: "Search 1"
+            tabPath: ""
+            tabTerm: ""
+            tabRegex: false
+            tabCase: false
+            tabResultMode: 0
+            tabWithin: ""
+        }
+    }
+    property int activeTab: 0
+
+    function persistActiveTab() {
+        if (activeTab < 0 || activeTab >= tabsModel.count) return
+        tabsModel.set(activeTab, {
+            label: tabsModel.get(activeTab).label,
+            tabPath: searchBar.pathText,
+            tabTerm: searchBar.termText,
+            tabRegex: searchBar.regexEnabled,
+            tabCase: searchBar.caseSensitive,
+            tabResultMode: page.controller.resultMode,
+            tabWithin: page.controller.withinFilter
+        })
+    }
+
+    function loadTab(idx) {
+        if (idx < 0 || idx >= tabsModel.count) return
+        const t = tabsModel.get(idx)
+        searchBar.pathText = t.tabPath
+        searchBar.termText = t.tabTerm
+        searchBar.regexEnabled = t.tabRegex
+        searchBar.caseSensitive = t.tabCase
+        page.controller.resultMode = t.tabResultMode
+        page.controller.withinFilter = t.tabWithin
+        page.controller.clearResults()
+        page.refreshView()
+        activeTab = idx
+    }
+
+    function openNewTab() {
+        persistActiveTab()
+        const n = tabsModel.count + 1
+        tabsModel.append({
+            label: qsTr("Search %1").arg(n),
+            tabPath: "", tabTerm: "",
+            tabRegex: false, tabCase: false,
+            tabResultMode: 0, tabWithin: ""
+        })
+        loadTab(tabsModel.count - 1)
+    }
+
+    function closeTab(idx) {
+        if (tabsModel.count <= 1) return  // keep at least one
+        const wasActive = (idx === activeTab)
+        tabsModel.remove(idx)
+        if (wasActive) {
+            const next = Math.min(idx, tabsModel.count - 1)
+            loadTab(next)
+        } else if (idx < activeTab) {
+            activeTab -= 1
+        }
+    }
 
     function refreshContainers() {
         // Kick off the off-thread probe — result lands on
@@ -99,6 +184,101 @@ Kirigami.Page {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
+
+        // ============================================================
+        // Tab bar — in-session named searches. Pill-style Mailspring
+        // tabs with × on hover. Always visible (single-tab still
+        // shows so the "+" affordance is discoverable).
+        // ============================================================
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 36
+            color: app.tokens.surfaceSidebar
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 1
+                color: app.tokens.separator
+            }
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: app.tokens.spaceL
+                anchors.rightMargin: app.tokens.spaceL
+                spacing: app.tokens.spaceXS
+
+                Repeater {
+                    model: tabsModel
+                    delegate: Rectangle {
+                        id: tabChip
+                        Layout.preferredHeight: 26
+                        Layout.alignment: Qt.AlignVCenter
+                        radius: app.tokens.radiusPill
+                        color: index === page.activeTab
+                            ? app.tokens.surface2
+                            : (tabHover.containsMouse
+                                ? app.tokens.surface1
+                                : "transparent")
+                        border.color: index === page.activeTab
+                            ? app.tokens.accent : "transparent"
+                        border.width: 1
+                        implicitWidth: tabRow.implicitWidth + app.tokens.spaceL * 2
+                        Behavior on color { ColorAnimation { duration: app.tokens.durationSnap } }
+
+                        RowLayout {
+                            id: tabRow
+                            anchors.fill: parent
+                            anchors.leftMargin: app.tokens.spaceM
+                            anchors.rightMargin: app.tokens.spaceS
+                            spacing: app.tokens.spaceXS
+                            Controls.Label {
+                                text: model.label
+                                font.pixelSize: app.tokens.textCaption + 1
+                                font.weight: index === page.activeTab
+                                    ? app.tokens.weightSemibold : app.tokens.weightMedium
+                                color: index === page.activeTab
+                                    ? app.tokens.accent : Kirigami.Theme.textColor
+                                opacity: index === page.activeTab ? 1.0 : 0.75
+                            }
+                            Controls.Button {
+                                flat: true
+                                icon.name: "window-close-symbolic"
+                                display: Controls.AbstractButton.IconOnly
+                                Layout.preferredWidth: 18
+                                Layout.preferredHeight: 18
+                                visible: tabsModel.count > 1
+                                    && (index === page.activeTab || tabHover.containsMouse)
+                                onClicked: page.closeTab(index)
+                            }
+                        }
+                        MouseArea {
+                            id: tabHover
+                            anchors.fill: parent
+                            acceptedButtons: Qt.LeftButton
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                page.persistActiveTab()
+                                page.loadTab(index)
+                            }
+                        }
+                    }
+                }
+
+                Controls.Button {
+                    flat: true
+                    icon.name: "list-add-symbolic"
+                    display: Controls.AbstractButton.IconOnly
+                    Layout.preferredWidth: 26
+                    Layout.preferredHeight: 26
+                    Controls.ToolTip.text: qsTr("New search tab (Ctrl+T)")
+                    Controls.ToolTip.visible: hovered
+                    onClicked: page.openNewTab()
+                }
+
+                Item { Layout.fillWidth: true }
+            }
+        }
 
         // ============================================================
         // Toolbar / SearchBar strip
@@ -235,6 +415,44 @@ Kirigami.Page {
                 onClicked: filterDrawer.open()
             }
 
+            // Save current search params as a named profile. The
+            // profile shows up under the Profiles nav entry.
+            Controls.Button {
+                flat: true
+                icon.name: "bookmark-new-symbolic"
+                text: qsTr("Save profile…")
+                display: Controls.AbstractButton.TextBesideIcon
+                enabled: searchBar.pathText.length > 0 && searchBar.termText.length > 0
+                onClicked: saveProfileDialog.open()
+            }
+
+            // Export menu — CSV / JSON / Markdown writes the visible
+            // rows (after within-filter + files-mode dedup) to a
+            // path chosen by the user.
+            Controls.Button {
+                flat: true
+                icon.name: "document-save-symbolic"
+                text: qsTr("Export…")
+                display: Controls.AbstractButton.TextBesideIcon
+                enabled: page.controller.matchCount > 0 && !page.controller.busy
+                onClicked: exportMenu.popup()
+                Controls.Menu {
+                    id: exportMenu
+                    Controls.MenuItem {
+                        text: qsTr("Export as CSV…")
+                        onTriggered: { exportSaveDialog.format = 0; exportSaveDialog.open() }
+                    }
+                    Controls.MenuItem {
+                        text: qsTr("Export as JSON…")
+                        onTriggered: { exportSaveDialog.format = 1; exportSaveDialog.open() }
+                    }
+                    Controls.MenuItem {
+                        text: qsTr("Export as Markdown…")
+                        onTriggered: { exportSaveDialog.format = 2; exportSaveDialog.open() }
+                    }
+                }
+            }
+
             // Replace button → opens the replace dialog. Disabled for
             // container targets and before any search has run.
             Controls.Button {
@@ -367,6 +585,78 @@ Kirigami.Page {
                 onClicked: {
                     page.controller.withinFilter = ""
                     page.refreshView()
+                }
+            }
+        }
+
+        // ============================================================
+        // Sortable column header
+        // ============================================================
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 28
+            visible: resultList.count > 0
+            color: app.tokens.surface1
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 1
+                color: app.tokens.separator
+            }
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: app.tokens.spaceXL + 44 + app.tokens.spaceL
+                anchors.rightMargin: app.tokens.spaceXL
+                spacing: app.tokens.spaceL
+
+                property int sortColumn: 0
+                property bool sortAscending: true
+                id: sortHeader
+
+                function sortBy(col) {
+                    if (sortHeader.sortColumn === col) {
+                        sortHeader.sortAscending = !sortHeader.sortAscending
+                    } else {
+                        sortHeader.sortColumn = col
+                        sortHeader.sortAscending = true
+                    }
+                    page.controller.sortResults(sortHeader.sortColumn, sortHeader.sortAscending)
+                }
+
+                Repeater {
+                    model: [
+                        { col: 0, label: qsTr("Path"),  fill: true,  align: Qt.AlignLeft },
+                        { col: 1, label: qsTr("Line"),  fill: false, align: Qt.AlignRight },
+                        { col: 2, label: qsTr("Match"), fill: false, align: Qt.AlignLeft }
+                    ]
+                    delegate: Controls.Button {
+                        Layout.fillWidth: modelData.fill
+                        Layout.preferredWidth: modelData.fill ? -1 : 80
+                        flat: true
+                        contentItem: RowLayout {
+                            spacing: 4
+                            Controls.Label {
+                                Layout.fillWidth: modelData.align !== Qt.AlignRight
+                                Layout.alignment: modelData.align
+                                text: modelData.label
+                                font.pixelSize: app.tokens.textCaption
+                                font.weight: app.tokens.weightSemibold
+                                font.letterSpacing: 0.6
+                                opacity: 0.6
+                            }
+                            Kirigami.Icon {
+                                visible: sortHeader.sortColumn === modelData.col
+                                source: sortHeader.sortAscending
+                                    ? "arrow-up-symbolic" : "arrow-down-symbolic"
+                                implicitWidth: 10
+                                implicitHeight: 10
+                                isMask: true
+                                opacity: 0.7
+                            }
+                        }
+                        onClicked: sortHeader.sortBy(modelData.col)
+                    }
                 }
             }
         }
@@ -574,6 +864,79 @@ Kirigami.Page {
         return "file://" + encodeURI(path)
     }
 
+    // Save current form as a named profile.
+    Controls.Dialog {
+        id: saveProfileDialog
+        modal: true
+        title: qsTr("Save search as profile")
+        standardButtons: Controls.Dialog.Cancel
+        contentItem: ColumnLayout {
+            spacing: app.tokens.spaceM
+            Controls.Label {
+                text: qsTr("Profile name")
+                font.pixelSize: app.tokens.textCaption
+                opacity: 0.7
+            }
+            Controls.TextField {
+                id: profileNameField
+                Layout.fillWidth: true
+                placeholderText: qsTr("e.g. “TODOs in ~/code”")
+                Keys.onReturnPressed: saveButton.commit()
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                Controls.Button {
+                    text: qsTr("Cancel")
+                    onClicked: saveProfileDialog.close()
+                }
+                PrimaryButton {
+                    id: saveButton
+                    text: qsTr("Save")
+                    icon.name: "document-save-symbolic"
+                    enabled: profileNameField.text.trim().length > 0
+                    function commit() {
+                        if (!enabled) return
+                        page.controller.saveProfile(
+                            profileNameField.text.trim(),
+                            searchBar.pathText,
+                            searchBar.termText,
+                            searchBar.regexEnabled,
+                            searchBar.caseSensitive,
+                            page.controller.resultMode === 1
+                        )
+                        profileNameField.text = ""
+                        saveProfileDialog.close()
+                    }
+                    onClicked: commit()
+                }
+            }
+        }
+    }
+
+    // Save-as dialog for the export menu. `format`: 0=CSV, 1=JSON,
+    // 2=Markdown. `defaultSuffix` keeps Linux file dialogs honest
+    // about the file's MIME type when the user picks a directory.
+    Dialogs.FileDialog {
+        id: exportSaveDialog
+        title: qsTr("Export results")
+        fileMode: Dialogs.FileDialog.SaveFile
+        property int format: 0
+        defaultSuffix: format === 1 ? "json" : format === 2 ? "md" : "csv"
+        nameFilters: format === 1
+            ? [qsTr("JSON (*.json)")]
+            : format === 2
+                ? [qsTr("Markdown (*.md)")]
+                : [qsTr("CSV (*.csv)")]
+        onAccepted: {
+            let p = selectedFile.toString()
+            p = p.replace(/^file:\/\//, "")
+            try { p = decodeURIComponent(p) } catch (e) {}
+            const msg = page.controller.exportResults(p, exportSaveDialog.format)
+            page.controller.statusText = msg
+        }
+    }
+
     Dialogs.FolderDialog {
         id: browseDialog
         title: qsTr("Choose folder")
@@ -736,7 +1099,18 @@ Kirigami.Page {
             Controls.Label {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
+                // The irreversible warning only renders when the user
+                // hasn't opted out via Settings → Replace → Confirm.
+                visible: app.settingsController.replaceConfirm
                 text: qsTr("Replace every match in %1 files. The original files are rewritten in place — there is no undo.").arg(page.controller.filesMatched)
+            }
+            Controls.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                visible: !app.settingsController.replaceConfirm
+                text: qsTr("Replace every match in %1 files. (Confirmation disabled in Settings.)").arg(page.controller.filesMatched)
+                font.pixelSize: app.tokens.textCaption + 1
+                opacity: 0.75
             }
 
             Controls.Label {

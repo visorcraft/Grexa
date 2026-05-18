@@ -129,14 +129,18 @@ QtObject {
                                                       ? Qt.rgba(1, 1, 1, 0.12)
                                                       : Qt.rgba(0, 0, 0, 0.07))
     readonly property color surfaceCard:  surface1
+    // High-contrast biases the separator alpha up so card edges
+    // remain visible against very light or very dark wallpapers.
     readonly property color separator:    Qt.rgba(Kirigami.Theme.textColor.r,
                                                   Kirigami.Theme.textColor.g,
                                                   Kirigami.Theme.textColor.b,
-                                                  isDark ? 0.12 : 0.09)
+                                                  highContrast ? (isDark ? 0.32 : 0.22)
+                                                               : (isDark ? 0.12 : 0.09))
     readonly property color separatorStrong: Qt.rgba(Kirigami.Theme.textColor.r,
                                                      Kirigami.Theme.textColor.g,
                                                      Kirigami.Theme.textColor.b,
-                                                     isDark ? 0.22 : 0.16)
+                                                     highContrast ? (isDark ? 0.50 : 0.38)
+                                                                  : (isDark ? 0.22 : 0.16))
     readonly property color selection:    accentMute
     readonly property color selectionEdge: accent
 
@@ -148,18 +152,48 @@ QtObject {
 
     // Quick check for whether the host theme is dark — we use this
     // to lift our subtle surface tints the right direction.
+    //
+    // The user's Settings → Appearance toggle is consulted first:
+    //   0 (System): luminance of Kirigami.Theme.backgroundColor
+    //   1 (Light) : forced false
+    //   2 (Dark)  : forced true
+    //   3..11     : dark-leaning custom palettes — forced true so the
+    //               surface tints / separators bias the right
+    //               direction until each variant defines its own
+    //               color stops.
+    //
+    // Effect: a real "apply now" theme toggle without requiring a
+    // KColorSchemeManager binding through cxx-qt-lib.
     readonly property bool isDark: {
+        const pref = app.settingsController ? app.settingsController.theme : 0
+        if (pref === 1) return false
+        if (pref === 2) return true
+        if (pref >= 3 && pref <= 11) return true
         const c = Kirigami.Theme.backgroundColor
         return (c.r + c.g + c.b) / 3.0 < 0.5
     }
 
     // ---- Motion -----------------------------------------------------
-    readonly property int durationSnap:        110   // toggles, hover
-    readonly property int durationNormal:      180   // page transitions, fades
-    readonly property int durationSlow:        280   // result-list populate
-    readonly property int durationDecorative:  420   // empty-state breathing
+    // When the user has asked for reduced motion in Settings →
+    // Accessibility, every duration collapses to zero. Animations
+    // still execute (they're declarative bindings on `Behavior` and
+    // `Transition`), they just complete instantly.
+    readonly property bool reducedMotion: app.settingsController
+        ? app.settingsController.accessibilityReducedMotion : false
+
+    readonly property int durationSnap:        reducedMotion ? 0 : 110   // toggles, hover
+    readonly property int durationNormal:      reducedMotion ? 0 : 180   // page transitions, fades
+    readonly property int durationSlow:        reducedMotion ? 0 : 280   // result-list populate
+    readonly property int durationDecorative:  reducedMotion ? 0 : 420   // empty-state breathing
 
     readonly property int easing: Easing.OutCubic
+
+    // High-contrast bias: when the toggle is on, push every text
+    // color closer to pure black/white and every separator closer
+    // to the active foreground. Cheap to compute; reads as a meta-
+    // theme over whichever Kirigami palette is current.
+    readonly property bool highContrast: app.settingsController
+        ? app.settingsController.accessibilityHighContrast : false
 
     // ---- Density ----------------------------------------------------
     readonly property int rowCompact:  30

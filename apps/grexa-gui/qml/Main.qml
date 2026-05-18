@@ -26,6 +26,18 @@ Kirigami.ApplicationWindow {
     Component.onCompleted: {
         app.raise()
         app.requestActivate()
+        // Surface a recovery dialog if the previous run left a
+        // partial replace journal behind. Gated on the user opt-in
+        // toggle in Settings → Replace.
+        if (settingsController.replaceShowJournalOnStartup) {
+            const j = searchController.residualJournalJson()
+            if (j && j.length > 0) {
+                try {
+                    residualJournal.entry = JSON.parse(j)
+                    residualJournal.open()
+                } catch (e) {}
+            }
+        }
     }
 
     // ---- Shared singletons ----
@@ -115,12 +127,42 @@ Kirigami.ApplicationWindow {
         context: Qt.ApplicationShortcut
         onActivated: Qt.quit()
     }
+    // Ctrl+T / Ctrl+W are scoped to the application but only act
+    // when the Search page is mounted — `currentItem` is the live
+    // page instance. The functions below probe for the tab-API
+    // surface that SearchPage exposes; missing on other pages
+    // (Settings, Regex Builder, About).
+    Shortcut {
+        sequence: "Ctrl+T"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            const p = app.pageStack.currentItem
+            if (p && p.openNewTab) {
+                app.goTo("search")
+                p.openNewTab()
+            } else {
+                app.goTo("search")
+            }
+        }
+    }
+    Shortcut {
+        sequence: "Ctrl+W"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            const p = app.pageStack.currentItem
+            if (p && p.closeTab && p.activeTab !== undefined) {
+                p.closeTab(p.activeTab)
+            }
+        }
+    }
 
     function goTo(key) {
         currentPageKey = key
         switch (key) {
             case "search":   app.pageStack.replace(searchPage); break
             case "regex":    app.pageStack.replace(regexPage); break
+            case "history":  app.pageStack.replace(historyPage); break
+            case "profiles": app.pageStack.replace(profilesPage); break
             case "settings": app.pageStack.replace(settingsPage); break
             case "about":    app.pageStack.replace(aboutPage); break
         }
@@ -241,6 +283,20 @@ Kirigami.ApplicationWindow {
             }
             NavItem {
                 Layout.fillWidth: true
+                label: qsTr("History")
+                iconName: "history-symbolic"
+                active: app.currentPageKey === "history"
+                onTriggered: app.goTo("history")
+            }
+            NavItem {
+                Layout.fillWidth: true
+                label: qsTr("Profiles")
+                iconName: "document-save-symbolic"
+                active: app.currentPageKey === "profiles"
+                onTriggered: app.goTo("profiles")
+            }
+            NavItem {
+                Layout.fillWidth: true
                 label: qsTr("Settings")
                 iconName: "settings-configure-symbolic"
                 active: app.currentPageKey === "settings"
@@ -296,6 +352,58 @@ Kirigami.ApplicationWindow {
 
     Component { id: searchPage;   SearchPage {} }
     Component { id: regexPage;    RegexBuilderPage {} }
+    Component { id: historyPage;  HistoryPage {} }
+    Component { id: profilesPage; ProfilesPage {} }
     Component { id: settingsPage; SettingsPage {} }
     Component { id: aboutPage;    AboutPage {} }
+
+    // Residual replace-journal recovery dialog. Shown at startup
+    // when a previous run was killed mid-replace and the journal
+    // wasn't cleaned up.
+    Controls.Dialog {
+        id: residualJournal
+        modal: true
+        title: qsTr("Interrupted replace from a previous run")
+        standardButtons: Controls.Dialog.Discard | Controls.Dialog.Close
+        property var entry: ({})
+        width: Math.min(app.width * 0.6, 520)
+        onDiscarded: {
+            searchController.clearResidualJournal()
+            close()
+        }
+
+        contentItem: ColumnLayout {
+            spacing: tokens.spaceM
+            Controls.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: qsTr("Grexa found a residual replace journal at $XDG_STATE_HOME/grexa/replace-journal.json. The previous run rewrote some files before being interrupted.")
+            }
+            Controls.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                font.family: tokens.monoFamily
+                font.pixelSize: tokens.textCaption + 1
+                opacity: 0.85
+                text: {
+                    if (!residualJournal.entry || !residualJournal.entry.root) return ""
+                    const modified = (residualJournal.entry.modified_files || []).length
+                    const failed = (residualJournal.entry.failed_files || []).length
+                    return qsTr("root: %1\nterm: %2 → %3\nfiles modified: %4\nfailures: %5")
+                        .arg(residualJournal.entry.root || "")
+                        .arg(residualJournal.entry.search_term || "")
+                        .arg(residualJournal.entry.replacement || "")
+                        .arg(modified)
+                        .arg(failed)
+                }
+            }
+            Controls.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                font.pixelSize: tokens.textCaption + 1
+                opacity: 0.7
+                text: qsTr("Click Discard to remove the journal, or Close to keep it for forensic review. The file is a JSON document you can inspect by hand.")
+            }
+        }
+    }
 }

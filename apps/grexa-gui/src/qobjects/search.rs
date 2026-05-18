@@ -236,6 +236,84 @@ pub mod ffi {
         #[qinvokable]
         fn refresh_view(self: Pin<&mut SearchController>);
 
+        /// Export every visible row to `dest_path` in the given
+        /// format. `format`: 0=CSV, 1=JSON, 2=Markdown table.
+        /// Writes synchronously; small files only — multi-million
+        /// row exports should stream via the CLI.
+        #[qinvokable]
+        fn export_results(self: &SearchController, dest_path: &QString, format: i32) -> QString;
+
+        /// Sort the underlying row set in place by the given column.
+        /// `column`: 0=Path, 1=Line, 2=Match preview text.
+        /// `ascending`: false flips to descending.
+        ///
+        /// Mutates `rows` and rebuilds `visible`. Surfaces via a
+        /// model reset.
+        #[qinvokable]
+        fn sort_results(self: Pin<&mut SearchController>, column: i32, ascending: bool);
+
+        /// Return the residual replace journal (if any) as a JSON
+        /// object describing the most recent interrupted replace
+        /// run. Empty string when no journal is present. The GUI
+        /// shell calls this at startup when
+        /// `replace_show_journal_on_startup` is true.
+        #[qinvokable]
+        fn residual_journal_json(self: &SearchController) -> QString;
+
+        /// Clear the on-disk residual replace journal. Called from
+        /// the recovery dialog's "Dismiss" button.
+        #[qinvokable]
+        fn clear_residual_journal(self: &SearchController);
+
+        // ---- History --------------------------------------------
+
+        /// Return the persisted search history as a JSON array.
+        /// Each entry has `search_term`, `search_path`,
+        /// `match_file_names`, `exclude_dirs`, `regex_search`,
+        /// `files_search`, `search_case_sensitive`,
+        /// `respect_gitignore`, `include_subfolders`,
+        /// `include_hidden_items`, `include_binary_files`,
+        /// `timestamp_unix`, `result_count`. Pulls from
+        /// `SearchHistoryStore`.
+        #[qinvokable]
+        fn history_json(self: &SearchController) -> QString;
+
+        /// Append a row to the history store. The seven-field
+        /// dedupe key keeps the list from bloating when the same
+        /// search reruns. Called from the GUI after each
+        /// successful `start_search`.
+        #[qinvokable]
+        fn record_history(self: &SearchController, summary_json: &QString);
+
+        /// Drop a history entry by its full row JSON. The store
+        /// dedupes via `key`, so this passes the exact entry back.
+        #[qinvokable]
+        fn remove_history_entry(self: &SearchController, entry_json: &QString);
+
+        // ---- Profiles -------------------------------------------
+
+        /// Return every saved search profile as a JSON array.
+        #[qinvokable]
+        fn profiles_json(self: &SearchController) -> QString;
+
+        /// Save the current search parameters (`path`, `term`,
+        /// `regex`, `case_sensitive`, `result_mode`) as a named
+        /// profile. Upserts on collision with the same name.
+        #[qinvokable]
+        fn save_profile(
+            self: &SearchController,
+            name: &QString,
+            path: &QString,
+            term: &QString,
+            regex: bool,
+            case_sensitive: bool,
+            files_mode: bool,
+        ) -> bool;
+
+        /// Delete a saved profile by name.
+        #[qinvokable]
+        fn delete_profile(self: &SearchController, name: &QString) -> bool;
+
         /// Fired when the recent-paths list grows or shrinks.
         #[qsignal]
         fn history_changed(self: Pin<&mut SearchController>);
@@ -775,15 +853,20 @@ impl ffi::SearchController {
         if path_str.trim().is_empty() {
             return;
         }
-        let preset = with_workspace(|w| {
-            w.settings
-                .load()
-                .map(|s| editor_preset_from_settings(&s))
-                .unwrap_or(grexa_core::EditorPreset::XdgOpen)
+        let (preset, custom_template) = with_workspace(|w| {
+            let s = w.settings.load().unwrap_or_default();
+            (editor_preset_from_settings(&s), s.editor_custom_command)
         });
         let line_opt = if line >= 1 { Some(line as usize) } else { None };
-        let argv =
-            grexa_core::open_in_editor_command(preset, std::path::Path::new(&path_str), line_opt);
+        // A non-empty custom command always wins. This matches how
+        // VS Code / IntelliJ / etc. treat the "External Tools" pattern
+        // — the preset gives users one click for common editors, the
+        // template lets them override with the exact argv they want.
+        let argv = if !custom_template.trim().is_empty() {
+            expand_editor_template(custom_template.trim(), &path_str, line_opt)
+        } else {
+            grexa_core::open_in_editor_command(preset, std::path::Path::new(&path_str), line_opt)
+        };
         spawn_detached(argv);
     }
 
@@ -869,12 +952,149 @@ impl ffi::SearchController {
         });
     }
 
+    fn residual_journal_json(&self) -> QString {
+        match grexa_core::load_residual_journal() {
+            Ok(Some(entry)) => {
+                // Serialize a stable subset of the fields. The full
+                // struct already derives Serialize via grexa-core.
+                let json = serde_json::to_string(&entry).unwrap_or_else(|_| "{}".into());
+                QString::from(&json)
+            }
+            _ => QString::default(),
+        }
+    }
+
+    fn clear_residual_journal(&self) {
+        // Removing the file via the journal-path helper. The
+        // public API doesn't expose direct removal; the next
+        // successful replace flow ends in a `cleanup` call on
+        // its own journal. Until then, delete the file directly.
+        let path = grexa_core::AppPaths::from_env()
+            .state_dir
+            .join("replace-journal.json");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    fn history_json(&self) -> QString {
+        let entries = with_workspace(|w| w.history.load().unwrap_or_default());
+        match serde_json::to_string(&entries) {
+            Ok(s) => QString::from(&s),
+            Err(_) => QString::from("[]"),
+        }
+    }
+
+    fn record_history(&self, summary_json: &QString) {
+        let s = summary_json.to_string();
+        let entry: grexa_core::RecentSearch = match serde_json::from_str(&s) {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+        let _ = with_workspace(|w| w.history.add(entry));
+    }
+
+    fn remove_history_entry(&self, entry_json: &QString) {
+        let s = entry_json.to_string();
+        let entry: grexa_core::RecentSearch = match serde_json::from_str(&s) {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+        let _ = with_workspace(|w| w.history.remove(&entry));
+    }
+
+    fn profiles_json(&self) -> QString {
+        let profiles = with_workspace(|w| w.profiles.load().unwrap_or_default());
+        match serde_json::to_string(&profiles) {
+            Ok(s) => QString::from(&s),
+            Err(_) => QString::from("[]"),
+        }
+    }
+
+    fn save_profile(
+        &self,
+        name: &QString,
+        path: &QString,
+        term: &QString,
+        regex: bool,
+        case_sensitive: bool,
+        files_mode: bool,
+    ) -> bool {
+        let name_str = name.to_string();
+        if name_str.trim().is_empty() {
+            return false;
+        }
+        let mut options =
+            grexa_core::SearchOptions::new(PathBuf::from(path.to_string()), term.to_string());
+        options.regex = regex;
+        options.case_sensitive = case_sensitive;
+        let profile = grexa_core::SearchProfile::new(name_str, options, files_mode);
+        with_workspace(|w| w.profiles.upsert(profile).is_ok())
+    }
+
+    fn delete_profile(&self, name: &QString) -> bool {
+        let name_str = name.to_string();
+        with_workspace(|w| w.profiles.remove(&name_str).is_ok())
+    }
+
+    fn export_results(&self, dest_path: &QString, format: i32) -> QString {
+        let dest = std::path::PathBuf::from(dest_path.to_string());
+        if dest_path.to_string().trim().is_empty() {
+            return QString::from("error: destination path is empty");
+        }
+        let rust = self.rust();
+        // Project through `visible` so the user gets exactly what's
+        // on screen — within-filter + files-mode dedup are honored.
+        let rows: Vec<&ResultRow> = rust
+            .visible
+            .iter()
+            .filter_map(|&i| rust.rows.get(i))
+            .collect();
+
+        let body = match format {
+            1 => export_as_json(&rows),
+            2 => export_as_markdown(&rows),
+            _ => export_as_csv(&rows),
+        };
+        match std::fs::write(&dest, body) {
+            Ok(()) => QString::from(&format!("Wrote {} rows to {}", rows.len(), dest.display())),
+            Err(err) => QString::from(&format!("Export failed: {err}")),
+        }
+    }
+
     fn refresh_view(mut self: Pin<&mut Self>) {
         unsafe { self.as_mut().begin_reset_model() };
         self.as_mut().rust_mut().rebuild_visible();
         unsafe { self.as_mut().end_reset_model() };
         // match_count reflects raw match count, files_matched
         // reflects file count — those don't change on view refresh.
+    }
+
+    fn sort_results(mut self: Pin<&mut Self>, column: i32, ascending: bool) {
+        unsafe { self.as_mut().begin_reset_model() };
+        {
+            let mut s = self.as_mut().rust_mut();
+            // Stable sort so equal keys keep their search-order
+            // (matches `ripgrep`'s output stability — important
+            // when sorting by path with many lines per file).
+            match column {
+                1 => s.rows.sort_by(|a, b| {
+                    let ord = a.line.cmp(&b.line).then_with(|| a.column.cmp(&b.column));
+                    if ascending { ord } else { ord.reverse() }
+                }),
+                2 => s.rows.sort_by(|a, b| {
+                    let ord = a.preview_match.cmp(&b.preview_match);
+                    if ascending { ord } else { ord.reverse() }
+                }),
+                _ => s.rows.sort_by(|a, b| {
+                    // Path sort uses the relative path string so the
+                    // dedupe order is intuitive (alphabetic by
+                    // file-tree, not full absolute path).
+                    let ord = a.relative_path.cmp(&b.relative_path);
+                    if ascending { ord } else { ord.reverse() }
+                }),
+            }
+            s.rebuild_visible();
+        }
+        unsafe { self.as_mut().end_reset_model() };
     }
 
     fn row_count(&self, parent: &QModelIndex) -> i32 {
@@ -1136,6 +1356,117 @@ fn finish_replace(
     }
 }
 
+/// CSV export — RFC 4180 with `"`-escaped fields. Header row first.
+fn export_as_csv(rows: &[&ResultRow]) -> String {
+    let mut buf = String::from("path,line,column,match\n");
+    for r in rows {
+        let path = csv_escape(&r.full_path.to_string_lossy());
+        let m = csv_escape(&r.preview_match);
+        use std::fmt::Write;
+        let _ = writeln!(&mut buf, "{path},{},{},{m}", r.line, r.column);
+    }
+    buf
+}
+
+fn csv_escape(s: &str) -> String {
+    if s.contains(',') || s.contains('"') || s.contains('\n') {
+        let escaped = s.replace('"', "\"\"");
+        format!("\"{escaped}\"")
+    } else {
+        s.to_string()
+    }
+}
+
+/// JSON export — one array of `{path, line, column, match}` objects.
+fn export_as_json(rows: &[&ResultRow]) -> String {
+    use serde_json::json;
+    let arr: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|r| {
+            json!({
+                "path": r.full_path.to_string_lossy(),
+                "line": r.line,
+                "column": r.column,
+                "match": r.preview_match,
+            })
+        })
+        .collect();
+    serde_json::to_string_pretty(&arr).unwrap_or_else(|_| "[]".into())
+}
+
+/// Markdown table export — for sharing in PRs / issue trackers.
+fn export_as_markdown(rows: &[&ResultRow]) -> String {
+    let mut buf =
+        String::from("| Path | Line | Column | Match |\n|------|------|--------|-------|\n");
+    for r in rows {
+        let path = md_escape(&r.full_path.to_string_lossy());
+        let m = md_escape(&r.preview_match);
+        use std::fmt::Write;
+        let _ = writeln!(&mut buf, "| {path} | {} | {} | {m} |", r.line, r.column);
+    }
+    buf
+}
+
+fn md_escape(s: &str) -> String {
+    s.replace('|', "\\|").replace('\n', " ")
+}
+
+/// Substitute `{path}` / `{line}` / `{file}` placeholders in a
+/// user-provided editor command template, then split on whitespace
+/// to produce an argv. Quoted segments are honored. Designed for
+/// the simple "kate --line {line} {path}" pattern; not a full shell.
+///
+/// Tokens recognized:
+/// * `{path}` — absolute path passed to `open_in_editor`
+/// * `{file}` — basename (last `/`-delimited segment)
+/// * `{line}` — line number (1-based); empty when no line is given
+fn expand_editor_template(
+    template: &str,
+    path: &str,
+    line: Option<usize>,
+) -> Vec<std::ffi::OsString> {
+    let file = std::path::Path::new(path)
+        .file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.to_string());
+    let line_str = line.map(|n| n.to_string()).unwrap_or_default();
+    let expanded = template
+        .replace("{path}", path)
+        .replace("{file}", &file)
+        .replace("{line}", &line_str);
+    split_shell_argv(&expanded)
+        .into_iter()
+        .map(std::ffi::OsString::from)
+        .collect()
+}
+
+/// Tiny shell-style argv splitter. Honors single and double quotes;
+/// no command substitution, no variable expansion, no escaping
+/// inside quotes. Anything more elaborate is the user's job —
+/// they can write a wrapper script.
+fn split_shell_argv(s: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut buf = String::new();
+    let mut in_single = false;
+    let mut in_double = false;
+    for c in s.chars() {
+        match c {
+            '\'' if !in_double => in_single = !in_single,
+            '"' if !in_single => in_double = !in_double,
+            c if c.is_whitespace() && !in_single && !in_double => {
+                if !buf.is_empty() {
+                    out.push(std::mem::take(&mut buf));
+                }
+            }
+            c => buf.push(c),
+        }
+    }
+    if !buf.is_empty() {
+        out.push(buf);
+    }
+    out
+}
+
 /// Pick the editor preset from the persisted settings. The numeric
 /// mapping matches the `editor_preset` qproperty and the order in
 /// `crates/grexa-core/src/desktop.rs`.
@@ -1194,9 +1525,14 @@ unsafe extern "C" {
 /// Best-effort `org.freedesktop.FileManager1.ShowItems` call via
 /// `gdbus`. Returns `Ok(())` only on success. Falls back to the
 /// xdg-open helper when this errors.
+///
+/// The URI string is percent-encoded so single quotes (which would
+/// otherwise close the GVariant string literal) become `%27`, and
+/// every other reserved character is also escaped. This matches the
+/// `file://` URI form `org.freedesktop.FileManager1` expects.
 fn try_filemanager1_reveal(path: &std::path::Path) -> Result<(), ()> {
     let abs = path.canonicalize().map_err(|_| ())?;
-    let uri = format!("file://{}", abs.display());
+    let uri = format!("file://{}", percent_encode_path(&abs.to_string_lossy()));
     let status = std::process::Command::new("gdbus")
         .args([
             "call",
@@ -1213,6 +1549,23 @@ fn try_filemanager1_reveal(path: &std::path::Path) -> Result<(), ()> {
         .status()
         .map_err(|_| ())?;
     if status.success() { Ok(()) } else { Err(()) }
+}
+
+/// Percent-encode a filesystem path for inclusion in a `file://` URI.
+/// Keeps `/`, ASCII alphanumerics, and the unreserved RFC 3986
+/// characters (`-._~`). Encodes everything else, including `'` and
+/// `"` which would otherwise terminate a GVariant string literal.
+fn percent_encode_path(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        let keep = b.is_ascii_alphanumeric() || matches!(b, b'/' | b'-' | b'.' | b'_' | b'~');
+        if keep {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
 }
 
 /// Fire a desktop notification via `notify-send`. Best-effort — fails

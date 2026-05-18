@@ -75,6 +75,20 @@
   </supports>
 
   <releases>
+    <release version="0.2.0" date="2026-05-18">
+      <description>
+        <p>v0.2 — full GUI feature parity with Grex on Linux.</p>
+        <ul>
+          <li>Folder picker, filter drawer, target selector for Docker/Podman.</li>
+          <li>Replace flow with confirmation, residual journal recovery on startup.</li>
+          <li>Result row context menu, search-within-results, sortable columns, export to CSV/JSON/Markdown.</li>
+          <li>In-session search tabs (Ctrl+T / Ctrl+W).</li>
+          <li>Saved-search Profiles page and search History page.</li>
+          <li>Settings: Editor presets + custom command template, Accessibility (reduced motion, high contrast), Privacy (path redaction in logs), Replace (confirm + journal-on-startup).</li>
+          <li>Single-instance lockfile, KNotification on long searches and replace, keyboard shortcuts (F1, Ctrl+1..4, Esc, Ctrl+Q).</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-05-16">
       <description>
         <p>Initial alpha. Core Rust search engine, CLI, AI HTTP client, and container detection.</p>

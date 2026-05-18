@@ -144,6 +144,19 @@ fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
 
     let paths = AppPaths::from_env();
     let log_path = paths.state_dir.join("grexa-gui.log");
+
+    // Read the privacy toggle from the persisted settings. When
+    // `privacy_redact_paths` is true, every line written to the log
+    // file has $HOME replaced with `~` so a copy-pasted diagnostic
+    // doesn't leak the user's account name. Stderr stays unredacted
+    // because that path is the local terminal, not a shared
+    // diagnostic surface.
+    let redact = grexa_core::SettingsStore::new(&paths)
+        .load()
+        .map(|s| s.privacy_redact_paths)
+        .unwrap_or(false);
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+
     let (file_layer, guard) = match std::fs::create_dir_all(&paths.state_dir) {
         Ok(()) => match std::fs::OpenOptions::new()
             .create(true)
@@ -151,7 +164,8 @@ fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
             .open(&log_path)
         {
             Ok(file) => {
-                let (writer, guard) = tracing_appender::non_blocking(file);
+                let writer = RedactingWriter::new(file, redact, home);
+                let (writer, guard) = tracing_appender::non_blocking(writer);
                 let layer = tracing_subscriber::fmt::layer()
                     .with_writer(writer)
                     .with_target(true)
@@ -254,3 +268,68 @@ unsafe extern "C" {
 
 const LOCK_EX: i32 = 2;
 const LOCK_NB: i32 = 4;
+
+/// `std::io::Write` adapter that replaces the user's `$HOME` with
+/// `~` before forwarding bytes to the inner writer. Designed for
+/// the `tracing-appender` pipeline so log lines that include
+/// absolute paths don't leak the user's account when diagnostics
+/// get copy-pasted into a bug report.
+///
+/// Best-effort: works on the byte stream the tracing layer hands
+/// down. Partial writes that split `$HOME` across two `write()`
+/// calls are still redacted because `tracing-appender` buffers a
+/// full event before flushing.
+struct RedactingWriter {
+    inner: std::fs::File,
+    pattern: Option<Vec<u8>>,
+}
+
+impl RedactingWriter {
+    fn new(inner: std::fs::File, redact: bool, home: Option<std::path::PathBuf>) -> Self {
+        let pattern = if redact {
+            home.and_then(|h| {
+                let s = h.to_string_lossy().into_owned();
+                if s.is_empty() {
+                    None
+                } else {
+                    Some(s.into_bytes())
+                }
+            })
+        } else {
+            None
+        };
+        Self { inner, pattern }
+    }
+}
+
+impl std::io::Write for RedactingWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match &self.pattern {
+            Some(pat) if !pat.is_empty() => {
+                // Linear scan + replace. The buffer is small (one
+                // tracing event) so allocating a new Vec is cheap.
+                let mut out = Vec::with_capacity(buf.len());
+                let mut i = 0;
+                while i < buf.len() {
+                    if buf[i..].starts_with(pat) {
+                        out.push(b'~');
+                        i += pat.len();
+                    } else {
+                        out.push(buf[i]);
+                        i += 1;
+                    }
+                }
+                self.inner.write_all(&out)?;
+                // Return the original len so the caller sees a
+                // "consumed all bytes" success — tracing-appender
+                // would otherwise loop on a short write.
+                Ok(buf.len())
+            }
+            _ => self.inner.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
