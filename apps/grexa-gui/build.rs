@@ -17,6 +17,7 @@ fn main() {
                 "qml/AiChatPanel.qml",
                 "qml/AboutPage.qml",
                 "qml/LicensesPage.qml",
+                "qml/CreditsPage.qml",
                 "qml/GplLicenseDialog.qml",
                 "qml/HistoryPage.qml",
                 "qml/ProfilesPage.qml",

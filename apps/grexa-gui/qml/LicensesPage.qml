@@ -78,28 +78,28 @@ Kirigami.Page {
 
     function documentTitle(index) {
         switch (index) {
-        case 1: return qsTr("Acknowledgments")
-        case 2: return qsTr("Grexa GPL v3")
-        default: return qsTr("Third-party licenses")
+        case 1: return qsTr("Third-party licenses")
+        case 2: return qsTr("Acknowledgments")
+        default: return qsTr("Grexa License")
         }
     }
 
     function documentSubtitle(index) {
         switch (index) {
         case 1:
-            return qsTr("Narrative attribution for Grexa, Grex, runtime components, and direct dependencies.")
-        case 2:
-            return qsTr("The complete GPL-3.0-only license text bundled into the application.")
-        default:
             return qsTr("The cargo-about-generated bundle with every direct and transitive Rust crate, grouped by license text.")
+        case 2:
+            return qsTr("Narrative attribution for Grexa, Grex, runtime components, and direct dependencies.")
+        default:
+            return qsTr("The complete GPL-3.0-only license text bundled into the application.")
         }
     }
 
     function documentBody(index) {
         switch (index) {
-        case 1: return page.creditsText
-        case 2: return page.gplText
-        default: return page.thirdPartyText
+        case 1: return page.thirdPartyText
+        case 2: return page.creditsText
+        default: return page.gplText
         }
     }
 
@@ -224,15 +224,15 @@ Kirigami.Page {
                     onCurrentIndexChanged: page.setActiveDocument(currentIndex)
 
                     Controls.TabButton {
+                        text: qsTr("Grexa License")
+                        width: implicitWidth + app.tokens.spaceL
+                    }
+                    Controls.TabButton {
                         text: qsTr("Third-party")
                         width: implicitWidth + app.tokens.spaceL
                     }
                     Controls.TabButton {
                         text: qsTr("Acknowledgments")
-                        width: implicitWidth + app.tokens.spaceL
-                    }
-                    Controls.TabButton {
-                        text: qsTr("GPL v3")
                         width: implicitWidth + app.tokens.spaceL
                     }
                 }
@@ -247,7 +247,7 @@ Kirigami.Page {
                 }
 
                 AppFlatButton {
-                    visible: page.activeDocument === 2
+                    visible: page.activeDocument === 0
                     text: qsTr("Dialog")
                     icon.name: "document-preview-symbolic"
                     display: Controls.AbstractButton.TextBesideIcon

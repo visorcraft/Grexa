@@ -13,6 +13,7 @@ use std::pin::Pin;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
 use grexa_core::{DefaultSettings, ThemePreference};
+use serde_json::json;
 
 use super::workspace_handle::with_workspace;
 
@@ -74,12 +75,24 @@ pub mod ffi {
         /// Return Grexa's bundled credits and attribution narrative.
         #[qinvokable]
         fn credits_text(self: &SettingsController) -> QString;
+
+        /// Return table-ready third-party crate credit metadata.
+        #[qinvokable]
+        fn third_party_credits_json(self: &SettingsController) -> QString;
     }
 }
 
 const GPL_LICENSE_TEXT: &str = include_str!("../../../../LICENSE");
 const THIRD_PARTY_LICENSES_TEXT: &str = include_str!("../../../../docs/credits-third-party.md");
 const CREDITS_TEXT: &str = include_str!("../../../../CREDITS.md");
+
+#[derive(Debug, Eq, PartialEq)]
+struct ThirdPartyCredit {
+    name: String,
+    version: String,
+    license: String,
+    url: String,
+}
 
 #[derive(Default)]
 pub struct SettingsControllerRust {
@@ -212,6 +225,105 @@ fn theme_from_i32(v: i32) -> ThemePreference {
     }
 }
 
+fn third_party_credit_entries(text: &str) -> Vec<ThirdPartyCredit> {
+    let mut current_license = String::new();
+    let mut in_license_texts = false;
+    let mut in_used_by = false;
+    let mut entries = Vec::new();
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+
+        if trimmed == "## License Texts" {
+            in_license_texts = true;
+            continue;
+        }
+        if !in_license_texts {
+            continue;
+        }
+
+        if let Some(title) = trimmed.strip_prefix("### ") {
+            current_license = license_section_to_spdx(title);
+            in_used_by = false;
+            continue;
+        }
+
+        if trimmed == "Used by:" {
+            in_used_by = !current_license.is_empty();
+            continue;
+        }
+
+        if !in_used_by {
+            continue;
+        }
+
+        if trimmed.starts_with("```") || trimmed == "---" {
+            in_used_by = false;
+            continue;
+        }
+
+        if let Some(entry) = parse_used_by_line(trimmed, &current_license) {
+            entries.push(entry);
+        }
+    }
+
+    entries.sort_by(|a, b| {
+        a.name
+            .cmp(&b.name)
+            .then_with(|| a.version.cmp(&b.version))
+            .then_with(|| a.license.cmp(&b.license))
+    });
+    entries
+}
+
+fn parse_used_by_line(line: &str, license: &str) -> Option<ThirdPartyCredit> {
+    let body = line.strip_prefix("- [`")?;
+    let (label, rest) = body.split_once("`](")?;
+    let url = rest.strip_suffix(')')?;
+    let (name, version) = label.rsplit_once(' ')?;
+
+    Some(ThirdPartyCredit {
+        name: name.to_owned(),
+        version: version.to_owned(),
+        license: license.to_owned(),
+        url: url.to_owned(),
+    })
+}
+
+fn license_section_to_spdx(title: &str) -> String {
+    match title {
+        "Apache License 2.0" => "Apache-2.0".to_owned(),
+        "BSD 3-Clause &quot;New&quot; or &quot;Revised&quot; License" => "BSD-3-Clause".to_owned(),
+        "BSD Zero Clause License" => "0BSD".to_owned(),
+        "Community Data License Agreement Permissive 2.0" => "CDLA-Permissive-2.0".to_owned(),
+        "GNU General Public License v3.0 only" => "GPL-3.0-only".to_owned(),
+        "ISC License" => "ISC".to_owned(),
+        "MIT License" => "MIT".to_owned(),
+        "Unicode License v3" => "Unicode-3.0".to_owned(),
+        "zlib License" => "Zlib".to_owned(),
+        other => other
+            .replace("&quot;", "\"")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">"),
+    }
+}
+
+fn third_party_credit_entries_json(text: &str) -> String {
+    let rows: Vec<_> = third_party_credit_entries(text)
+        .into_iter()
+        .map(|entry| {
+            json!({
+                "name": entry.name,
+                "version": entry.version,
+                "license": entry.license,
+                "url": entry.url,
+            })
+        })
+        .collect();
+    serde_json::to_string(&rows).unwrap_or_else(|_| "[]".to_owned())
+}
+
 impl ffi::SettingsController {
     fn reload(mut self: Pin<&mut Self>) {
         let settings = with_workspace(|w| w.settings.load().unwrap_or_default());
@@ -302,6 +414,10 @@ impl ffi::SettingsController {
     fn credits_text(&self) -> QString {
         QString::from(CREDITS_TEXT)
     }
+
+    fn third_party_credits_json(&self) -> QString {
+        QString::from(third_party_credit_entries_json(THIRD_PARTY_LICENSES_TEXT))
+    }
 }
 
 #[cfg(test)]
@@ -345,6 +461,29 @@ mod tests {
         assert!(THIRD_PARTY_LICENSES_TEXT.contains("Third-Party"));
         assert!(THIRD_PARTY_LICENSES_TEXT.contains("License Texts"));
         assert!(CREDITS_TEXT.contains("Credits and Attribution"));
+    }
+
+    #[test]
+    fn third_party_credit_entries_parse_bundled_markdown() {
+        let entries = third_party_credit_entries(THIRD_PARTY_LICENSES_TEXT);
+
+        assert!(entries.len() > 200);
+        assert!(entries.iter().any(|entry| {
+            entry.name == "cxx-qt" && entry.version == "0.8.1" && entry.license == "Apache-2.0"
+        }));
+        assert!(entries.iter().any(|entry| {
+            entry.name == "aho-corasick"
+                && entry.version == "1.1.4"
+                && entry.license == "MIT"
+                && entry.url.contains("aho-corasick")
+        }));
+    }
+
+    #[test]
+    fn third_party_credit_entries_json_is_qml_ready() {
+        let json = third_party_credit_entries_json(THIRD_PARTY_LICENSES_TEXT);
+        let rows: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert!(rows.as_array().is_some_and(|rows| rows.len() > 200));
     }
 
     /// Regression pin for the silent-reload bug. The old `reload()`

@@ -18,7 +18,6 @@ Kirigami.ScrollablePage {
     globalToolBarStyle: Kirigami.ApplicationHeaderStyle.None
 
     signal navigateRequested(string pageKey)
-    signal gplTextRequested()
 
     // See SettingsPage.qml — Pages render under the View colorSet.
     Kirigami.Theme.inherit: false
@@ -302,6 +301,78 @@ Kirigami.ScrollablePage {
                 }
             }
 
+            // -- Grexa project card ---------------------------------
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.topMargin: app.tokens.spaceM
+                Layout.preferredHeight: 96
+                radius: app.tokens.radiusCard
+                color: app.tokens.surface1
+                border.color: app.tokens.separator
+                border.width: 1
+
+                Rectangle {
+                    id: grexaProjectIcon
+                    anchors.leftMargin: app.tokens.spaceL
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 56
+                    height: 56
+                    radius: app.tokens.radiusAvatar
+                    color: app.tokens.surface2
+                    border.color: app.tokens.separatorStrong
+                    border.width: 1
+                    Image {
+                        anchors.fill: parent
+                        anchors.margins: 4
+                        source: "qrc:/qt/qml/com/visorcraft/Grexa/resources/grexa.png"
+                        sourceSize.width: 96
+                        sourceSize.height: 96
+                        smooth: true
+                        mipmap: true
+                    }
+                }
+
+                ColumnLayout {
+                    anchors.left: grexaProjectIcon.right
+                    anchors.leftMargin: app.tokens.spaceXL
+                    anchors.right: grexaProjectButton.left
+                    anchors.rightMargin: app.tokens.spaceL
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 2
+                    Controls.Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Native Linux search app built with Rust, Qt 6, Kirigami, and cxx-qt.")
+                        font.pixelSize: app.tokens.textBodyEmphasis
+                        font.weight: app.tokens.weightSemibold
+                        font.family: app.tokens.sansFamily
+                        elide: Text.ElideRight
+                    }
+                    Controls.Label {
+                        Layout.fillWidth: true
+                        textFormat: Text.RichText
+                        text: qsTr("<a href='https://github.com/visorcraft/grexa'>github.com/visorcraft/grexa</a>")
+                        onLinkActivated: link => Qt.openUrlExternally(link)
+                        linkColor: app.tokens.accent
+                        font.pixelSize: app.tokens.textBody
+                        font.family: app.tokens.sansFamily
+                        elide: Text.ElideRight
+                    }
+                }
+
+                AppFlatButton {
+                    id: grexaProjectButton
+                    anchors.right: parent.right
+                    anchors.rightMargin: app.tokens.spaceL
+                    anchors.verticalCenter: parent.verticalCenter
+                    icon.name: "go-next-symbolic"
+                    icon.color: app.tokens.textPrimary
+                    text: qsTr("Visit Grexa")
+                    display: Controls.AbstractButton.TextBesideIcon
+                    onClicked: Qt.openUrlExternally("https://github.com/visorcraft/grexa")
+                }
+            }
+
             // -- Sister-project card --------------------------------
             // Compact card mirroring the brand hero pattern: the green
             // Grex (Windows / male gecko) mark sits in an accent halo
@@ -317,59 +388,65 @@ Kirigami.ScrollablePage {
                 border.color: app.tokens.separator
                 border.width: 1
 
-                RowLayout {
-                    anchors.fill: parent
+                Rectangle {
+                    id: grexProjectIcon
                     anchors.leftMargin: app.tokens.spaceL
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 56
+                    height: 56
+                    radius: app.tokens.radiusAvatar
+                    color: app.tokens.surface2
+                    border.color: app.tokens.separatorStrong
+                    border.width: 1
+                    Image {
+                        anchors.fill: parent
+                        anchors.margins: 4
+                        source: "qrc:/qt/qml/com/visorcraft/Grexa/resources/grex-mark.png"
+                        sourceSize.width: 96
+                        sourceSize.height: 96
+                        smooth: true
+                        mipmap: true
+                    }
+                }
+
+                ColumnLayout {
+                    anchors.left: grexProjectIcon.right
+                    anchors.leftMargin: app.tokens.spaceXL
+                    anchors.right: grexProjectButton.left
                     anchors.rightMargin: app.tokens.spaceL
-                    spacing: app.tokens.spaceL
-
-                    Rectangle {
-                        Layout.preferredWidth: 56
-                        Layout.preferredHeight: 56
-                        Layout.alignment: Qt.AlignVCenter
-                        radius: app.tokens.radiusAvatar
-                        color: app.tokens.surface2
-                        border.color: app.tokens.separatorStrong
-                        border.width: 1
-                        Image {
-                            anchors.fill: parent
-                            anchors.margins: 4
-                            source: "qrc:/qt/qml/com/visorcraft/Grexa/resources/grex-mark.png"
-                            sourceSize.width: 96
-                            sourceSize.height: 96
-                            smooth: true
-                            mipmap: true
-                        }
-                    }
-
-                    ColumnLayout {
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 2
+                    Controls.Label {
                         Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignVCenter
-                        spacing: 2
-                        Controls.Label {
-                            text: qsTr("Official Linux port of our Grex tool for Windows.")
-                            font.pixelSize: app.tokens.textBodyEmphasis
-                            font.weight: app.tokens.weightSemibold
-                            font.family: app.tokens.sansFamily
-                        }
-                        Controls.Label {
-                            textFormat: Text.RichText
-                            text: qsTr("<a href='https://github.com/visorcraft/grex'>github.com/visorcraft/grex</a>")
-                            onLinkActivated: link => Qt.openUrlExternally(link)
-                            linkColor: app.tokens.accent
-                            font.pixelSize: app.tokens.textBody
-                            font.family: app.tokens.sansFamily
-                        }
+                        text: qsTr("Official Linux port of our Grex tool for Windows.")
+                        font.pixelSize: app.tokens.textBodyEmphasis
+                        font.weight: app.tokens.weightSemibold
+                        font.family: app.tokens.sansFamily
+                        elide: Text.ElideRight
                     }
+                    Controls.Label {
+                        Layout.fillWidth: true
+                        textFormat: Text.RichText
+                        text: qsTr("<a href='https://github.com/visorcraft/grex'>github.com/visorcraft/grex</a>")
+                        onLinkActivated: link => Qt.openUrlExternally(link)
+                        linkColor: app.tokens.accent
+                        font.pixelSize: app.tokens.textBody
+                        font.family: app.tokens.sansFamily
+                        elide: Text.ElideRight
+                    }
+                }
 
-                    AppFlatButton {
-                        Layout.alignment: Qt.AlignVCenter
-                        icon.name: "go-next-symbolic"
-                        icon.color: app.tokens.textPrimary
-                        text: qsTr("Visit Grex")
-                        display: Controls.AbstractButton.TextBesideIcon
-                        onClicked: Qt.openUrlExternally("https://github.com/visorcraft/grex")
-                    }
+                AppFlatButton {
+                    id: grexProjectButton
+                    anchors.right: parent.right
+                    anchors.rightMargin: app.tokens.spaceL
+                    anchors.verticalCenter: parent.verticalCenter
+                    icon.name: "go-next-symbolic"
+                    icon.color: app.tokens.textPrimary
+                    text: qsTr("Visit Grex")
+                    display: Controls.AbstractButton.TextBesideIcon
+                    onClicked: Qt.openUrlExternally("https://github.com/visorcraft/grex")
                 }
             }
 
@@ -384,16 +461,16 @@ Kirigami.ScrollablePage {
                     AppFlatButton {
                         icon.name: "view-list-text"
                         icon.color: app.tokens.textPrimary
-                        text: qsTr("View Licenses")
+                        text: qsTr("Licenses")
                         display: Controls.AbstractButton.TextBesideIcon
                         onClicked: page.navigateRequested("licenses")
                     }
                     AppFlatButton {
-                        icon.name: "document-edit"
+                        icon.name: "help-about-symbolic"
                         icon.color: app.tokens.textPrimary
-                        text: qsTr("GPL v3 text")
+                        text: qsTr("Credits")
                         display: Controls.AbstractButton.TextBesideIcon
-                        onClicked: page.gplTextRequested()
+                        onClicked: page.navigateRequested("credits")
                     }
                     Item { Layout.fillWidth: true }
                 }

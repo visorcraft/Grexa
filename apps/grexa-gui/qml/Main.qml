@@ -68,12 +68,12 @@ Kirigami.ApplicationWindow {
         app.requestActivate()
         // First positional CLI arg lets dev/QA jump to a specific
         // page on launch — used for screenshot validation across
-        // the theme palette. Usage: `grexa settings`, `grexa licenses`,
+        // the theme palette. Usage: `grexa settings`, `grexa credits`,
         // etc. `arguments[0]` is the binary path; `arguments[1]` is
         // the first user arg.
         const initial = Qt.application.arguments && Qt.application.arguments.length > 1
             ? Qt.application.arguments[1] : ""
-        if (initial && ["search","regex","history","profiles","settings","about","licenses"].indexOf(initial) !== -1) {
+        if (initial && ["search","regex","history","profiles","settings","about","licenses","credits"].indexOf(initial) !== -1) {
             app.goTo(initial)
         }
         // Surface a recovery dialog if the previous run left a
@@ -254,6 +254,7 @@ Kirigami.ApplicationWindow {
             case "settings": app.pageStack.replace(settingsPage); break
             case "about":    app.pageStack.replace(aboutPage); break
             case "licenses": app.pageStack.replace(licensesPage); break
+            case "credits":  app.pageStack.replace(creditsPage); break
         }
     }
 
@@ -447,15 +448,31 @@ Kirigami.ApplicationWindow {
                 label: qsTr("About")
                 iconName: "help-about-symbolic"
                 active: app.currentPageKey === "about"
+                    || app.currentPageKey === "licenses"
+                    || app.currentPageKey === "credits"
                 compact: drawer.isCollapsed
                 onTriggered: app.goTo("about")
             }
 
             Item { Layout.fillHeight: true; Layout.fillWidth: true }
 
-            // -- Footer — version pill on the left, license badge
-            // on the right. Hidden when the sidebar is collapsed
-            // so the icon strip stays clean.
+            // -- Footer — expanded shows version + license; collapsed
+            // keeps the version visible in the narrow strip.
+            Controls.Label {
+                Layout.fillWidth: true
+                Layout.leftMargin: tokens.spaceXS
+                Layout.rightMargin: tokens.spaceXS
+                Layout.bottomMargin: tokens.spaceL
+                horizontalAlignment: Text.AlignHCenter
+                text: "v" + Qt.application.version
+                font.pixelSize: tokens.textCaption - 1
+                minimumPixelSize: 8
+                fontSizeMode: Text.HorizontalFit
+                font.family: tokens.monoFamily
+                opacity: 0.65
+                color: tokens.textPrimary
+                visible: drawer.isCollapsed
+            }
             RowLayout {
                 Layout.fillWidth: true
                 Layout.leftMargin: tokens.spaceL
@@ -503,7 +520,6 @@ Kirigami.ApplicationWindow {
         id: aboutPage
         AboutPage {
             onNavigateRequested: pageKey => app.goTo(pageKey)
-            onGplTextRequested: gplLicenseDialog.openLicenseText()
         }
     }
     Component {
@@ -511,6 +527,10 @@ Kirigami.ApplicationWindow {
         LicensesPage {
             onGplTextRequested: gplLicenseDialog.openLicenseText()
         }
+    }
+    Component {
+        id: creditsPage
+        CreditsPage {}
     }
 
     GplLicenseDialog { id: gplLicenseDialog }

@@ -42,9 +42,9 @@ What ships today:
    store records every path; the workspace state is shared via a
    thread-local pointer so QML instances see the same state.
 3. **A complete QML page set** at `apps/grexa-gui/qml/` — Main +
-   Search + Regex Builder + Settings + About + Licenses + Context
-   Preview + AiChatPanel + DesignTokens — bundled into the binary via Qt's
-   resource system at `qrc:/qt/qml/com/visorcraft/Grexa/...`.
+   Search + Regex Builder + Settings + About + Credits + Licenses +
+   Context Preview + AiChatPanel + DesignTokens — bundled into the binary
+   via Qt's resource system at `qrc:/qt/qml/com/visorcraft/Grexa/...`.
 4. **Unit tests** that exercise the Rust-side state without
    instantiating Qt (`search_controller_drives_real_search`,
    `cancel_sets_cancelled_status`, `recent_paths_json_round_trips`
@@ -79,6 +79,7 @@ apps/grexa-gui/
     ├── ContextPreviewDialog.qml# gutter + match-line highlight
     ├── AiChatPanel.qml         # disabled / empty / busy / error states + Clear
     ├── AboutPage.qml           # version + license + credits
+    ├── CreditsPage.qml         # card + table summary of third-party credits
     ├── LicensesPage.qml        # tabbed bundled license document viewer
     ├── GplLicenseDialog.qml    # bundled GPL-3.0 text viewer
     ├── NavItem.qml             # sidebar nav entry
@@ -151,8 +152,17 @@ without touching Rust as long as it uses the same keys.
 - Inputs: version (compile-time `env!("CARGO_PKG_VERSION")`), commit
   sha (compile-time via `vergen` in a future change), bundled license
   text
-- Outputs: "View Licenses" navigates to the built-in Licenses page
-  instead of opening the generated supplement on GitHub.
+- Outputs: "View Licenses" navigates to the full bundled document
+  viewer; "Credits" navigates to the card-and-table third-party
+  credits page.
+
+### Credits
+
+- Inputs: `SettingsController::third_party_credits_json()` parses the
+  bundled `docs/credits-third-party.md` supplement into table-ready
+  crate rows; runtime components are listed from `CREDITS.md`.
+- Outputs: runtime dependency credits and a filterable Cargo crate
+  table with project links.
 
 ### Licenses
 
