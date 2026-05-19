@@ -431,23 +431,27 @@ and culture-related UI behavior.
 `Tests/ViewModels/TabViewModelTests.cs` verifies that view-model search and
 replace calls pass through the relevant SearchService parameters.
 
-## Current Grexa Gaps Against This Audit
+## Current Grexa Status Against This Audit
 
-As of this audit:
+As of the current implementation:
 
 - Grexa implements native walking, hidden filtering, system directory filtering,
   symlink selection, match-file filtering, exclude-dir filtering, size limits,
-  text search, regex search, result fields, and file aggregation.
-- Grexa does not yet implement Grex-compatible `.gitignore` golden tests.
-- Grexa does not yet implement document extraction for ZIP/Office/OpenDocument,
-  PDF, or RTF.
-- Grexa does not yet implement selected-culture text matching or an ICU strategy.
-- Grexa's result ordering and column/preview behavior need comparison fixtures.
-- Grexa does not yet implement progress events or cancellation policy.
-- Grexa does not yet implement replace.
-- Grexa does not yet implement Baloo candidate seeding.
-- Grexa CLI and core expose only a subset of the advanced comparison settings
-  through command-line options.
+  text search, regex search, result fields, file aggregation, progress events,
+  and cancellation.
+- Grex-compatible `.gitignore` coverage lives in
+  `crates/grexa-core/tests/gitignore_parity.rs`.
+- Document extraction covers ZIP/Office/OpenDocument, PDF, and RTF paths through
+  `crates/grexa-core/src/documents.rs`.
+- Replace is implemented in `crates/grexa-core/src/replace.rs` and wired into
+  the GUI replace flow.
+- Baloo candidate seeding has an adapter in `crates/grexa-core/src/baloo.rs`;
+  full search integration remains a gap.
+- CLI/core expose comparison, normalization, culture, diacritic, and file-index
+  settings.
 
-These gaps should remain open in `PLAN.md` until covered by implementation and
-tests.
+Remaining gaps:
+
+- add more result-ordering and preview comparison fixtures against Grex
+- broaden culture-specific text matching fixtures
+- wire and test Baloo candidate seeding through the search pipeline and GUI

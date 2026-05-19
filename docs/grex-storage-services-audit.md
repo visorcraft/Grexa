@@ -3,8 +3,8 @@
 This document records the exact persistence behavior of Grex
 `SettingsService`, `RecentPathsService`, `RecentSearchesService`, and
 `SearchProfilesService`, and defines Grexa's XDG-based replacement. It is the
-behavioral source of truth for PLAN.md phase 0 line 149 and for the existing
-`crates/grexa-core/src/storage.rs` skeleton.
+behavioral source of truth for PLAN.md phase 0 line 149 and for the
+implementation in `crates/grexa-core/src/storage.rs`.
 
 Source evidence:
 
@@ -18,7 +18,7 @@ Source evidence:
 - `Tests/Services/RecentPathsServiceTests.cs`
 - `Tests/Services/RecentSearchesServiceTests.cs`
 - `Tests/Services/SearchProfilesServiceTests.cs`
-- `crates/grexa-core/src/storage.rs` (existing Grexa skeleton)
+- `crates/grexa-core/src/storage.rs` (Grexa implementation)
 - `crates/grexa-core/src/models.rs`
 
 The Settings UI surface and Linux replacements are covered in
@@ -245,7 +245,8 @@ Grexa replacement:
 - Provide `SettingsStore::delete(&self) -> Result<(), JsonStoreError>` that
   removes the file (ignoring a missing file as success) and forces the next
   `load()` to return `DefaultSettings::default()`.
-- The current Rust skeleton lacks this method; add it.
+- The current Rust implementation still lacks this method; add it when Settings
+  UI restore-defaults lands.
 
 ### DockerSearchEnabledChanged Event
 
@@ -288,16 +289,14 @@ Equality:
   inherits the same case-sensitive equality on Linux, which is the correct
   default for case-sensitive filesystems.
 
-Grexa skeleton parity (`crates/grexa-core/src/storage.rs::RecentPathStore`):
+Grexa parity (`crates/grexa-core/src/storage.rs::RecentPathStore`):
 
 - ✅ Limit of 20 (`RECENT_PATH_LIMIT`).
 - ✅ Newest-first insertion with dedupe.
 - ✅ `remove()` matches Grex behavior.
-- ❌ No `add()` whitespace guard. Grex skips empty/whitespace input; Grexa
-  currently inserts them. Add a guard.
-- ❌ No `filter(query)` helper. Add `RecentPathStore::filter(&self, query: &str) -> Result<Vec<PathBuf>, JsonStoreError>` mirroring Grex
-  semantics (case-insensitive substring against the UTF-8 string form of
-  the path; treat empty/whitespace as "return all").
+- ✅ `add()` skips empty/whitespace input.
+- ✅ `filter(query)` mirrors Grex semantics: case-insensitive substring against
+  the UTF-8 path string, with empty/whitespace query returning all paths.
 - ❌ No `clear()` helper, but Grex does not expose one for recent paths
   either; not required for parity.
 
@@ -385,29 +384,17 @@ These belong in Grexa's view layer, not the storage struct. The audit
 records them only so the UI port can reproduce the exact truncation lengths
 (37/40 for term, 47/50 for path, `g` short date/time format).
 
-### Grexa Skeleton Gaps
+### Grexa Status
 
 `crates/grexa-core/src/storage.rs::SearchHistoryStore`:
 
 - ✅ Limit of 20.
 - ✅ Newest-first insertion.
-- ❌ Dedupe key. Current Grexa code:
-  ```rust
-  searches.retain(|existing| {
-      existing.search_path != search.search_path
-          || existing.search_term != search.search_term
-      });
-  ```
-  This only keys on `(path, term)`. Grex keys on seven fields. **Fix**:
-  expand the dedupe condition to the full seven-field key. The simplest
-  faithful port is a `key(&self) -> String` method that joins the seven
-  fields with `|`, matching Grex's `GetKey()` byte for byte so future
-  migration of an existing user's `search_history.json` keeps the same
-  identity.
-- ❌ No empty-term guard. Add it.
-- ❌ No `remove(&self, key: &str)` and no `clear(&self)`. Add both.
-- ❌ No `filter(&self, query: &str)` helper. Add it (case-insensitive
-  substring against term OR path).
+- ✅ Dedupe uses `RecentSearch::key()` with the seven Grex fields.
+- ✅ Empty/whitespace search terms are ignored.
+- ✅ `remove_by_key`, `remove`, and `clear` are implemented.
+- ✅ `filter(query)` performs case-insensitive substring matching against term
+  or path.
 
 ### Tests To Port
 
@@ -490,32 +477,22 @@ Sort order:
 
 `SearchProfile.SecondaryText` is a UI helper; not stored.
 
-### Grexa Skeleton Gaps
+### Grexa Status
 
 `crates/grexa-core/src/storage.rs::SearchProfileStore`:
 
 - ✅ Upsert by name with `CreatedAt` preserved.
 - ✅ Remove by name.
-- ❌ **Sort order**: current code calls
-  `profiles.sort_by_key(|profile| profile.name.to_lowercase());` after
-  upsert. Grex does **not** sort alphabetically; it moves the touched
-  profile to the front of the list. The Settings UI consumes that order.
-  Fix: drop the sort and either (a) move the upserted profile to index 0
-  to match Grex, or (b) leave existing relative order and re-insert
-  upserted at index 0. Option (a) matches Grex exactly.
-- ❌ **Name comparison**: Grex matches names with
-  `StringComparison.OrdinalIgnoreCase`. Grexa currently uses `==`
-  (case-sensitive). Switch to ASCII case-insensitive at minimum; Unicode
-  case folding is acceptable but a deliberate upgrade.
-- ❌ No `exists(name)` helper. Add it.
-- ❌ No `clear()` helper. Add it.
-- ❌ No guard against empty `name` in `upsert`. Add one.
-- ❌ `SearchProfile::new` sets both `created_unix` and `updated_unix` to
+- ✅ Touched profiles move to the front of the list.
+- ✅ Name comparison is case-insensitive.
+- ✅ `exists(name)` and `clear()` are implemented.
+- ✅ Empty/whitespace names are ignored by `upsert`.
+- ✅ `SearchProfile::new` sets both `created_unix` and `updated_unix` to
   the same `unix_now()`. That matches Grex's "if default" logic for new
   profiles. The upsert path correctly preserves `created_unix` on update.
   Keep both behaviors.
-- ❌ `SearchProfile` has no `use_file_index` field. Decide via the
-  `SearchOptions` extension above and update both structs.
+- ✅ `SearchOptions` carries `use_file_index`; profile JSON stores it through
+  the nested search options.
 
 ### Tests To Port
 

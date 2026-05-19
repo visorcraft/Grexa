@@ -11,48 +11,40 @@ container search, optional AI assistance, and a fully scriptable CLI.
 
 ## Status
 
-**v0.3.0** — Polish + responsiveness pass on top of the v0.2 GUI
-parity release. Per-tab result-row isolation now preserves the
-full row buffer across tab switches (including `busy`, `replacing`,
-and the last-replace summary); the action toolbar wraps to
-additional rows on narrow windows instead of clipping; the pink
-gecko renders correctly in the Wayland taskbar via Qt's
-`setDesktopFileName` + auto-installed hicolor theme; Settings
-auto-save on change with an error-tinted pill on disk-write
-failure (no more Apply button); Filters/Esc/Export-menu toggles
-behave as users expect; re-clicking the active tab or sidebar
-nav item is a no-op instead of a hidden side effect.
+**v1.0.0** — Stable. Feature-complete against the Grex parity
+matrix on Linux. The on-disk schemas (`settings.json`,
+`recent_paths.json`, `search_history.json`, `profiles.json`,
+`replace-journal.json`), the `grexa-cli` flag surface, and the
+cxx-qt QObject surface exposed to QML are the long-term 1.x
+contract. v0.3.x config and data load unchanged.
 
-A follow-up polish round added inline pluralization
-("1 match · 1 file"), Enter-to-open on result rows,
-Enter-to-commit in the Replace dialog, an AI-chat Clear button,
-filter rows on the History and Profiles pages, and horizontal
-scrolling on the tab strip.
+The v0.3 polish + responsiveness pass carries forward: per-tab
+result-row isolation preserves the full row buffer across tab
+switches (including `busy`, `replacing`, and the last-replace
+summary); the action toolbar wraps to additional rows on narrow
+windows instead of clipping; the pink gecko renders correctly in
+the Wayland taskbar via Qt's `setDesktopFileName` + auto-installed
+hicolor theme; Settings auto-save on change with an error-tinted
+pill on disk-write failure (no more Apply button); Filters / Esc /
+Export-menu toggles behave as users expect; re-clicking the active
+tab or sidebar nav item is a no-op instead of a hidden side
+effect.
 
-A final audit pass routed the Rust `plural_count` helper through
-the Fluent bundle (German / Japanese users now see locale-correct
-inflection in status pills + notifications), debounced the
-History/Profiles filter inputs, renamed `FlagChip.checked` to
-`active` to harden against the imperative-binding regression,
-and fixed two launch-time warnings (xdg-desktop-portal app-id
-registration + Qt `Shortcut` plural sequences).
+Pluralization is locale-aware end-to-end via Fluent (German /
+Japanese users see correct inflection in status pills and
+notifications). The History and Profiles pages each carry a
+debounced filter row. The tab strip scrolls horizontally on
+overflow.
 
-v0.2 added the original GUI parity surface: folder picker,
-filter drawer, target selector for Docker/Podman, replace flow with
-residual-journal recovery, sortable result columns,
-search-within-results, in-session tabs, Profiles page, History page,
-export to CSV/JSON/Markdown, result row context menu, single-instance
-lockfile, KNotification, keyboard shortcuts, Editor/Replace/
-Accessibility/Privacy settings.
+The Rust core, CLI, container adapter, AI client, document
+extraction, encoding detection, settings, history, profiles,
+context preview, sorting, gitignore parity, and Fluent
+localization (en / de / ja) all ship working. The Qt 6 / Kirigami
+GUI binary boots via [cxx-qt 0.8](https://github.com/KDAB/cxx-qt)
+and is feature-complete against the Grex parity matrix in
+[docs/feature-parity.md](docs/feature-parity.md).
 
-The Rust core, CLI, container adapter, AI client, document extraction,
-encoding detection, settings, history, profiles, context preview,
-sorting, gitignore parity, and Fluent localization (en / de / ja) all
-ship working. The Qt 6 / Kirigami GUI binary boots via
-[cxx-qt 0.8](https://github.com/KDAB/cxx-qt) and is feature-complete
-against the Grex parity matrix in [docs/feature-parity.md](docs/feature-parity.md).
-
-Release notes: [docs/release-notes-0.3.0.md](docs/release-notes-0.3.0.md).
+Release notes: [docs/release-notes-1.0.0.md](docs/release-notes-1.0.0.md).
 
 ## Quick start
 
@@ -136,6 +128,8 @@ See [docs/architecture.md](docs/architecture.md) for the full breakdown.
   bringing Grex settings / history / profiles into Grexa
 - [docs/gui-design.md](docs/gui-design.md) — cxx-qt bridge + QML
   module map
+- [docs/release-notes-1.0.0.md](docs/release-notes-1.0.0.md) —
+  v1.0.0 stable release (schema + CLI freeze)
 - [docs/release-notes-0.3.0.md](docs/release-notes-0.3.0.md) —
   v0.3.0 changes (polish + responsiveness)
 - [docs/release-notes-0.2.0.md](docs/release-notes-0.2.0.md) —

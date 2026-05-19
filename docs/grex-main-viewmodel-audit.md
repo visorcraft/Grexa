@@ -259,19 +259,17 @@ Grexa test requirements:
   resources.
 - Test selected-tab restore if session persistence is implemented.
 
-## Current Grexa Gaps
+## Current Grexa Status
 
-Current `apps/grexa-gui` is a placeholder binary and does not yet implement a
-tab controller, QML tab model, selected-tab state, or tab lifecycle tests.
+`apps/grexa-gui` is no longer a placeholder binary. The Search page owns an
+in-session QML tab model, starts with an initial Search tab, supports
+add/remove/select flows, and stores per-tab result snapshots through
+`SearchController`.
 
-Missing relative to Grex behavior:
+Remaining gaps:
 
-- initial Search tab
-- add/remove/select tab controller API
-- `CanRemoveTab` equivalent
-- per-tab disposal/cancellation integration
-- QML-observable tab model
-- selected-tab signal path
-- localized generated tab titles
-- invalid-tab removal guards
-- many-tabs stress coverage
+- move tab lifecycle coverage into GUI/QML automation
+- test close/remove behavior while a search or replace is active
+- add many-tabs stress coverage
+- decide whether session persistence is in scope and test restore behavior if
+  it lands

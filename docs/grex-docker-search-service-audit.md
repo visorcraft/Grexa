@@ -340,20 +340,24 @@ Tests cover:
 
 Grexa should preserve this lenient normalization for pasted paths.
 
-## Current Grexa Gaps Against This Audit
+## Current Grexa Status Against This Audit
 
-As of this audit:
+As of the current implementation:
 
-- `grexa-containers` only defines DTOs for runtime, container info, search
-  target, and mirror info.
-- Docker and Podman runtime discovery are not implemented.
-- Direct in-container grep search is not implemented.
-- Grep availability caching is not implemented.
-- Mirror/archive fallback is not implemented.
-- Container `.gitignore` handling is not implemented.
-- Container path preservation in search results is not implemented.
-- Cleanup/prune behavior is not implemented.
-- Container tests are not implemented.
+- `grexa-containers` implements Docker/Podman runtime detection, CLI-backed
+  container listing, direct in-container grep, mirror/archive fallback, path
+  rewriting back to container paths, mirror pruning, and context preview.
+- The GUI target selector lists detected Docker/Podman containers when
+  container search is enabled and dispatches searches through
+  `search_container`.
+- Unit tests cover runtime detection, CLI parsing, grep output parsing, direct
+  grep invocation, mirror fallback setup, and path rewriting. Live-daemon tests
+  are gated behind the `container-live` feature.
 
-These gaps should remain open in `PLAN.md` until implementation and tests cover
-them.
+Remaining gaps:
+
+- add grep availability caching if repeated probes are a measured problem
+- add container `.gitignore` parity if Grexa decides to mirror Grex behavior
+  inside containers
+- broaden live tests for mirror fallback and cleanup/prune behavior
+- add GUI automation for the container target selector and error states

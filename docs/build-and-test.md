@@ -74,6 +74,64 @@ just manpage        # writes target/man/grexa-cli.1
 just completions    # writes target/completions/{grexa-cli.bash,_grexa-cli,grexa-cli.fish}
 ```
 
+## Distro packages
+
+Per-distro recipes live under `packaging/`. Each is bumped to match
+the workspace `[workspace.package].version`. Build the artifact for
+your target distro on a host with that distro's tooling:
+
+| Target | Tooling | Command |
+| ------ | ------- | ------- |
+| Source tarball | `tar` | `tar --exclude='./target' --exclude='./.git' --transform 's,^\./,grexa-1.0.0/,' -czf grexa-1.0.0.tar.gz .` |
+| Debian / Ubuntu (.deb) | `dpkg-deb`, `fakeroot` | `fakeroot dpkg-deb --build --root-owner-group <staged-tree> grexa.deb` (see `packaging/debian/`) |
+| Fedora / RHEL (.rpm) | `rpmbuild` | `rpmbuild -bb packaging/fedora/grexa.spec` |
+| openSUSE (.rpm) | `rpmbuild` | `rpmbuild -bb packaging/opensuse/grexa.spec` |
+| Arch / CachyOS (.pkg.tar.zst) | `makepkg`, `fakeroot` | `cd packaging/arch && makepkg -f` |
+| AppImage | `linuxdeploy`, `linuxdeploy-plugin-qt`, Qt 6 host stack, `jxrlib` | `NO_STRIP=1 QMAKE=/usr/bin/qmake6 bash packaging/appimage/build.sh` |
+| Flatpak | `flatpak-builder`, KDE 6.10 runtime, rust-stable//25.08 | `just flatpak-bundle` |
+
+The Justfile exposes the Flatpak path as first-class targets:
+
+```bash
+just flatpak-vendor   # `cargo vendor --locked target/flatpak/vendor`
+                      # + writes .cargo/config.toml. Run once, or whenever
+                      # Cargo.lock changes.
+
+just flatpak          # flatpak-builder against
+                      # packaging/flatpak/io.visorcraft.Grexa.yml.
+                      # Produces target/flatpak/repo + target/flatpak/build.
+
+just flatpak-bundle   # flatpak build-bundle → target/release/grexa.flatpak.
+                      # The single-file bundle that ships to users.
+```
+
+One-time Flatpak runtime install (per dev box):
+
+```bash
+flatpak remote-add --user --if-not-exists flathub \
+    https://flathub.org/repo/flathub.flatpakrepo
+flatpak install --user -y flathub \
+    org.kde.Platform//6.10 \
+    org.kde.Sdk//6.10 \
+    org.freedesktop.Sdk.Extension.rust-stable//25.08
+```
+
+The `rust-stable//25.08` extension ships Rust 1.95.0, matching
+`rust-toolchain.toml` exactly, so no rustup roundtrip happens inside
+the sandbox. The build itself runs **with no network access** —
+`just flatpak-vendor` populates `target/flatpak/vendor` first and the
+manifest's `cargo --offline build --release --workspace --frozen`
+reads only from that directory.
+
+### Why the Flatpak skips the .svg icon
+
+Newer librsvg releases on Arch (≥ 2.62) dropped the gdk-pixbuf SVG
+loader, so `flatpak build-export` rejects `io.visorcraft.Grexa.svg`
+with "Format not recognized" on those hosts. The Flatpak manifest
+intentionally installs only the PNG hicolor set (16..512 px) — KDE
+Plasma scales the closest PNG cleanly at HiDPI. The .deb / .rpm /
+Arch / AppImage targets all still ship the SVG.
+
 ## Dependency policy
 
 ```bash

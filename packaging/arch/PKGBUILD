@@ -1,6 +1,6 @@
 # Maintainer: VisorCraft LLC <maintainer@visorcraft.com>
 pkgname=grexa
-pkgver=0.3.0
+pkgver=1.0.0
 pkgrel=1
 pkgdesc="Fast Linux file content search with tabs, replace, and AI assistance"
 arch=('x86_64' 'aarch64')

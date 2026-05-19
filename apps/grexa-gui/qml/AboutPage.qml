@@ -450,10 +450,10 @@ Kirigami.ScrollablePage {
                 }
             }
 
-            // -- Third-party credits card --------------------------
+            // -- Licenses & Credits card --------------------------
             Card {
                 Layout.fillWidth: true
-                title: qsTr("Third-party credits")
+                title: qsTr("Licenses & Credits")
                 subtitle: qsTr("Every direct + transitive crate, acknowledgments, and full license text is bundled in the built-in licenses view.")
                 RowLayout {
                     Layout.fillWidth: true

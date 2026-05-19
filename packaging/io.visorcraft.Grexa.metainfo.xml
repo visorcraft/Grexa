@@ -75,6 +75,25 @@
   </supports>
 
   <releases>
+    <release version="1.0.0" date="2026-05-19">
+      <description>
+        <p>v1.0 — stable release. Feature-complete against Grex on Linux.</p>
+        <ul>
+          <li>Promotes the v0.3 polish + responsiveness pass to a 1.0
+              line — per-tab result-row isolation, responsive action
+              toolbar, auto-saved Settings, locale-aware
+              pluralization, taskbar icon integration, About page
+              "Licenses &amp; Credits" card.</li>
+          <li>Stable on-disk schemas: settings.json,
+              recent_paths.json, search_history.json, profiles.json,
+              replace-journal.json all forward-compatible with v0.3.
+              No data migration required.</li>
+          <li>All v0.3 known limits remain on the roadmap (Qt palette
+              swap via KColorSchemeManager; structured-field path
+              redaction in tracing spans).</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-05-18">
       <description>
         <p>v0.3 — polish, responsiveness, true per-tab isolation.</p>

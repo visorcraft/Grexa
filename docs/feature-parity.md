@@ -5,7 +5,7 @@ Every row is one Grex behavior; the *Implementation* column points at
 the code, doc, or audit that establishes parity, an intentional
 divergence, or an explicit non-applicability.
 
-Last refreshed: v0.3.0.
+Last refreshed: v1.0.0.
 
 Status legend:
 
@@ -19,7 +19,7 @@ Status legend:
 
 | Grex feature | Status | Implementation |
 | ------------ | ------ | -------------- |
-| Tabbed searches, per-tab state | ✅ | `apps/grexa-gui/src/tab.rs::TabState` + per-tab snapshot in `qobjects/search.rs::TabSnapshot`; QML tab strip in `SearchPage.qml` with horizontal-scroll overflow (v0.3). |
+| Tabbed searches, per-tab state | ✅ | Per-tab snapshots in `qobjects/search.rs::TabSnapshot`; QML tab strip in `SearchPage.qml` with horizontal-scroll overflow (v0.3). |
 | Text + Regex modes | ✅ | `crates/grexa-core/src/search.rs` + `pattern.rs` (two-engine cascade). |
 | Content mode with line / column / snippet | ✅ | `SearchResult`. |
 | Files mode aggregation | ✅ | `FileSearchResult` + `aggregate_file_results`. |
@@ -31,7 +31,7 @@ Status legend:
 | Culture-aware comparison (ordinal / culture / invariant / normalization / diacritic) | 🟡 | Modes wired through `SearchOptions`; ICU4X-backed casing ships v1.1 (`docs/grex-culture-comparison-audit.md`). |
 | Streaming + cancellation | ✅ | `CancelToken` + `ProgressEvent`. |
 | Sort + stable tie-breakers | ✅ | `crates/grexa-core/src/sort.rs`. |
-| Search-within-results | ✅ | `TabState::set_within_filter(filter, regex)`. |
+| Search-within-results | ✅ | `SearchController` within-filter state + QML tab snapshots. |
 | Result export (CSV / JSON / clipboard) | ✅ | CLI emits CSV/JSON; GUI Export menu writes CSV/JSON/Markdown; result-row context menu copies path / filename / line content / path:line. |
 
 ## Replace
@@ -103,7 +103,7 @@ Status legend:
 | Secret-Service-backed API key | ✅ | `secret.rs` via `keyring`. |
 | Opt-in setting | ✅ | `DefaultSettings.ai_search_enabled`. |
 | Provider scope doc | ✅ | `docs/ai-provider-scope.md`. |
-| In-tab conversation state | ✅ | `TabState::ai_mode` + `AiChatPanel.qml` (with turn-count header + Clear button as of v0.3). |
+| In-tab conversation state | ✅ | `AiChatPanel.qml` with turn-count header + Clear button (v0.3). |
 
 ## Context preview
 
@@ -165,7 +165,7 @@ Status legend:
 | ------------ | ------ | -------------- |
 | Fluent catalog format | ✅ | `crates/grexa-i18n`. |
 | Three locales (en/de/ja) | ✅ | `locales/<tag>/grexa.ftl`. |
-| Plural-aware status text | ✅ | `apps/grexa-gui/src/status.rs` plus `Bundle::plural_count` for bare-count fragments (`count-matches`, `count-files`, `count-files-modified`, `count-matches-replaced`, `count-failures` in en/de/ja). QML side uses Qt's `qsTr("%n …(s)", "", n)` plural overload. |
+| Plural-aware status text | ✅ | `Bundle::plural_count` for bare-count fragments (`count-matches`, `count-files`, `count-files-modified`, `count-matches-replaced`, `count-failures` in en/de/ja). QML side uses Qt's `qsTr("%n …(s)", "", n)` plural overload. |
 | Runtime locale switching | ✅ | `Bundle::for_locale(Locale::from_tag(tag))`. |
 | English fallback | ✅ | `Bundle` always carries a fallback bundle. |
 | Locale sync gate | ✅ | `scripts/check_locale_sync.py` + a unit test. |

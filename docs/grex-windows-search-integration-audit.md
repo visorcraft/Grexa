@@ -212,15 +212,19 @@ Grexa replacement:
   when a Linux index backend is implemented; otherwise ignore it with migration
   notes.
 
-## Current Grexa Gaps Against This Audit
+## Current Grexa Status Against This Audit
 
 As of this audit:
 
-- No index candidate provider trait exists.
-- Baloo availability/path-indexed detection is not implemented.
+- A Baloo candidate provider trait and CLI-backed adapter exist in
+  `crates/grexa-core/src/baloo.rs`.
+- Baloo availability/path-indexed detection is only partially represented by
+  the CLI adapter; indexed-path eligibility still needs integration.
 - Search does not report whether it used an index.
-- Settings include `use_file_index`, but there is no UI or backend behavior.
-- Tests for index candidate fallback and verification are not implemented.
+- Settings include `use_file_index`, and the CLI has `--use-index` /
+  `--no-index`, but the GUI has no file-index toggle yet.
+- Search pipeline integration, fallback verification, and live-index tests are
+  not implemented.
 
 These gaps should remain open in `PLAN.md` until implementation and tests cover
 them.

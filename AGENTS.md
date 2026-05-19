@@ -26,6 +26,9 @@ just completions    # writes target/completions/grexa-cli.{bash,zsh,fish}
 just run-cli ARGS   # cargo run -p grexa-cli -- ARGS
 just run-gui        # cargo run -p grexa
 just package        # cargo package --workspace --allow-dirty (release dry-run)
+just flatpak-vendor # cargo vendor → target/flatpak/vendor (run before flatpak)
+just flatpak        # flatpak-builder → target/flatpak/repo
+just flatpak-bundle # flatpak build-bundle → target/release/grexa.flatpak
 ```
 
 **CI parity:** `just ci` runs `fmt --check`, `clippy -D warnings`, and
@@ -50,11 +53,8 @@ grexa/
 │   ├── build.rs                # CxxQtBuilder::new_qml_module(...) — bundles QML into binary
 │   ├── src/
 │   │   ├── main.rs             # QGuiApplication + QQmlApplicationEngine boot
-│   │   ├── qobjects.rs         # cxx_qt::bridge — SearchController QObject
-│   │   ├── controller.rs       # singletons the GUI relies on
-│   │   ├── workspace.rs        # multi-tab workspace state
-│   │   ├── tab.rs              # per-tab state
-│   │   └── status.rs           # Fluent-aware status formatter
+│   │   ├── qobjects/           # cxx_qt::bridge modules — GUI QObjects
+│   │   └── workspace.rs        # shared stores + Fluent bundle
 │   └── qml/                    # bundled at build time → qrc:/qt/qml/com/visorcraft/Grexa/
 ├── crates/
 │   ├── grexa-core/             # search, replace, encoding, gitignore, glob,
@@ -106,15 +106,15 @@ grexa/
   of truth; non-English locales must contain every English key.
 - **`grexa`** (in `apps/grexa-gui`) is the Qt binary. It links every
   other crate but contains no algorithm logic of its own. The QML
-  layer talks to one cxx-qt-generated `SearchController` QObject;
-  business state lives in `Workspace` (TLS-installed before the
-  engine boots).
+  layer talks to cxx-qt-generated QObjects; shared stores and the
+  Fluent bundle live in `Workspace` (TLS-installed before the engine
+  boots).
 
 ### cxx-qt patterns
 
-- **One bridge module per QObject family.** Today there is one:
-  `qobject` in `apps/grexa-gui/src/qobjects.rs`. New QObjects join
-  the same module unless they're a separate logical surface.
+- **One bridge module per QObject family.** Existing bridge modules live
+  under `apps/grexa-gui/src/qobjects/`. New QObjects should join the
+  nearest logical module or get a new file in that directory.
 - **Bridge declaration vs. impl:** `#[cxx_qt::bridge] pub mod qobject
   { extern "RustQt" { #[qobject] type SearchController = super::SearchControllerRust; … } }`
   declares the QObject. The methods are implemented in
@@ -169,8 +169,8 @@ parity matrix against Grex's gitignore behavior lives in
 `crates/grexa-core/tests/gitignore_parity.rs` with cases that have
 inline `DIVERGES from Grex` comments where applicable.
 
-GUI tests in `apps/grexa-gui/src/qobjects.rs` exercise the Rust-side
-`SearchControllerRust` struct directly — no Qt runtime required.
+GUI tests in `apps/grexa-gui/src/qobjects/` exercise the Rust-side
+QObject backing structs directly — no Qt runtime required.
 
 ## Localization
 
@@ -251,7 +251,7 @@ drift.
    the seven-field dedup test (`recent_search_key_round_trips`).
 5. Update the GUI: add a binding in `apps/grexa-gui/qml/SearchPage.qml`
    and route it through the `SearchController` invokable in
-   `apps/grexa-gui/src/qobjects.rs`.
+   `apps/grexa-gui/src/qobjects/`.
 6. Add a Fluent key for any new labels in
    `crates/grexa-i18n/locales/en/grexa.ftl` and sync to de/ja.
 7. Update `docs/usage.md` if the flag is user-facing and
@@ -296,6 +296,7 @@ drift.
 
 | Doc | Purpose |
 | --- | ------- |
+| [docs/release-notes-1.0.0.md](docs/release-notes-1.0.0.md) | v1.0.0 stable release notes (schema + CLI freeze) |
 | [docs/release-notes-0.3.0.md](docs/release-notes-0.3.0.md) | v0.3.0 release notes (polish + responsiveness) |
 | [docs/release-notes-0.2.0.md](docs/release-notes-0.2.0.md) | v0.2.0 release notes (Phase 20 GUI parity) |
 | [docs/release-notes-0.1.0.md](docs/release-notes-0.1.0.md) | v0.1.0 release notes |

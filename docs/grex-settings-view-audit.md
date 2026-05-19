@@ -623,19 +623,19 @@ Grexa should add tests for:
 - context preview clamp behavior
 - theme migration from Grex custom theme names
 
-## Current Grexa Gaps
+## Current Grexa Status
 
-The Grexa skeleton already covers XDG paths and a large part of the settings
-model, but this audit leaves these SettingsView-related gaps:
+Grexa now covers XDG paths, theme preference persistence, AI endpoint/model
+settings, Secret-Service-backed API key storage, container search settings,
+context preview settings, editor/replace/privacy/accessibility toggles, and
+Grex-compatible settings export/import behavior in `grexa-core`.
 
-- no theme preference field in `DefaultSettings`
-- no AI API key storage or secret-service integration
-- no import/export/restore Settings UI
-- no Grex JSON import compatibility layer
-- no explicit settings schema version or migration framework
-- no settings UI for container search, AI, context preview, localization, or
-  column visibility
-- no file-index eligibility UI
-- no localized Settings tooltips/accessibility audit
-- no notification diagnostics replacement
-- no tests for Grex-to-Grexa Settings import edge cases
+Remaining gaps:
+
+- add import/export/restore controls to the Settings UI
+- add an explicit settings schema version or migration framework
+- add UI for file-index eligibility and column visibility if those features
+  remain in scope
+- complete localized Settings tooltip/accessibility coverage
+- add notification diagnostics replacement
+- broaden Grex-to-Grexa settings import edge-case tests

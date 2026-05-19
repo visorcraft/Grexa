@@ -177,8 +177,8 @@ impl SettingsControllerRust {
         s.default_match_files = self.default_match_files.to_string();
         s.default_exclude_dirs = self.default_exclude_dirs.to_string();
         s.theme_preference = theme_from_i32(self.theme);
-        s.context_preview_lines_before = self.context_lines_before.clamp(0, 50) as u8;
-        s.context_preview_lines_after = self.context_lines_after.clamp(0, 50) as u8;
+        s.context_preview_lines_before = self.context_lines_before.clamp(1, 20) as u8;
+        s.context_preview_lines_after = self.context_lines_after.clamp(1, 20) as u8;
         s.editor_preset = self.editor_preset.clamp(0, 8) as u8;
         s.editor_custom_command = self.editor_custom_command.to_string();
         s.replace_confirm = self.replace_confirm;

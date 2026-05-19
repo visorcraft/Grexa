@@ -17,9 +17,4 @@ pub mod regex_builder;
 pub mod search;
 pub mod settings;
 
-// `results` is a placeholder for a future standalone results-model
-// QObject; today the model is implemented directly on
-// `SearchController`. Keep the module around to reserve the path.
-mod results;
-
 pub use workspace_handle::install_workspace;

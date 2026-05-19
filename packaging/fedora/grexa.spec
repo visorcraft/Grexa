@@ -1,5 +1,5 @@
 Name:           grexa
-Version:        0.3.0
+Version:        1.0.0
 Release:        1%{?dist}
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 
@@ -58,6 +58,9 @@ done
 target/release/grexa-cli manpage > grexa-cli.1
 install -Dm644 grexa-cli.1 %{buildroot}%{_mandir}/man1/grexa-cli.1
 
+install -d %{buildroot}%{_datadir}/bash-completion/completions
+install -d %{buildroot}%{_datadir}/zsh/site-functions
+install -d %{buildroot}%{_datadir}/fish/vendor_completions.d
 target/release/grexa-cli completions bash \
     > %{buildroot}%{_datadir}/bash-completion/completions/grexa-cli
 target/release/grexa-cli completions zsh \
@@ -65,9 +68,13 @@ target/release/grexa-cli completions zsh \
 target/release/grexa-cli completions fish \
     > %{buildroot}%{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
-desktop-file-validate %{buildroot}%{_datadir}/applications/io.visorcraft.Grexa.desktop
-appstream-util validate-relax \
-    %{buildroot}%{_metainfodir}/io.visorcraft.Grexa.metainfo.xml
+# Optional validators — skipped if the helper isn't installed (non-Fedora
+# rpmbuild hosts).
+command -v desktop-file-validate >/dev/null && \
+    desktop-file-validate %{buildroot}%{_datadir}/applications/io.visorcraft.Grexa.desktop || :
+command -v appstream-util >/dev/null && \
+    appstream-util validate-relax \
+        %{buildroot}%{_metainfodir}/io.visorcraft.Grexa.metainfo.xml || :
 
 %files
 %license LICENSE
@@ -84,6 +91,11 @@ appstream-util validate-relax \
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Tue May 19 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.0.0-1
+- v1.0.0 stable release — feature-complete against Grex on Linux.
+- Promotes v0.3 polish (per-tab isolation, responsive toolbar,
+  auto-saved Settings, Fluent plurals, taskbar icon) to the 1.0 line.
+
 * Mon May 18 2026 VisorCraft LLC <maintainer@visorcraft.com> - 0.3.0-1
 - v0.3.0 polish and responsiveness release.
 

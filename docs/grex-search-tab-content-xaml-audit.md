@@ -444,24 +444,18 @@ Grexa test requirements:
 - Table column tests for headers, widths, hide/show menus, and tooltips.
 - Keyboard and pointer interaction tests for result rows.
 
-## Current Grexa Gaps
+## Current Grexa Status
 
-Current `apps/grexa-gui` only prints a placeholder message and has no QML Search
-page.
+Grexa now ships `SearchPage.qml` with path/recent-path controls, local/container
+target selection, search/history/profile/replace flows, filter controls, an
+AI chat panel, result rows, export actions, and per-tab snapshots.
 
-Missing relative to this audit:
+Remaining gaps:
 
-- Search page QML file
-- path/recent path control
-- container target selector
-- search input/history/replace controls
-- command strip
-- filter pane
-- result filter panel
-- AI chat panel
-- Content table
-- Files table
-- column header menus and resizers
-- result row templates and tooltips
+- add QML screenshot/geometry automation for desktop and narrow widths
+- add column/table parity if Grexa keeps Grex-style column header menus and
+  resizers
+- broaden keyboard and pointer tests for row actions, export, preview, and AI
+  mode visibility
 - responsive/narrow visual states
 - localized QML string IDs

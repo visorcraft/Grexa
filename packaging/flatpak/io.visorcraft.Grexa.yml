@@ -1,20 +1,50 @@
 # Flatpak manifest for Grexa.
 #
-# Build with:
-#   flatpak-builder --user --install --force-clean build-dir \
-#       packaging/flatpak/io.visorcraft.Grexa.yml
+# This manifest pairs with the workspace `rust-toolchain.toml` pin (Rust
+# 1.95, 2024 edition) by selecting the KDE 6.10 runtime, which is built on
+# the FDO 25.08 SDK and gets us the matching rust-stable Sdk extension.
 #
-# Requires the KDE Frameworks 6 runtime + Rust SDK extension.
+# Build the .flatpak bundle via `just flatpak` (recommended) or directly:
+#
+#   # Vendor all cargo deps first so the sandbox can build with no network.
+#   cargo vendor --locked target/flatpak/vendor > target/flatpak/config.toml
+#   flatpak-builder --user --force-clean --repo=target/flatpak/repo \
+#       target/flatpak/build packaging/flatpak/io.visorcraft.Grexa.yml
+#   flatpak build-bundle target/flatpak/repo \
+#       target/flatpak/grexa-1.0.0.flatpak io.visorcraft.Grexa stable
+#
+# Requires:
+#   flatpak-builder
+#   org.kde.Platform//6.10
+#   org.kde.Sdk//6.10
+#   org.freedesktop.Sdk.Extension.rust-stable//25.08
 
 app-id: io.visorcraft.Grexa
 runtime: org.kde.Platform
-runtime-version: '6.6'
+runtime-version: '6.10'
 sdk: org.kde.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
 command: grexa
 
+# Skip the post-build `appstreamcli compose` pass — Grexa's metainfo
+# references the GitHub repo URL which appstreamcli treats as a hard
+# read-error when the repo is private / unpublished, and the resulting
+# `filters-but-no-output` failure aborts the whole build. The metainfo
+# is still bundled at /app/share/metainfo and consumed by software
+# centers at install time.
+appstream-compose: false
+
 finish-args:
+  # Make QML resolve `org.kde.breeze` from our patched on-disk copy
+  # at /app/share/qml-overrides instead of the runtime's compiled-in
+  # qrc resources. The KDE 6.10 flatpak runtime's QtQuick.Controls
+  # has `depends org.kde.breeze` baked into its IndirectBasic qmldir
+  # (so QT_QUICK_CONTROLS_STYLE is bypassed), and the bundled Breeze
+  # has two ComboBox / ToolTip bugs fixed upstream. See build-commands
+  # for the rationale + patch reference.
+  - --env=QML_IMPORT_PATH=/app/share/qml-overrides
+  - --env=QML2_IMPORT_PATH=/app/share/qml-overrides
   # Wayland + X11 fallback for the QML shell.
   - --share=ipc
   - --socket=wayland
@@ -46,29 +76,53 @@ finish-args:
 
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
+  # No build-args network share — cargo reads from the vendored `vendor/`
+  # tree set up before the manifest references this module.
   env:
     CARGO_HOME: /run/build/grexa/cargo
-  build-args:
-    - --share=network # Cargo fetches at build time.
+    # Match the host pin so `rust-toolchain.toml` is satisfied without a
+    # rustup roundtrip inside the sandbox.
+    RUSTC_BOOTSTRAP: '0'
 
 modules:
   - name: grexa
     buildsystem: simple
     build-commands:
-      - cargo --offline fetch --manifest-path Cargo.toml || cargo fetch
-      - cargo --offline build --release --workspace
+      - cargo --offline build --release --workspace --frozen
       - install -Dm755 target/release/grexa /app/bin/grexa
       - install -Dm755 target/release/grexa-cli /app/bin/grexa-cli
       - install -Dm644 packaging/io.visorcraft.Grexa.desktop /app/share/applications/io.visorcraft.Grexa.desktop
       - install -Dm644 packaging/io.visorcraft.Grexa.metainfo.xml /app/share/metainfo/io.visorcraft.Grexa.metainfo.xml
-      - install -Dm644 packaging/icons/scalable/io.visorcraft.Grexa.svg /app/share/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg
+      # SVG icon intentionally skipped — newer librsvg dropped the
+      # gdk-pixbuf SVG loader, so `flatpak build-export` rejects it as
+      # "Format not recognized". The hicolor PNG set below (16..512px)
+      # covers every Plasma / GNOME icon-size request; KDE scales the
+      # nearest PNG cleanly at HiDPI. The SVG is still shipped in the
+      # other packaging targets (.deb / .rpm / Arch / AppImage).
       - for sz in 16 24 32 48 64 96 128 192 256 512; do install -Dm644 "packaging/icons/${sz}x${sz}/apps/io.visorcraft.Grexa.png" "/app/share/icons/hicolor/${sz}x${sz}/apps/io.visorcraft.Grexa.png"; done
       - target/release/grexa-cli manpage > grexa-cli.1
       - install -Dm644 grexa-cli.1 /app/share/man/man1/grexa-cli.1
-      - target/release/grexa-cli completions bash > grexa-cli.bash
-      - install -Dm644 grexa-cli.bash /app/share/bash-completion/completions/grexa-cli
-      - target/release/grexa-cli completions fish > grexa-cli.fish
-      - install -Dm644 grexa-cli.fish /app/share/fish/vendor_completions.d/grexa-cli.fish
+      - install -d /app/share/bash-completion/completions /app/share/fish/vendor_completions.d /app/share/zsh/site-functions
+      - target/release/grexa-cli completions bash > /app/share/bash-completion/completions/grexa-cli
+      - target/release/grexa-cli completions fish > /app/share/fish/vendor_completions.d/grexa-cli.fish
+      - target/release/grexa-cli completions zsh > /app/share/zsh/site-functions/_grexa-cli
+      - install -Dm644 LICENSE /app/share/licenses/grexa/LICENSE
+      # Patched Breeze QML override. The KDE 6.10 flatpak runtime
+      # ships two upstream-fixed bugs in Breeze's ComboBox + ToolTip
+      # (see breeze-6.10.patch). The runtime's QtQuick.Controls also
+      # forces `depends org.kde.breeze` into every QML scene via its
+      # IndirectBasic qmldir, so we can't sidestep Breeze with the
+      # QT_QUICK_CONTROLS_STYLE env var. Instead: copy the whole
+      # module to /app/share/qml-overrides, drop the `prefer` line
+      # from its qmldir so QML loads .qml files from disk (rather
+      # than from libBreezeStyle.so's compiled-in qrc resources),
+      # then apply the two-file patch.
+      - mkdir -p /app/share/qml-overrides/org/kde/breeze
+      - cp -r /usr/lib/qml/org/kde/breeze/. /app/share/qml-overrides/org/kde/breeze/
+      - sed -i '/^prefer :/d' /app/share/qml-overrides/org/kde/breeze/qmldir
+      - patch -p1 -d /app/share/qml-overrides/org/kde/breeze < packaging/flatpak/breeze-6.10.patch
     sources:
+      # The repo root. `cargo vendor` must be run beforehand so that
+      # ./vendor/ exists and ./.cargo/config.toml points at it.
       - type: dir
         path: ../..

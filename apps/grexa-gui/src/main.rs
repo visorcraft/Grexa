@@ -4,7 +4,7 @@
 //! Grexa GUI shell entry point.
 //!
 //! Uses `cxx-qt` 0.8 for the Rust ⇄ Qt bridge. The QObjects defined in
-//! `qobjects.rs` are auto-registered with QML under
+//! `qobjects/` are auto-registered with QML under
 //! `com.visorcraft.Grexa 1.0` by the `qml_module()` declaration in
 //! `build.rs`. The QML files in `apps/grexa-gui/qml/` are bundled into
 //! the binary via Qt's resource system and loaded from
@@ -28,10 +28,7 @@ use grexa_core::AppPaths;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
-mod controller;
 mod qobjects;
-mod status;
-mod tab;
 mod workspace;
 
 fn main() {

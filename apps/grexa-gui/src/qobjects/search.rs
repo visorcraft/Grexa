@@ -498,11 +498,11 @@ impl SearchControllerRust {
     /// within-filter is active, the returned pair already accounts
     /// for which of the appended rows are actually visible.
     ///
-    /// Kept for tests / future callers. Live `push_rows` uses the
-    /// two-phase `filter_batch_for_view` + `append_with_visible`
-    /// split so `beginInsertRows` can be bracketed around the
-    /// correct visible-row count.
-    #[allow(dead_code)]
+    /// Test helper. Live `push_rows` uses the two-phase
+    /// `filter_batch_for_view` + `append_with_visible` split so
+    /// `beginInsertRows` can be bracketed around the correct
+    /// visible-row count.
+    #[cfg(test)]
     pub fn append_batch(&mut self, batch: Vec<ResultRow>) -> Option<(i32, i32)> {
         if batch.is_empty() {
             return None;

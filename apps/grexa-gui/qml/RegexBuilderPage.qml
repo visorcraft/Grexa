@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 // Regex Builder. Preset chips + pattern editor + sample text with
-// inline match highlights + match-count badge. The match
-// highlighting is computed in QML JS (cheap enough for the test
-// strings users typically paste here) so we don't need a separate
-// "highlight pattern" invokable on the controller.
+// inline match highlights + match-count badge. Match ranges come
+// from the Rust controller so the preview follows the same regex
+// engine path as search.
 
 import QtQuick
 import QtQuick.Controls as Controls

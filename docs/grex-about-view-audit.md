@@ -257,18 +257,16 @@ Grexa replacement:
   keys, F1 navigation, and theme rendering.
 - Add a test that runtime language refresh updates the version label.
 
-## Current Grexa Gaps
+## Current Grexa Status
 
-Grexa does not yet have an About page.
+Grexa now has an About page in the native shell/navigation. It includes Grexa
+branding, package version text, Grexa and upstream Grex project links, separate
+Credits and Licenses routes, and the bundled GPL-3.0-only text through the
+Licenses view. F1 opens the About page from the main window.
 
-Required work:
+Remaining gaps:
 
-- add an About page to the native shell/navigation
-- add F1 navigation if appropriate
-- add Grexa branding and logo assets
-- show package/build version
-- link to `https://github.com/visorcraft/grexa`
-- show GPL 3.0 licensing
-- add localized strings and translation tests
-- support system/light/dark/high-contrast themes
-- include About in UI smoke tests
+- add UI automation/smoke coverage for About navigation, F1, external links,
+  Credits, and Licenses
+- add runtime language-refresh coverage for visible About text
+- add screenshot coverage for all shipped theme variants and high-contrast mode

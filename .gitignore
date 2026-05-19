@@ -21,3 +21,4 @@
 **/*.swp
 **/*.swo
 **/*~
+.cargo/config.toml

@@ -15,7 +15,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-VERSION="$(grep '^version' crates/grexa-core/Cargo.toml | head -1 | cut -d'"' -f2)"
+VERSION="$(awk -F'"' '
+    /^\[workspace\.package\]/ { in_section = 1; next }
+    in_section && /^\[/ { exit }
+    in_section && $1 ~ /^version[[:space:]]*=/ { print $2; exit }
+' Cargo.toml)"
 APP_DIR="target/appimage/Grexa.AppDir"
 
 rm -rf "$APP_DIR"
@@ -42,19 +46,23 @@ done
 
 "$APP_DIR/usr/bin/grexa-cli" manpage > "$APP_DIR/usr/share/man/man1/grexa-cli.1"
 
-# AppRun shim — launches the GUI binary.
-cat > "$APP_DIR/AppRun" <<'APPRUN'
+# AppRun shim — launches the GUI binary. Lives OUTSIDE the AppDir so that
+# linuxdeploy's --custom-apprun copy has distinct source / destination paths.
+APPRUN_SRC="target/appimage/AppRun"
+cat > "$APPRUN_SRC" <<'APPRUN'
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "$0")")"
 export PATH="$HERE/usr/bin:$PATH"
-export QT_PLUGIN_PATH="$HERE/usr/lib/qt6/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
+export QT_PLUGIN_PATH="$HERE/usr/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
+export QML2_IMPORT_PATH="$HERE/usr/qml${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}"
+export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 exec "$HERE/usr/bin/grexa" "$@"
 APPRUN
-chmod +x "$APP_DIR/AppRun"
+chmod +x "$APPRUN_SRC"
 
 cp packaging/icons/scalable/io.visorcraft.Grexa.svg "$APP_DIR/io.visorcraft.Grexa.svg"
 cp packaging/io.visorcraft.Grexa.desktop "$APP_DIR/io.visorcraft.Grexa.desktop"
 
-linuxdeploy --appdir "$APP_DIR" --plugin qt --output appimage --custom-apprun "$APP_DIR/AppRun"
+linuxdeploy --appdir "$APP_DIR" --plugin qt --output appimage --custom-apprun "$APPRUN_SRC"
 mv Grexa*.AppImage "Grexa-${VERSION}-x86_64.AppImage"
 echo "wrote Grexa-${VERSION}-x86_64.AppImage"

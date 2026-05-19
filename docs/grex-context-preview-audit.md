@@ -338,18 +338,16 @@ Current test gaps:
 Grexa should add tests for all target types, encoding edge cases, and preview
 task cancellation/error propagation.
 
-## Current Grexa Gaps
+## Current Grexa Status
 
-The current Grexa skeleton does not yet include a context preview service or UI.
+Grexa now includes `grexa-core::context_preview`, `ContextPreviewDialog.qml`,
+and `SearchController::preview_at`. The Search page opens the dialog from
+result rows and keyboard flow, and Settings stores before/after line counts
+with the core `1..20` clamp.
 
-Required work:
+Remaining gaps:
 
-- implement context preview service in `grexa-core`
-- integrate with the Search page content result table
-- add Settings-backed before/after line counts with `1..20` clamp
-- implement local file previews
-- implement mirrored and direct container previews
-- add native editor-opening templates
-- add localized preview dialogs/menus/errors
-- test line boundaries, encodings, permissions, missing files, and container
-  paths
+- add mirrored/direct container preview support
+- add localized error strings for preview failures
+- broaden tests for permissions, missing files, encodings, and container paths
+- add UI automation for keyboard and pointer preview entry points

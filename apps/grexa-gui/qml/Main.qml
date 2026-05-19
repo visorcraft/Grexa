@@ -5,7 +5,7 @@
 //
 // Kirigami ApplicationWindow with a refined sidebar (grouped
 // sections, 32px nav rows, version footer) and a page stack.
-// Controllers are declared here once so every page reaches them
+// QML controller singletons are declared here once so every page reaches them
 // via `app.tokens` / `app.searchController` etc.
 
 import QtQuick
@@ -500,13 +500,6 @@ Kirigami.ApplicationWindow {
                     }
                 }
                 Item { Layout.fillWidth: true }
-                Controls.Label {
-                    text: qsTr("GPL v3")
-                    font.pixelSize: tokens.textCaption
-                    font.family: tokens.sansFamily
-                    opacity: 0.4
-                    color: tokens.textPrimary
-                }
             }
         }
     }

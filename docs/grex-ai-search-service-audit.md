@@ -401,17 +401,16 @@ Current test gaps:
 - no null context/conversation tests
 - no privacy/consent test
 
-## Current Grexa Gaps
+## Current Grexa Status
 
-`crates/grexa-ai` currently contains DTOs and endpoint helper functions only.
+`crates/grexa-ai` now implements OpenAI-compatible chat requests, model
+discovery, endpoint normalization, response/error parsing, Linux-aware context
+prompting, and Secret-Service-backed API key helpers. The GUI gates AI calls on
+the explicit `ai_search_enabled` setting and stores keys per endpoint.
 
-Required work:
+Remaining gaps:
 
-- implement HTTP chat request sending
-- implement model discovery and a deliberate cache strategy
-- implement shared endpoint normalization for chat and Settings test
-- implement response and error parsing
-- implement prompt/context building with Linux terms
-- add first-use AI context disclosure and opt-in
-- add secret handling for API keys
-- add unit tests matching Grex behavior and chosen Grexa improvements
+- decide whether model discovery needs caching and test invalidation behavior
+- add cancellation coverage for in-flight AI requests
+- add malformed-response and null-context tests beyond the current parser cases
+- add first-use privacy/context disclosure UI if required by policy

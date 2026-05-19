@@ -12,12 +12,13 @@ bundles `.qml` files into the binary via Qt's resource system.
 `cargo build -p grexa --release` produces a working binary that
 boots `QGuiApplication`, builds a `QQmlApplicationEngine`, and
 loads `qrc:/qt/qml/com/visorcraft/Grexa/Main.qml`. The QObject
-surface is in `apps/grexa-gui/src/qobjects.rs` as a
-`#[cxx_qt::bridge]` module; `apps/grexa-gui/build.rs` calls
-`CxxQtBuilder::new_qml_module(...)`. Verified locally with
-`QT_QPA_PLATFORM=offscreen target/release/grexa` running the Qt
-event loop. The workspace controllers (`workspace.rs`, `tab.rs`,
-`status.rs`) remain the source of truth for business logic.
+surface is split across `apps/grexa-gui/src/qobjects/`; each
+QObject family owns its own `#[cxx_qt::bridge]` module.
+`apps/grexa-gui/build.rs` calls `CxxQtBuilder::new_qml_module(...)`.
+Verified locally with `QT_QPA_PLATFORM=offscreen target/release/grexa`
+running the Qt event loop. Shared persistent GUI state lives in
+`workspace.rs`; per-tab UI state lives in `SearchPage.qml` snapshots
+and `SearchController`'s Rust-side snapshot map.
 
 A previous spike rejected cxx-qt after the link step failed with
 `undefined symbol: cxx_qt_init_crate_cxx_qt_lib`. That failure
@@ -39,19 +40,19 @@ What ships today:
    change signals), a `history_changed` qsignal, and
    `start_search` / `cancel` / `recent_paths_json` qinvokables. The
    real `grexa-core` search engine drives it; the recent-paths
-   store records every path; the workspace state is shared via a
-   thread-local pointer so QML instances see the same state.
+   store records every path; shared stores are accessed through a
+   thread-local `Workspace` so QML instances see the same state.
 3. **A complete QML page set** at `apps/grexa-gui/qml/` — Main +
    Search + Regex Builder + Settings + About + Credits + Licenses +
    Context Preview + AiChatPanel + DesignTokens — bundled into the binary
    via Qt's resource system at `qrc:/qt/qml/com/visorcraft/Grexa/...`.
-4. **Unit tests** that exercise the Rust-side state without
-   instantiating Qt (`search_controller_drives_real_search`,
-   `cancel_sets_cancelled_status`, `recent_paths_json_round_trips`
-   in `qobjects.rs`). The cxx-qt-generated `SearchController` is
-   tested by `cargo build -p grexa` itself: a regression in
-   property signatures, qinvokable types, or qsignal generation
-   trips the C++ compile in `build.rs`.
+4. **Unit tests** that exercise the Rust-side QObject backing state
+   without instantiating Qt, including search streaming, recent-path JSON,
+   Regex Builder evaluation, Settings reload, license bundling, and credits
+   parsing under `src/qobjects/`. The cxx-qt-generated QObjects are tested by
+   `cargo build -p grexa` itself: a regression in property signatures,
+   qinvokable types, or qsignal generation trips the C++ compile in
+   `build.rs`.
 
 ## Module map
 
@@ -61,11 +62,8 @@ apps/grexa-gui/
 ├── build.rs            # CxxQtBuilder::new_qml_module(...) — registers QML module + files
 ├── src/
 │   ├── main.rs         # logging + workspace install + QGuiApplication + QQmlApplicationEngine
-│   ├── qobjects.rs     # SearchController QObject (cxx_qt::bridge) + workspace TLS
-│   ├── controller.rs   # `Controllers` struct: settings, bundle, cancel
-│   ├── tab.rs          # `TabState` per-tab state
-│   ├── workspace.rs    # `Workspace`: tabs + persistent stores + Fluent bundle + replace
-│   └── status.rs       # `format_status` Fluent-aware status formatter
+│   ├── qobjects/       # cxx-qt QObjects + workspace TLS handle
+│   └── workspace.rs    # `Workspace`: persistent stores + Fluent bundle
 └── qml/                # bundled into binary at qrc:/qt/qml/com/visorcraft/Grexa/
     ├── Main.qml                # Kirigami ApplicationWindow + nav rail + shortcuts
     ├── SearchPage.qml          # path + term + filters + tabs + result list
@@ -119,8 +117,9 @@ color stops. Tokens flow through three layers:
 ## Wiring contracts
 
 Every QML page binds to one or more controller objects in
-`controller.rs`. The contracts are stable; the QML side can evolve
-without touching Rust as long as it uses the same keys.
+`src/qobjects/`. The contracts are stable; the QML side can evolve
+without touching Rust as long as it uses the same invokables,
+properties, and model roles.
 
 ### Search
 
@@ -152,7 +151,7 @@ without touching Rust as long as it uses the same keys.
 - Inputs: version (compile-time `env!("CARGO_PKG_VERSION")`), commit
   sha (compile-time via `vergen` in a future change), bundled license
   text
-- Outputs: "View Licenses" navigates to the full bundled document
+- Outputs: "Licenses" navigates to the full bundled document
   viewer; "Credits" navigates to the card-and-table third-party
   credits page.
 
@@ -175,14 +174,13 @@ without touching Rust as long as it uses the same keys.
 
 ## Cross-tab state
 
-Each Search tab is its own state object. The controller layer holds a
-`Vec<TabState>` plus an `active: usize`. Tab creation / close /
-rename / drag is GUI-only; the Rust side only needs:
-
-- `new_tab() -> TabId`
-- `close_tab(id)`
-- `set_active(id)`
-- `get_tab(id) -> &TabState`
+Search tabs are in-session QML state. `SearchPage.qml` owns the tab
+strip, active tab id, and form fields, while `SearchController` stores
+per-tab result snapshots keyed by the stable tab id. Switching tabs
+saves the outgoing snapshot with `save_tab_snapshot(id)` and restores
+the incoming snapshot with `restore_tab_snapshot(id)`. Persistent
+history, profiles, settings, and recent paths still flow through the
+shared `Workspace`.
 
 ## Build pipeline (current)
 
@@ -200,44 +198,3 @@ QML files load from `qrc:/qt/qml/com/visorcraft/Grexa/...` at
 runtime. Editing a QML file requires a `cargo build` cycle because
 the file is baked into the binary at build time — that is the
 cxx-qt-native flow.
-
-## What lands when the dedicated GUI PR opens
-
-Phase 1 (the spike itself):
-- ✅ Add `cxx-qt-build`, `cxx-qt`, `cxx-qt-lib` to apps/grexa-gui
-- ✅ Drop the `qml6`-spawn fallback
-- ✅ Pure-Cargo build (no CMake)
-- ✅ Stand up one Rust `QObject` (the `SearchController`) and the
-  `qobjects::tests::search_controller_drives_real_search` test
-
-Phase 4 (Search UI MVP):
-- Replace `SearchPage.qml` placeholder with the real path/term/mode
-  pickers, filter pane, command strip, virtualized result tables
-- Wire `ProgressEvent` → `ListModel` batch inserts
-- Add Tabs, Stop button, search-within-results
-
-Phase 5 (Linux desktop integration):
-- Portal file picker (`org.freedesktop.portal.FileChooser`)
-- KIO-FUSE path support
-- KNotifications via `KNotifications::sendEvent`
-- KDE color-scheme tracking
-
-Phase 9 (Regex Builder), Phase 10 (Settings), Phase 14 (Context
-Preview), Phase 18 (Visual Polish): all incremental QML work on top
-of the same controller scaffolding.
-
-## Why ship this skeleton at all?
-
-Three reasons:
-
-1. **Verifies end-to-end wiring.** The Rust host has to link every
-   core crate. Today that passes `cargo build -p grexa` and
-   `cargo test -p grexa`. A regression in any consumed crate breaks
-   the workspace clippy gate.
-2. **Documents the contract.** Every page that doesn't exist yet
-   still has a QML file describing what it expects. Future engineers
-   don't have to re-derive the layout from PLAN.md.
-3. **Gives the user a "GUI launches" smoke test.** `cargo run -p grexa`
-   on a Qt 6 + Kirigami box pops a window with four pages, navigation
-   rail, and KDE-native styling — proof the Qt path works even before
-   the full UI lands.

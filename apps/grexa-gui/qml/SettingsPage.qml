@@ -339,13 +339,13 @@ Kirigami.ScrollablePage {
                     Layout.fillWidth: true
                     Controls.Label { text: qsTr("Lines before") }
                     AppSpinBox {
-                        from: 0; to: 50
+                        from: 1; to: 20
                         value: page.settings.contextLinesBefore
                         onValueModified: { page.settings.contextLinesBefore = value; page.commit() }
                     }
                     Controls.Label { text: qsTr("Lines after") }
                     AppSpinBox {
-                        from: 0; to: 50
+                        from: 1; to: 20
                         value: page.settings.contextLinesAfter
                         onValueModified: { page.settings.contextLinesAfter = value; page.commit() }
                     }

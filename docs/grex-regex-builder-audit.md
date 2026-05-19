@@ -391,20 +391,19 @@ Current test gaps:
 Grexa should add tests for all of the above, especially regex engine parity with
 the actual search implementation.
 
-## Current Grexa Gaps
+## Current Grexa Status
 
-The current Grexa skeleton does not yet include a Regex Builder UI or core
-regex-explainer module.
+Grexa now ships `RegexBuilderPage.qml` and
+`apps/grexa-gui/src/qobjects/regex_builder.rs`. Live compilation and sample
+match ranges use `grexa-core::PatternEngine`, so the preview follows the same
+regex engine cascade as search. The page includes preset chips, sample text,
+case-insensitive matching, match count, inline highlights, and apply-to-search
+flow.
 
-Required work:
+Remaining gaps:
 
-- choose and document the regex engine used by both search and Regex Builder
-- implement live pattern compilation with timeout/cancellation
-- implement sample text match preview
-- implement global/first-match toggle
-- implement case-insensitive and multiline options
-- implement the five Grex presets
-- implement overwrite confirmation
-- implement visual breakdown or a scoped explainer
-- localize labels, placeholders, dynamic messages, dialogs, and tooltips
-- test parser/explainer behavior and search/builder regex parity
+- implement a visual breakdown/explainer if Grexa keeps that Grex surface
+- add global/first-match and multiline controls if parity requires them
+- add timeout/cancellation coverage for expensive regexes
+- broaden tests for preset behavior and search/builder regex parity
+- complete localization/accessibility coverage for all Regex Builder controls

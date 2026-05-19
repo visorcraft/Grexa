@@ -1,10 +1,9 @@
 // SPDX-FileCopyrightText: 2026 VisorCraft LLC
 // SPDX-License-Identifier: GPL-3.0-only
 
-// Context-preview dialog. Renders ±5 lines around the match using
-// the controller's previewAt() invokable. The output already has
-// `>` on the match line; we apply our match tint on that line so
-// the eye lands on it instantly.
+// Context-preview dialog. Renders the configured surrounding lines
+// through the controller's previewAt() invokable. The output already
+// has `>` on the match line; we apply our match tint on that line.
 
 import QtQuick
 import QtQuick.Controls as Controls

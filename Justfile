@@ -65,9 +65,49 @@ package:
 run-cli *args:
     cargo run -p grexa-cli -- {{args}}
 
-# Launch the GUI placeholder.
+# Launch the GUI.
 run-gui:
     cargo run -p grexa
+
+# Vendor every cargo dependency into target/flatpak/vendor. Required
+# before `just flatpak` so the sandboxed build can compile with no
+# network access. Re-runs are cheap (cargo only re-downloads crates
+# that aren't already in vendor/). Note: this does NOT touch
+# .cargo/config.toml — `just flatpak` writes / removes it around the
+# build so host cargo builds aren't redirected at the vendor tree.
+flatpak-vendor:
+    mkdir -p target/flatpak
+    cargo vendor --locked target/flatpak/vendor > target/flatpak/vendor-config.toml
+    @echo "wrote target/flatpak/vendor + target/flatpak/vendor-config.toml"
+
+# Build the Flatpak into a local OSTree repo at target/flatpak/repo and
+# the install tree at target/flatpak/build. Requires:
+#   flatpak-builder
+#   org.kde.Platform//6.10
+#   org.kde.Sdk//6.10
+#   org.freedesktop.Sdk.Extension.rust-stable//25.08
+flatpak: flatpak-vendor
+    # Stage the vendor config at .cargo/config.toml just long enough for
+    # flatpak-builder to copy the source tree into the sandbox, then
+    # remove it so subsequent host cargo builds use the registry cache
+    # again. The trap also fires on failure to keep the worktree clean.
+    mkdir -p .cargo
+    cp target/flatpak/vendor-config.toml .cargo/config.toml
+    trap 'rm -f .cargo/config.toml' EXIT INT TERM; \
+        flatpak-builder --user --force-clean --disable-rofiles-fuse \
+            --repo=target/flatpak/repo \
+            target/flatpak/build \
+            packaging/flatpak/io.visorcraft.Grexa.yml
+    @echo "built target/flatpak/repo"
+
+# Bundle the Flatpak repo into a single redistributable .flatpak file
+# at target/release/grexa.flatpak.
+flatpak-bundle: flatpak
+    mkdir -p target/release
+    flatpak build-bundle target/flatpak/repo \
+        target/release/grexa.flatpak \
+        io.visorcraft.Grexa master
+    @echo "wrote target/release/grexa.flatpak"
 
 # Convenience target — everything CI does. Useful before pushing.
 ci: fmt-check lint test

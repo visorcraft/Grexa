@@ -573,26 +573,22 @@ Grexa test requirements:
 - Add cancellation tests under active streaming.
 - Add target-mode tests for local, Docker, and Podman.
 
-## Current Grexa Gaps
+## Current Grexa Status
 
-Current Grexa core has basic search summaries, file aggregation, storage, and
-sort field models, but it does not yet implement a full tab/session controller.
+Grexa now has a QML tab strip with stable tab ids and Rust-side
+`SearchController` snapshots for per-tab rows, filters, result mode, and
+status. Core supports search summaries, file aggregation, sorting, replace,
+cancellation, and progress events. The GUI supports search/replace command
+flow, search-within-results, tab title abbreviation, and local/container target
+selection.
 
-Missing or incomplete relative to this audit:
+Remaining gaps:
 
-- isolated per-tab session model
-- search/replace command lifecycle
-- replace implementation in core/controller
-- cancellation state and cancellation-latency guarantees
-- streaming result delivery with backpressure
-- filtered versus unfiltered result model
-- search-within-results filtering
-- default sort state and sort toggling
-- localized status key/argument model
-- tab title abbreviation
-- GUI command eligibility bindings
-- Docker/Podman target selection in the tab model
-- mirror-result path remapping in the UI/controller
+- add GUI automation for command eligibility bindings and tab switching
+- test cancellation latency and active-search cleanup when closing tabs
+- add large-result responsiveness tests for filtering/sorting and snapshot
+  memory use
+- decide whether persistent tab/session restore is in scope
 - Baloo/file-index option eligibility
 - runtime localization refresh for open tabs
 

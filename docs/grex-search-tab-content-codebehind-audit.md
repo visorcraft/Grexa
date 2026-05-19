@@ -834,25 +834,20 @@ Grexa test requirements:
 - Localization refresh tests for visible Search page text.
 - Large-result column/table responsiveness tests.
 
-## Current Grexa Gaps
+## Current Grexa Status
 
-Current `apps/grexa-gui` is still a placeholder. Grexa does not yet have the
-Search page code-behind equivalent or QML/controller implementation.
+Grexa now has a QML Search page backed by `SearchController`. Implemented
+surface includes recent paths, filters, search/replace flow with confirmation
+and result summary dialogs, AI panel lifecycle, search-within-results, result
+model roles, Space-to-preview, open/reveal/copy actions, export, and
+history/profile UI.
 
-Missing relative to this audit:
+Remaining gaps:
 
-- Search page UI controller
-- QML Search page bindings
-- recent path AutoSuggest and removal UI
-- filter options pane and validation wiring
-- search/replace toolbar flow
-- replace confirmation dialog
-- AI chat panel and request lifecycle in GUI
-- search-within-results controls in GUI
-- result grid item models and column controls
-- Space-to-preview and right-click context menus
-- Linux file open/reveal integration
-- profile save/load/delete UI
+- add UI automation for command enablement and keyboard/pointer behavior
+- decide whether Grex-style column controls remain required
+- broaden tests for export of filtered rows and profile/history interactions
+- add localization-refresh tests for visible Search page text
 - search history flyout UI
 - export menu UI
 - localization refresh for the Search page
