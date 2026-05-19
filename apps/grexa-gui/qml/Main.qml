@@ -499,7 +499,6 @@ Kirigami.ApplicationWindow {
                         color: tokens.textPrimary
                     }
                 }
-                Item { Layout.fillWidth: true }
             }
         }
     }

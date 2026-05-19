@@ -4,14 +4,10 @@
 # 1.95, 2024 edition) by selecting the KDE 6.10 runtime, which is built on
 # the FDO 25.08 SDK and gets us the matching rust-stable Sdk extension.
 #
-# Build the .flatpak bundle via `just flatpak` (recommended) or directly:
-#
-#   # Vendor all cargo deps first so the sandbox can build with no network.
-#   cargo vendor --locked target/flatpak/vendor > target/flatpak/config.toml
-#   flatpak-builder --user --force-clean --repo=target/flatpak/repo \
-#       target/flatpak/build packaging/flatpak/io.visorcraft.Grexa.yml
-#   flatpak build-bundle target/flatpak/repo \
-#       target/flatpak/grexa-1.0.0.flatpak io.visorcraft.Grexa stable
+# Build the .flatpak bundle via `just flatpak-bundle` (recommended). The
+# Justfile target vendors cargo deps into target/flatpak/vendor, stages
+# the matching .cargo/config.toml under a trap (so it's removed even on
+# build failure), and produces target/release/grexa.flatpak.
 #
 # Requires:
 #   flatpak-builder
@@ -76,13 +72,10 @@ finish-args:
 
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
-  # No build-args network share — cargo reads from the vendored `vendor/`
-  # tree set up before the manifest references this module.
+  # No build-args network share — cargo reads from the vendored
+  # target/flatpak/vendor tree staged by `just flatpak-vendor`.
   env:
     CARGO_HOME: /run/build/grexa/cargo
-    # Match the host pin so `rust-toolchain.toml` is satisfied without a
-    # rustup roundtrip inside the sandbox.
-    RUSTC_BOOTSTRAP: '0'
 
 modules:
   - name: grexa
@@ -122,7 +115,10 @@ modules:
       - sed -i '/^prefer :/d' /app/share/qml-overrides/org/kde/breeze/qmldir
       - patch -p1 -d /app/share/qml-overrides/org/kde/breeze < packaging/flatpak/breeze-6.10.patch
     sources:
-      # The repo root. `cargo vendor` must be run beforehand so that
-      # ./vendor/ exists and ./.cargo/config.toml points at it.
+      # The repo root. `just flatpak` stages
+      # target/flatpak/vendor + .cargo/config.toml before flatpak-builder
+      # runs, so this `type: dir` copies them into the sandbox alongside
+      # the workspace; `cargo --offline --frozen` then resolves every
+      # crate from the vendored tree.
       - type: dir
         path: ../..
