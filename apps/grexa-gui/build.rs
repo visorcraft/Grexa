@@ -16,6 +16,8 @@ fn main() {
                 "qml/ContextPreviewDialog.qml",
                 "qml/AiChatPanel.qml",
                 "qml/AboutPage.qml",
+                "qml/LicensesPage.qml",
+                "qml/GplLicenseDialog.qml",
                 "qml/HistoryPage.qml",
                 "qml/ProfilesPage.qml",
                 "qml/DesignTokens.qml",

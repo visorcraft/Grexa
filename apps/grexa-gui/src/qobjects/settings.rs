@@ -62,8 +62,24 @@ pub mod ffi {
         /// Persist the current property values to `settings.json`.
         #[qinvokable]
         fn apply(self: Pin<&mut SettingsController>);
+
+        /// Return the bundled GPL-3.0 license text for Grexa itself.
+        #[qinvokable]
+        fn gpl_license_text(self: &SettingsController) -> QString;
+
+        /// Return the bundled third-party license bundle.
+        #[qinvokable]
+        fn third_party_licenses_text(self: &SettingsController) -> QString;
+
+        /// Return Grexa's bundled credits and attribution narrative.
+        #[qinvokable]
+        fn credits_text(self: &SettingsController) -> QString;
     }
 }
+
+const GPL_LICENSE_TEXT: &str = include_str!("../../../../LICENSE");
+const THIRD_PARTY_LICENSES_TEXT: &str = include_str!("../../../../docs/credits-third-party.md");
+const CREDITS_TEXT: &str = include_str!("../../../../CREDITS.md");
 
 #[derive(Default)]
 pub struct SettingsControllerRust {
@@ -274,6 +290,18 @@ impl ffi::SettingsController {
         };
         self.as_mut().set_last_save_status(QString::from(msg));
     }
+
+    fn gpl_license_text(&self) -> QString {
+        QString::from(GPL_LICENSE_TEXT)
+    }
+
+    fn third_party_licenses_text(&self) -> QString {
+        QString::from(THIRD_PARTY_LICENSES_TEXT)
+    }
+
+    fn credits_text(&self) -> QString {
+        QString::from(CREDITS_TEXT)
+    }
 }
 
 #[cfg(test)]
@@ -309,6 +337,14 @@ mod tests {
             let t = theme_from_i32(v);
             assert_eq!(theme_to_i32(t), v, "variant {v} did not round-trip");
         }
+    }
+
+    #[test]
+    fn bundled_license_texts_are_present() {
+        assert!(GPL_LICENSE_TEXT.contains("GNU GENERAL PUBLIC LICENSE"));
+        assert!(THIRD_PARTY_LICENSES_TEXT.contains("Third-Party"));
+        assert!(THIRD_PARTY_LICENSES_TEXT.contains("License Texts"));
+        assert!(CREDITS_TEXT.contains("Credits and Attribution"));
     }
 
     /// Regression pin for the silent-reload bug. The old `reload()`

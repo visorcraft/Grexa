@@ -68,12 +68,12 @@ Kirigami.ApplicationWindow {
         app.requestActivate()
         // First positional CLI arg lets dev/QA jump to a specific
         // page on launch — used for screenshot validation across
-        // the theme palette. Usage: `grexa settings`, `grexa about`,
+        // the theme palette. Usage: `grexa settings`, `grexa licenses`,
         // etc. `arguments[0]` is the binary path; `arguments[1]` is
         // the first user arg.
         const initial = Qt.application.arguments && Qt.application.arguments.length > 1
             ? Qt.application.arguments[1] : ""
-        if (initial && ["search","regex","history","profiles","settings","about"].indexOf(initial) !== -1) {
+        if (initial && ["search","regex","history","profiles","settings","about","licenses"].indexOf(initial) !== -1) {
             app.goTo(initial)
         }
         // Surface a recovery dialog if the previous run left a
@@ -253,6 +253,7 @@ Kirigami.ApplicationWindow {
             case "profiles": app.pageStack.replace(profilesPage); break
             case "settings": app.pageStack.replace(settingsPage); break
             case "about":    app.pageStack.replace(aboutPage); break
+            case "licenses": app.pageStack.replace(licensesPage); break
         }
     }
 
@@ -498,7 +499,21 @@ Kirigami.ApplicationWindow {
     Component { id: historyPage;  HistoryPage {} }
     Component { id: profilesPage; ProfilesPage {} }
     Component { id: settingsPage; SettingsPage {} }
-    Component { id: aboutPage;    AboutPage {} }
+    Component {
+        id: aboutPage
+        AboutPage {
+            onNavigateRequested: pageKey => app.goTo(pageKey)
+            onGplTextRequested: gplLicenseDialog.openLicenseText()
+        }
+    }
+    Component {
+        id: licensesPage
+        LicensesPage {
+            onGplTextRequested: gplLicenseDialog.openLicenseText()
+        }
+    }
+
+    GplLicenseDialog { id: gplLicenseDialog }
 
     // Residual replace-journal recovery dialog. Shown at startup
     // when a previous run was killed mid-replace and the journal

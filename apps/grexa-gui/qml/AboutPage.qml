@@ -17,6 +17,9 @@ Kirigami.ScrollablePage {
     titleDelegate: Item {}
     globalToolBarStyle: Kirigami.ApplicationHeaderStyle.None
 
+    signal navigateRequested(string pageKey)
+    signal gplTextRequested()
+
     // See SettingsPage.qml — Pages render under the View colorSet.
     Kirigami.Theme.inherit: false
     Kirigami.Theme.colorSet: Kirigami.Theme.View
@@ -374,23 +377,23 @@ Kirigami.ScrollablePage {
             Card {
                 Layout.fillWidth: true
                 title: qsTr("Third-party credits")
-                subtitle: qsTr("Every direct + transitive crate, with full license text, is auto-generated into docs/credits-third-party.md.")
+                subtitle: qsTr("Every direct + transitive crate, acknowledgments, and full license text is bundled in the built-in licenses view.")
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: app.tokens.spaceM
                     AppFlatButton {
-                        icon.name: "document-edit"
-                        icon.color: app.tokens.textPrimary
-                        text: qsTr("CREDITS.md")
-                        display: Controls.AbstractButton.TextBesideIcon
-                        onClicked: Qt.openUrlExternally("https://github.com/visorcraft/grexa/blob/main/CREDITS.md")
-                    }
-                    AppFlatButton {
                         icon.name: "view-list-text"
                         icon.color: app.tokens.textPrimary
-                        text: qsTr("Transitive list")
+                        text: qsTr("View Licenses")
                         display: Controls.AbstractButton.TextBesideIcon
-                        onClicked: Qt.openUrlExternally("https://github.com/visorcraft/grexa/blob/main/docs/credits-third-party.md")
+                        onClicked: page.navigateRequested("licenses")
+                    }
+                    AppFlatButton {
+                        icon.name: "document-edit"
+                        icon.color: app.tokens.textPrimary
+                        text: qsTr("GPL v3 text")
+                        display: Controls.AbstractButton.TextBesideIcon
+                        onClicked: page.gplTextRequested()
                     }
                     Item { Layout.fillWidth: true }
                 }

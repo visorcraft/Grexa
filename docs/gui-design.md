@@ -42,8 +42,8 @@ What ships today:
    store records every path; the workspace state is shared via a
    thread-local pointer so QML instances see the same state.
 3. **A complete QML page set** at `apps/grexa-gui/qml/` — Main +
-   Search + Regex Builder + Settings + About + Context Preview +
-   AiChatPanel + DesignTokens — bundled into the binary via Qt's
+   Search + Regex Builder + Settings + About + Licenses + Context
+   Preview + AiChatPanel + DesignTokens — bundled into the binary via Qt's
    resource system at `qrc:/qt/qml/com/visorcraft/Grexa/...`.
 4. **Unit tests** that exercise the Rust-side state without
    instantiating Qt (`search_controller_drives_real_search`,
@@ -79,6 +79,8 @@ apps/grexa-gui/
     ├── ContextPreviewDialog.qml# gutter + match-line highlight
     ├── AiChatPanel.qml         # disabled / empty / busy / error states + Clear
     ├── AboutPage.qml           # version + license + credits
+    ├── LicensesPage.qml        # tabbed bundled license document viewer
+    ├── GplLicenseDialog.qml    # bundled GPL-3.0 text viewer
     ├── NavItem.qml             # sidebar nav entry
     ├── Card.qml                # rounded surface used by SettingsPage sections
     ├── EmptyState.qml          # shared empty-state illustration + copy
@@ -147,7 +149,19 @@ without touching Rust as long as it uses the same keys.
 ### About
 
 - Inputs: version (compile-time `env!("CARGO_PKG_VERSION")`), commit
-  sha (compile-time via `vergen` in a future change), license text
+  sha (compile-time via `vergen` in a future change), bundled license
+  text
+- Outputs: "View Licenses" navigates to the built-in Licenses page
+  instead of opening the generated supplement on GitHub.
+
+### Licenses
+
+- Inputs: `SettingsController` exposes `include_str!` bundles for
+  `docs/credits-third-party.md`, `CREDITS.md`, and `LICENSE`.
+- Outputs: tabbed in-app document viewer for third-party license
+  texts, acknowledgments, and Grexa's GPL v3 text, with line filtering
+  and copy support. The GPL dialog uses the same Rust-bundled license
+  text rather than QML resource reads.
 
 ## Cross-tab state
 
