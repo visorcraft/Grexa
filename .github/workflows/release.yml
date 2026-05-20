@@ -45,7 +45,7 @@ jobs:
             ninja-build \
             poppler-utils
 
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.100.0
         with:
           components: rustfmt, clippy
 
