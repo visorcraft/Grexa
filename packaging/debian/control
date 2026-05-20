@@ -2,14 +2,17 @@ Source: grexa
 Section: utils
 Priority: optional
 Maintainer: VisorCraft LLC <maintainer@visorcraft.com>
-Build-Depends: debhelper-compat (= 13),
-               rustc (>= 1.95),
-               cargo,
-               pkg-config,
-               qt6-base-dev,
-               qt6-declarative-dev,
-               kirigami-2-dev,
-               libfontconfig1-dev
+Build-Depends:
+ debhelper-compat (= 13),
+ cargo,
+ rustc,
+ pkg-config,
+ qt6-base-dev,
+ qt6-declarative-dev,
+ qt6-tools-dev,
+ qml6-module-org-kde-kirigami,
+ libfontconfig1-dev,
+ clang
 Standards-Version: 4.6.2
 Homepage: https://github.com/visorcraft/grexa
 Vcs-Browser: https://github.com/visorcraft/grexa
@@ -22,7 +25,8 @@ Depends: ${misc:Depends},
          ${shlibs:Depends},
          qt6-base-abi,
          qt6-declarative-abi,
-         kirigami-2-abi
+         qml6-module-org-kde-kirigami,
+         hicolor-icon-theme
 Recommends: poppler-utils,
             podman | docker.io,
             gnome-keyring | kwalletmanager

@@ -1,22 +1,33 @@
 # Maintainer: VisorCraft LLC <maintainer@visorcraft.com>
+# SPDX-FileCopyrightText: 2026 VisorCraft LLC
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Builds the Grexa GUI + CLI from the local source tree. Run from this
+# directory with:
+#
+#     makepkg -si
+
 pkgname=grexa
 pkgver=1.0.0
 pkgrel=1
 pkgdesc="Fast Linux file content search with tabs, replace, and AI assistance"
-arch=('x86_64' 'aarch64')
-url="https://github.com/visorcraft/grexa"
-license=('GPL3')
+arch=('x86_64')
+url="https://github.com/visorcraft/Grexa"
+license=('GPL-3.0-only')
 depends=(
     'qt6-base'
     'qt6-declarative'
     'kirigami'
-    'poppler'         # for pdftotext (optional but recommended)
+    'hicolor-icon-theme'
+    'poppler'
 )
 makedepends=(
-    'rust'
     'cargo'
+    'rust'
     'pkgconf'
     'qt6-tools'
+    'clang'
+    'ninja'
 )
 optdepends=(
     'podman: container search via rootless Podman'
@@ -25,28 +36,26 @@ optdepends=(
     'gnome-keyring: API key storage (non-KDE)'
 )
 provides=('grexa-cli')
-conflicts=()
+conflicts=('grexa-bin' 'grexa-git')
 options=('!lto')
-source=("https://github.com/visorcraft/grexa/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=('SKIP')
+source=()
+sha256sums=()
 
-prepare() {
-    cd "${pkgname}-${pkgver}"
-    cargo fetch --locked
-}
+_srcdir="${startdir}/../.."
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    cargo build --workspace --release --frozen
+    cd "${_srcdir}"
+    cargo build --workspace --release --locked
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    cargo test --workspace --release --frozen
+    cd "${_srcdir}"
+    cargo test --workspace --release --locked --no-run
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
+    cd "${_srcdir}"
+
     install -Dm755 "target/release/grexa" "${pkgdir}/usr/bin/grexa"
     install -Dm755 "target/release/grexa-cli" "${pkgdir}/usr/bin/grexa-cli"
 
@@ -56,11 +65,9 @@ package() {
         "${pkgdir}/usr/share/metainfo/io.visorcraft.Grexa.metainfo.xml"
     install -Dm644 packaging/icons/scalable/io.visorcraft.Grexa.svg \
         "${pkgdir}/usr/share/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg"
-    # Sized PNG icons for taskbars / HiDPI panels that don't render the
-    # scalable SVG cleanly at small sizes.
-    for sz in 16 24 32 48 64 96 128 192 256 512; do
-        install -Dm644 "packaging/icons/${sz}x${sz}/apps/io.visorcraft.Grexa.png" \
-            "${pkgdir}/usr/share/icons/hicolor/${sz}x${sz}/apps/io.visorcraft.Grexa.png"
+    for size in 16 24 32 48 64 96 128 192 256 512; do
+        install -Dm644 "packaging/icons/${size}x${size}/apps/io.visorcraft.Grexa.png" \
+            "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/io.visorcraft.Grexa.png"
     done
 
     "${pkgdir}/usr/bin/grexa-cli" manpage \

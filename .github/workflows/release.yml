@@ -1,5 +1,15 @@
 # SPDX-FileCopyrightText: 2026 VisorCraft LLC
 # SPDX-License-Identifier: GPL-3.0-only
+#
+# Tag-triggered release pipeline. Each tag push runs full preflight in
+# an Arch container, builds every packaging format Grexa supports, and
+# attaches the artifacts to a GitHub Release.
+#
+# Distros:
+#   - Linux x86_64 tarball + AppImage : Arch container (Qt 6 + Kirigami)
+#   - Arch / CachyOS pkg.tar.zst      : Arch container (makepkg as non-root)
+#   - Debian / Ubuntu .deb            : debian:trixie-slim container
+#   - Fedora / RHEL .rpm              : fedora:latest container
 
 name: release
 
@@ -17,14 +27,16 @@ env:
   QMAKE: /usr/bin/qmake6
 
 jobs:
-  linux-x86_64:
-    name: Linux x86_64 release
+  linux-tarball:
+    name: Linux x86_64 tarball + AppImage
     runs-on: ubuntu-24.04
     container:
       image: archlinux:base-devel
     concurrency:
-      group: release-${{ github.ref }}
+      group: release-linux-${{ github.ref }}
       cancel-in-progress: false
+    outputs:
+      version: ${{ steps.version.outputs.version }}
 
     steps:
       - name: Install Arch release dependencies
@@ -33,15 +45,21 @@ jobs:
           pacman -Syu --noconfirm --needed \
             git \
             curl \
+            wget \
             ca-certificates \
             pkgconf \
             qt6-base \
             qt6-declarative \
+            qt6-tools \
             kirigami \
             clang \
             ninja \
             mesa \
             poppler \
+            fuse2 \
+            file \
+            desktop-file-utils \
+            appstream \
             github-cli
 
       - uses: actions/checkout@v6
@@ -52,19 +70,25 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Check tag matches workspace version
+      - name: Resolve workspace version + verify tag
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
           workspace_version="$(awk -F'"' '
               /^\[workspace\.package\]/ { in_section = 1; next }
               in_section && /^\[/ { exit }
               in_section && $1 ~ /^version[[:space:]]*=/ { print $2; exit }
           ' Cargo.toml)"
-          tag_version="${GITHUB_REF_NAME#v}"
+          tag_version="${TAG#v}"
 
-          if [[ "$GITHUB_REF_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]] && [[ "$tag_version" != "$workspace_version" ]]; then
-            echo "tag ${GITHUB_REF_NAME} does not match workspace version ${workspace_version}" >&2
+          if [[ "$TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]] && [[ "$tag_version" != "$workspace_version" ]]; then
+            echo "tag ${TAG} does not match workspace version ${workspace_version}" >&2
             exit 1
           fi
+
+          printf 'version=%s\n' "$workspace_version" >> "$GITHUB_OUTPUT"
+          echo "Building Grexa ${workspace_version} from tag ${TAG}"
 
       - name: Format
         run: cargo fmt --all -- --check
@@ -74,6 +98,11 @@ jobs:
 
       - name: Test
         run: cargo test --workspace --all-features
+
+      - name: Validate desktop file + AppStream metainfo
+        run: |
+          desktop-file-validate packaging/io.visorcraft.Grexa.desktop
+          appstreamcli validate --no-net packaging/io.visorcraft.Grexa.metainfo.xml
 
       - name: Build release binaries
         run: cargo build --workspace --release
@@ -103,11 +132,11 @@ jobs:
           target/release/grexa-cli completions zsh > target/completions/_grexa-cli
           target/release/grexa-cli completions fish > target/completions/grexa-cli.fish
 
-      - name: Package release archive
+      - name: Stage portable tarball
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          safe_ref="${GITHUB_REF_NAME//\//-}"
-          version="${safe_ref#v}"
-          archive_root="grexa-${version}-linux-x86_64"
+          archive_root="grexa-${VERSION}-linux-x86_64"
           staging="target/release-dist/${archive_root}"
           dist="target/dist"
 
@@ -151,12 +180,270 @@ jobs:
 
           (cd "$dist" && sha256sum "${archive_root}.tar.gz" > sha256sums.txt)
 
-      - name: Create GitHub release
+      - name: Stage AppImage via linuxdeploy + linuxdeploy-plugin-qt
+        env:
+          QT_VERSION_MAJOR: "6"
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          NO_STRIP: "1"
+        run: |
+          mkdir -p /opt/linuxdeploy
+          cd /opt/linuxdeploy
+          wget -q --tries=3 \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage \
+            -O linuxdeploy
+          wget -q --tries=3 \
+            https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage \
+            -O linuxdeploy-plugin-qt
+          chmod +x linuxdeploy linuxdeploy-plugin-qt
+          export PATH="/opt/linuxdeploy:$PATH"
+
+          cd "$GITHUB_WORKSPACE"
+          bash packaging/appimage/build.sh
+
+          dist="target/dist"
+          if compgen -G "target/appimage/Grexa-*.AppImage" >/dev/null; then
+            mv target/appimage/Grexa-*.AppImage "${dist}/"
+            (cd "$dist" && sha256sum Grexa-*.AppImage >> sha256sums.txt)
+          else
+            echo "AppImage was not produced" >&2
+            exit 1
+          fi
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-tarball
+          path: target/dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  arch-pkg:
+    name: Arch / CachyOS pkg.tar.zst
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:base-devel
+    needs: [linux-tarball]
+
+    steps:
+      - name: Install Arch build dependencies
+        run: |
+          pacman -Sy --noconfirm --needed archlinux-keyring
+          pacman -Syu --noconfirm --needed \
+            git \
+            sudo \
+            pkgconf \
+            qt6-base \
+            qt6-declarative \
+            qt6-tools \
+            kirigami \
+            clang \
+            ninja \
+            mesa \
+            poppler \
+            rust \
+            cargo
+
+      - uses: actions/checkout@v6
+
+      - name: Create unprivileged build user
+        run: |
+          useradd -m -G wheel builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Build pacman package
+        run: |
+          runuser -u builder -- bash -lc '
+            set -euo pipefail
+            cd "$GITHUB_WORKSPACE/packaging/arch"
+            makepkg -sf --noconfirm --syncdeps
+          '
+
+      - name: Stage Arch artifact + sha256
+        run: |
+          mkdir -p target/dist
+          mv packaging/arch/grexa-*.pkg.tar.zst target/dist/
+          (cd target/dist && sha256sum grexa-*.pkg.tar.zst > sha256sums.txt)
+
+      - name: Upload Arch artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-pkg
+          path: target/dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  deb-pkg:
+    name: Debian / Ubuntu .deb
+    runs-on: ubuntu-24.04
+    container:
+      image: debian:trixie-slim
+    needs: [linux-tarball]
+
+    steps:
+      - name: Install Debian build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates \
+            git \
+            curl \
+            build-essential \
+            debhelper \
+            devscripts \
+            dpkg-dev \
+            qt6-base-dev \
+            qt6-declarative-dev \
+            qt6-tools-dev \
+            qml6-module-org-kde-kirigami \
+            libgl1-mesa-dev \
+            libfontconfig1-dev \
+            pkg-config \
+            clang \
+            ninja-build
+
+      - name: Install Rust toolchain via rustup
+        env:
+          RUSTUP_HOME: /usr/local/rustup
+          CARGO_HOME: /usr/local/cargo
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain 1.95.0 --profile minimal --no-modify-path
+          {
+            echo "RUSTUP_HOME=/usr/local/rustup"
+            echo "CARGO_HOME=/usr/local/cargo"
+          } >> "$GITHUB_ENV"
+          echo "/usr/local/cargo/bin" >> "$GITHUB_PATH"
+
+      - uses: actions/checkout@v6
+
+      - name: Mark workspace safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Stage debian/ at repo root
+        run: ln -sfn packaging/debian debian
+
+      - name: Build .deb
+        run: dpkg-buildpackage -d -us -uc -b
+
+      - name: Stage Debian artifacts + sha256
+        run: |
+          mkdir -p target/dist
+          mv ../grexa*.deb target/dist/
+          mv ../grexa*.buildinfo target/dist/ 2>/dev/null || true
+          mv ../grexa*.changes target/dist/ 2>/dev/null || true
+          (cd target/dist && sha256sum grexa*.deb > sha256sums.txt)
+
+      - name: Upload Debian artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-pkg
+          path: target/dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  rpm-pkg:
+    name: Fedora / RHEL .rpm
+    runs-on: ubuntu-24.04
+    container:
+      image: fedora:latest
+    needs: [linux-tarball]
+
+    steps:
+      - name: Install Fedora build dependencies
+        run: |
+          dnf -y install \
+            git \
+            tar \
+            rpm-build \
+            cargo \
+            rust \
+            qt6-qtbase-devel \
+            qt6-qtdeclarative-devel \
+            qt6-qttools-devel \
+            kf6-kirigami-devel \
+            mesa-libGL-devel \
+            pkgconf-pkg-config \
+            clang \
+            ninja-build \
+            desktop-file-utils \
+            libappstream-glib
+
+      - uses: actions/checkout@v6
+
+      - name: Mark workspace safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Generate source tarball + build .rpm
+        run: |
+          version="$(awk -F'"' '
+              /^\[workspace\.package\]/ { in_section = 1; next }
+              in_section && /^\[/ { exit }
+              in_section && $1 ~ /^version[[:space:]]*=/ { print $2; exit }
+          ' Cargo.toml)"
+
+          cd packaging/fedora
+          ( cd ../.. && \
+            git archive --format=tar.gz \
+              --prefix="grexa-${version}/" \
+              --output="packaging/fedora/grexa-${version}.tar.gz" \
+              HEAD )
+          rpmbuild \
+            --define "_topdir $(pwd)/_rpmbuild" \
+            --define "_sourcedir $(pwd)" \
+            -bb grexa.spec
+
+      - name: Stage RPM artifacts + sha256
+        run: |
+          mkdir -p target/dist
+          find packaging/fedora/_rpmbuild/RPMS -name "grexa-*.rpm" \
+            -exec mv {} target/dist/ \;
+          (cd target/dist && sha256sum grexa-*.rpm > sha256sums.txt)
+
+      - name: Upload RPM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-pkg
+          path: target/dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Create GitHub release
+    runs-on: ubuntu-latest
+    needs: [linux-tarball, arch-pkg, deb-pkg, rpm-pkg]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Mark workspace safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-staging
+
+      - name: Aggregate artifacts + checksums
+        run: |
+          mkdir -p dist
+          find dist-staging -type f ! -name "sha256sums.txt" \
+            -exec mv {} dist/ \;
+          (cd dist && sha256sum * > sha256sums.txt)
+          echo "Release payload:" && ls -la dist/
+
+      - name: Create or update GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
         run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          gh release create "$GITHUB_REF_NAME" target/dist/* \
-            --title "Grexa ${GITHUB_REF_NAME}" \
-            --generate-notes \
-            --verify-tag
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --title "Grexa $TAG" \
+              --generate-notes \
+              --verify-tag
+          fi

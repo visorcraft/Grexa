@@ -4,15 +4,16 @@ Release:        1%{?dist}
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 
 License:        GPL-3.0-only
-URL:            https://github.com/visorcraft/grexa
-Source0:        https://github.com/visorcraft/grexa/archive/refs/tags/v%{version}.tar.gz
+URL:            https://github.com/visorcraft/Grexa
+Source0:        %{name}-%{version}.tar.gz
 
-BuildRequires:  rust >= 1.95
 BuildRequires:  cargo
+BuildRequires:  rust
 BuildRequires:  qt6-qtbase-devel
 BuildRequires:  qt6-qtdeclarative-devel
+BuildRequires:  qt6-qttools-devel
 BuildRequires:  kf6-kirigami-devel
-BuildRequires:  pkgconf
+BuildRequires:  pkgconf-pkg-config
 BuildRequires:  desktop-file-utils
 BuildRequires:  libappstream-glib
 
@@ -32,13 +33,10 @@ respects the system color scheme by default. The CLI is available as
 grexa-cli; the GUI as grexa.
 
 %prep
-%autosetup -n %{name}-%{version}
+%setup -q -n %{name}-%{version}
 
 %build
-cargo build --workspace --release --frozen
-
-%check
-cargo test --workspace --release --frozen
+cargo build --workspace --release --locked
 
 %install
 install -Dm755 target/release/grexa %{buildroot}%{_bindir}/grexa
@@ -47,7 +45,7 @@ install -Dm755 target/release/grexa-cli %{buildroot}%{_bindir}/grexa-cli
 install -Dm644 packaging/io.visorcraft.Grexa.desktop \
     %{buildroot}%{_datadir}/applications/io.visorcraft.Grexa.desktop
 install -Dm644 packaging/io.visorcraft.Grexa.metainfo.xml \
-    %{buildroot}%{_metainfodir}/io.visorcraft.Grexa.metainfo.xml
+    %{buildroot}%{_datadir}/metainfo/io.visorcraft.Grexa.metainfo.xml
 install -Dm644 packaging/icons/scalable/io.visorcraft.Grexa.svg \
     %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg
 for sz in 16 24 32 48 64 96 128 192 256 512; do
@@ -74,7 +72,7 @@ command -v desktop-file-validate >/dev/null && \
     desktop-file-validate %{buildroot}%{_datadir}/applications/io.visorcraft.Grexa.desktop || :
 command -v appstream-util >/dev/null && \
     appstream-util validate-relax \
-        %{buildroot}%{_metainfodir}/io.visorcraft.Grexa.metainfo.xml || :
+        %{buildroot}%{_datadir}/metainfo/io.visorcraft.Grexa.metainfo.xml || :
 
 %files
 %license LICENSE
@@ -82,7 +80,7 @@ command -v appstream-util >/dev/null && \
 %{_bindir}/grexa
 %{_bindir}/grexa-cli
 %{_datadir}/applications/io.visorcraft.Grexa.desktop
-%{_metainfodir}/io.visorcraft.Grexa.metainfo.xml
+%{_datadir}/metainfo/io.visorcraft.Grexa.metainfo.xml
 %{_datadir}/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg
 %{_datadir}/icons/hicolor/*x*/apps/io.visorcraft.Grexa.png
 %{_mandir}/man1/grexa-cli.1*
