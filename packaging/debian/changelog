@@ -1,3 +1,11 @@
+grexa (1.0.1-1) unstable; urgency=medium
+
+  * Expand the GitHub release pipeline to publish tarball, AppImage,
+    Arch/CachyOS, Debian/Ubuntu, and Fedora/RHEL artifacts.
+  * Harden live Docker/Podman tests against container startup races.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Wed, 20 May 2026 13:42:54 +0000
+
 grexa (1.0.0-1) unstable; urgency=medium
 
   * v1.0.0 stable release — feature-complete against the Grex parity

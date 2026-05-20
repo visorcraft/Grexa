@@ -86,7 +86,7 @@ your target distro on a host with that distro's tooling:
 
 | Target | Tooling | Command |
 | ------ | ------- | ------- |
-| Source tarball | `tar` | `tar --exclude='./target' --exclude='./.git' --transform 's,^\./,grexa-1.0.0/,' -czf grexa-1.0.0.tar.gz .` |
+| Source tarball | `tar` | `tar --exclude='./target' --exclude='./.git' --transform 's,^\./,grexa-1.0.1/,' -czf grexa-1.0.1.tar.gz .` |
 | Debian / Ubuntu (.deb) | `dpkg-deb`, `fakeroot` | `fakeroot dpkg-deb --build --root-owner-group <staged-tree> grexa.deb` (see `packaging/debian/`) |
 | Fedora / RHEL (.rpm) | `rpmbuild` | `rpmbuild -bb packaging/fedora/grexa.spec` |
 | openSUSE (.rpm) | `rpmbuild` | `rpmbuild -bb packaging/opensuse/grexa.spec` |

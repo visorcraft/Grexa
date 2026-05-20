@@ -6,7 +6,7 @@
 #
 
 Name:           grexa
-Version:        1.0.0
+Version:        1.0.1
 Release:        0
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 License:        GPL-3.0-only
@@ -102,6 +102,11 @@ cargo test --workspace --release --frozen
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Wed May 20 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.0.1-0
+- Expands the GitHub release pipeline to publish tarball, AppImage,
+  Arch/CachyOS, Debian/Ubuntu, and Fedora/RHEL artifacts.
+- Hardens live Docker/Podman tests against container startup races.
+
 * Tue May 19 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.0.0-0
 - v1.0.0 stable release — feature-complete against Grex on Linux.
 - Promotes v0.3 polish (per-tab isolation, responsive toolbar,

@@ -75,6 +75,12 @@
   </supports>
 
   <releases>
+    <release version="1.0.1" date="2026-05-20">
+      <description>
+        <p>Packaging refresh with expanded Linux release artifacts and
+           hardened release CI.</p>
+      </description>
+    </release>
     <release version="1.0.0" date="2026-05-19">
       <description>
         <p>v1.0 — stable release. Feature-complete against Grex on Linux.</p>

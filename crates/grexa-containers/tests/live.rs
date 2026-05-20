@@ -20,7 +20,7 @@
 #![cfg(feature = "container-live")]
 
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use grexa_containers::{
     CliRuntime, ContainerInfo, ContainerRuntime, ContainerRuntimeKind, ContainerSearchOptions,
@@ -50,7 +50,8 @@ fn unique_name(prefix: &str) -> String {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_micros())
         .unwrap_or_default();
-    format!("{prefix}_{ts}")
+    let pid = std::process::id();
+    format!("{prefix}_{pid}_{ts}")
 }
 
 fn spawn_alpine_with_todo(
@@ -59,7 +60,7 @@ fn spawn_alpine_with_todo(
 ) -> Option<ContainerInfo> {
     let cli = runtime.cli_path.clone()?;
     // `<cli> run -d --rm --name <name> alpine sh -c 'echo "TODO ship it" > /tmp/notes && sleep 60'`
-    let mut cmd = std::process::Command::new(cli);
+    let mut cmd = std::process::Command::new(&cli);
     cmd.args([
         "run",
         "-d",
@@ -77,14 +78,30 @@ fn spawn_alpine_with_todo(
         return None;
     }
     let id = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    Some(ContainerInfo {
-        runtime: runtime.kind,
-        id,
-        name: container_name.to_string(),
-        image: "alpine".to_string(),
-        status: "Up".to_string(),
-        state: "running".to_string(),
-    })
+    for _ in 0..50 {
+        let ready = std::process::Command::new(&cli)
+            .args(["exec", &id, "test", "-f", "/tmp/notes"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
+        if ready {
+            return Some(ContainerInfo {
+                runtime: runtime.kind,
+                id,
+                name: container_name.to_string(),
+                image: "alpine".to_string(),
+                status: "Up".to_string(),
+                state: "running".to_string(),
+            });
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    eprintln!("live: alpine container did not create /tmp/notes before timeout; skipping");
+    cleanup(runtime, &id);
+    None
 }
 
 fn cleanup(runtime: &ContainerRuntime, container_id: &str) {
