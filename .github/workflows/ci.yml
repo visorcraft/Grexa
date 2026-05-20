@@ -17,7 +17,7 @@ jobs:
     name: rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -27,7 +27,7 @@ jobs:
     name: clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install Qt 6 + C++ toolchain
         run: |
           sudo apt-get update
@@ -48,7 +48,7 @@ jobs:
     name: test (stable)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install Qt 6 + runtime + C++ toolchain
         run: |
           sudo apt-get update
@@ -68,7 +68,7 @@ jobs:
     name: build + smoke GUI
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install Qt 6 + Kirigami
         run: |
           sudo apt-get update
@@ -106,7 +106,7 @@ jobs:
     name: cargo-deny
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: EmbarkStudios/cargo-deny-action@v2
 
@@ -114,7 +114,7 @@ jobs:
     name: appstream metadata
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: sudo apt-get update && sudo apt-get install -y appstream
       - run: appstreamcli validate packaging/io.visorcraft.Grexa.metainfo.xml
 
@@ -122,6 +122,6 @@ jobs:
     name: desktop file
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: sudo apt-get update && sudo apt-get install -y desktop-file-utils
       - run: desktop-file-validate packaging/io.visorcraft.Grexa.desktop
