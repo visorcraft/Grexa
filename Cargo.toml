@@ -47,7 +47,7 @@ chardetng = "0.1"
 icu_casemap = "2.2"
 icu_locale_core = "2.2"
 keyring = { version = "3", default-features = false, features = ["linux-native"] }
-zip = { version = "5.1", default-features = false, features = ["deflate"] }
+zip = { version = "8.6", default-features = false, features = ["deflate"] }
 quick-xml = "0.40"
 fluent = "0.16"
 unic-langid = { version = "0.9", features = ["macros"] }
