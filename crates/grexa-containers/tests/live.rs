@@ -11,7 +11,7 @@
 //!   cargo test -p grexa-containers --features container-live -- live::
 //!
 //! Each test:
-//!   1. Auto-detects an available runtime.
+//!   1. Auto-detects a usable CLI-backed runtime.
 //!   2. Skips itself (returns `Ok`) when no runtime is reachable, so
 //!      the file remains useful as documentation even when the
 //!      feature is on but the local box can't run containers.
@@ -29,9 +29,20 @@ use grexa_containers::{
 
 fn pick_runtime() -> Option<ContainerRuntime> {
     let probe = LiveProbe;
-    detect_runtimes(&probe)
-        .into_iter()
-        .find(ContainerRuntime::is_available)
+    detect_runtimes(&probe).into_iter().find(|runtime| {
+        if runtime.cli_path.is_none() {
+            eprintln!("live: {:?} detected without CLI; skipping", runtime.kind);
+            return false;
+        }
+        let cli = CliRuntime::new(runtime.clone(), SystemCommandRunner);
+        match cli.list_containers() {
+            Ok(_) => true,
+            Err(err) => {
+                eprintln!("live: {:?} CLI is not usable: {err}; skipping", runtime.kind);
+                false
+            }
+        }
+    })
 }
 
 fn unique_name(prefix: &str) -> String {
