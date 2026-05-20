@@ -64,7 +64,7 @@ grexa/
 │   ├── grexa-containers/       # Docker + Podman runtime adapters
 │   ├── grexa-ai/               # OpenAI-compatible HTTP client + keyring storage
 │   └── grexa-i18n/             # Fluent-backed localization (en / de / ja)
-├── docs/                       # behavior contracts + Grex audits + release notes
+├── docs/                       # behavior contracts + Grex audits
 ├── packaging/                  # Flatpak / AppImage / distro recipes + desktop file
 ├── scripts/                    # bench, locale sync, post-package smoke
 ├── CLAUDE.md                   # shim → AGENTS.md
@@ -264,7 +264,7 @@ drift.
 2. Copy the English file's structure; translate keys.
 3. `python3 scripts/check_locale_sync.py` to confirm parity.
 4. List the locale in `crates/grexa-i18n/src/lib.rs` (the `Locale`
-   enum) and in `README.md`'s status line.
+   enum) and in `README.md`'s localization note.
 5. Update `docs/translations.md`'s "currently shipped" list.
 
 ## Common pitfalls
@@ -296,10 +296,6 @@ drift.
 
 | Doc | Purpose |
 | --- | ------- |
-| [docs/release-notes-1.0.0.md](docs/release-notes-1.0.0.md) | v1.0.0 stable release notes (schema + CLI freeze) |
-| [docs/release-notes-0.3.0.md](docs/release-notes-0.3.0.md) | v0.3.0 release notes (polish + responsiveness) |
-| [docs/release-notes-0.2.0.md](docs/release-notes-0.2.0.md) | v0.2.0 release notes (Phase 20 GUI parity) |
-| [docs/release-notes-0.1.0.md](docs/release-notes-0.1.0.md) | v0.1.0 release notes |
 | [docs/features.md](docs/features.md) | End-to-end feature list |
 | [docs/usage.md](docs/usage.md) | User workflows (KDE, Docker, Podman, AI, CLI) |
 | [docs/architecture.md](docs/architecture.md) | Module map + data paths |
@@ -312,5 +308,6 @@ drift.
 | [docs/gui-design.md](docs/gui-design.md) | cxx-qt bridge + QML module map |
 | [docs/feature-parity.md](docs/feature-parity.md) | Grex ↔ Grexa parity matrix |
 | [docs/grex-*-audit.md](docs/) | Per-component behavior pin from upstream Grex |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contributor workflow + coding standards |
 | [CREDITS.md](CREDITS.md) | Third-party attribution |
 | [LICENSE](LICENSE) | GPL-3.0 full text |

@@ -1,173 +1,211 @@
-# Grexa
+<!-- SPDX-FileCopyrightText: 2026 VisorCraft LLC -->
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
 
-> Fast, precise file content search for Linux. A Linux/Qt port of
-> [Grex](https://github.com/visorcraft/grex), built ground-up for
-> KDE Plasma.
+<p align="center">
+  <img src="packaging/icons/512x512/apps/io.visorcraft.Grexa.png" alt="Grexa logo" width="250">
+</p>
 
-Grexa is a daily-driver developer utility. It does grep / `rg`-style
-searches with a polished Qt 6 / Kirigami interface, atomic-rename
-safe replace, OOXML / ODF / PDF document extraction, Docker + Podman
-container search, optional AI assistance, and a fully scriptable CLI.
+<h1 align="center">Grexa</h1>
 
-## Status
+<p align="center">
+  <strong>Fast, precise file-content search for Linux.</strong>
+</p>
 
-**v1.0.0** — Stable. Feature-complete against the Grex parity
-matrix on Linux. The on-disk schemas (`settings.json`,
-`recent_paths.json`, `search_history.json`, `profiles.json`,
-`replace-journal.json`), the `grexa-cli` flag surface, and the
-cxx-qt QObject surface exposed to QML are the long-term 1.x
-contract. v0.3.x config and data load unchanged.
+<p align="center">
+  A Qt 6 / Kirigami desktop app and scriptable Rust CLI for searching,
+  filtering, previewing, and safely replacing text across local files,
+  documents, and containers.
+</p>
 
-The v0.3 polish + responsiveness pass carries forward: per-tab
-result-row isolation preserves the full row buffer across tab
-switches (including `busy`, `replacing`, and the last-replace
-summary); the action toolbar wraps to additional rows on narrow
-windows instead of clipping; the pink gecko renders correctly in
-the Wayland taskbar via Qt's `setDesktopFileName` + auto-installed
-hicolor theme; Settings auto-save on change with an error-tinted
-pill on disk-write failure (no more Apply button); Filters / Esc /
-Export-menu toggles behave as users expect; re-clicking the active
-tab or sidebar nav item is a no-op instead of a hidden side
-effect.
+## What is Grexa?
 
-Pluralization is locale-aware end-to-end via Fluent (German /
-Japanese users see correct inflection in status pills and
-notifications). The History and Profiles pages each carry a
-debounced filter row. The tab strip scrolls horizontally on
-overflow.
+Grexa is a Linux-native port of
+[Grex](https://github.com/visorcraft/grex), rebuilt as a Rust workspace
+with a Qt 6 / Kirigami interface. It is designed for developers and
+power users who need fast local search with predictable filters,
+grep-style automation, and a polished desktop workflow.
 
-The Rust core, CLI, container adapter, AI client, document
-extraction, encoding detection, settings, history, profiles,
-context preview, sorting, gitignore parity, and Fluent
-localization (en / de / ja) all ship working. The Qt 6 / Kirigami
-GUI binary boots via [cxx-qt 0.8](https://github.com/KDAB/cxx-qt)
-and is feature-complete against the Grex parity matrix in
-[docs/feature-parity.md](docs/feature-parity.md).
+Grexa can:
 
-Release notes: [docs/release-notes-1.0.0.md](docs/release-notes-1.0.0.md).
+- Search by literal text or regex, including advanced regex features
+  through a fast `regex` / `fancy-regex` cascade.
+- Respect `.gitignore`, hidden-file settings, glob filters, size
+  filters, binary-file rules, symlinks, and recursive directory
+  options.
+- Preview matches with file path, line, column, encoding, modified
+  time, and sorted result views.
+- Replace text safely with atomic file writes and a replace journal.
+- Search extracted text from OOXML, ODF, and PDF documents.
+- Search inside Docker or Podman containers.
+- Run as either the `grexa` desktop app or the `grexa-cli` command.
+- Store API keys in the Linux Secret Service when optional AI features
+  are configured.
 
-## Quick start
+## Setup
 
 ### Requirements
 
-- Linux (Wayland or X11; KDE Plasma 6 recommended)
-- Rust **1.95+** (stable)
-- Qt 6.6+ + Kirigami 6 (for the GUI; not required for the CLI)
-- Optional: `pdftotext` (Poppler) for PDF search;
-  `docker` or `podman` for container search; KWallet or
-  GNOME Keyring for AI API-key storage.
+- Linux on Wayland or X11. KDE Plasma 6 is the primary desktop target.
+- Qt 6.6+ and Kirigami 6 for the GUI.
+- Rust 1.95+ only when building from source.
+- Optional: `pdftotext` from Poppler for PDF search.
+- Optional: Docker or Podman for container search.
+- Optional: KWallet or GNOME Keyring for AI-provider keys.
 
-### CLI
+### Install development packages
+
+Use your distro's package manager before building from source. The
+development packages also satisfy the GUI runtime requirements on most
+systems.
+
+| Distro | Command |
+| ------ | ------- |
+| Debian / Ubuntu | `sudo apt install rustc cargo qt6-base-dev qt6-declarative-dev qt6-tools-dev qml6-module-org-kde-kirigami clang poppler-utils` |
+| Fedora | `sudo dnf install rust cargo qt6-qtbase-devel qt6-qtdeclarative-devel kf6-kirigami-devel clang poppler-utils` |
+| Arch / Manjaro | `sudo pacman -S rust qt6-base qt6-declarative kirigami clang poppler` |
+| openSUSE | `sudo zypper install rust cargo qt6-base-devel qt6-declarative-devel kirigami6-devel clang poppler-tools` |
+
+The repository uses [`just`](https://just.systems/) for common tasks.
+If it is not installed, the equivalent `cargo` commands still work.
 
 ```bash
-# install from source
-cargo install --path crates/grexa-cli
+cargo install just
+```
 
-# basic search
+## Install
+
+### From a GitHub Release
+
+Download the latest `grexa-<version>-linux-x86_64.tar.gz` from the
+repository's GitHub Releases page, then unpack it:
+
+```bash
+tar -xzf grexa-<version>-linux-x86_64.tar.gz
+cd grexa-<version>-linux-x86_64
+
+./bin/grexa
+./bin/grexa-cli --help
+```
+
+To install the archive into `/usr/local`:
+
+```bash
+sudo install -Dm755 bin/grexa /usr/local/bin/grexa
+sudo install -Dm755 bin/grexa-cli /usr/local/bin/grexa-cli
+sudo cp -a share/. /usr/local/share/
+```
+
+### From source
+
+```bash
+git clone https://github.com/visorcraft/grexa.git
+cd grexa
+
+just ci
+just build-release
+
+target/release/grexa
+target/release/grexa-cli --help
+```
+
+CLI-only builds do not need Qt:
+
+```bash
+cargo build -p grexa-cli --release
+target/release/grexa-cli ~/code TODO
+```
+
+### Packaging
+
+Packaging recipes live under [`packaging/`](packaging/), including
+Flatpak, AppImage, Debian, Fedora, openSUSE, and Arch/CachyOS
+metadata. See [docs/build-and-test.md](docs/build-and-test.md) for
+packaging commands and release automation details.
+
+## Tweak Grexa
+
+### Common CLI workflows
+
+```bash
+# Basic content search
 grexa-cli ~/code TODO
 
-# regex with case sensitivity
+# Regex search
 grexa-cli ~/code 'fn\s+\w+_test' --regex --case-sensitive
 
-# inside a Podman container
-grexa-cli /etc TODO --container web --runtime podman
-
-# JSON output for piping
+# JSON output for scripts
 grexa-cli ~/code TODO --format json | jq '.[] | .full_path'
 
-# shell completions
+# Search inside a Podman container
+grexa-cli /etc TODO --container web --runtime podman
+
+# Generate shell completions
 grexa-cli completions bash > ~/.local/share/bash-completion/completions/grexa-cli
 ```
 
-### GUI
+### Desktop settings
+
+The GUI settings page auto-saves changes. Grexa stores local app data
+under standard XDG locations:
+
+| Data | Default path |
+| ---- | ------------ |
+| Settings | `~/.config/grexa/settings.json` |
+| Recent paths, history, profiles | `~/.local/share/grexa/` |
+| Logs and replace journal | `~/.local/state/grexa/` |
+
+Set `GREXA_LOG` to tune logging:
 
 ```bash
-cargo build --release -p grexa
-target/release/grexa
+GREXA_LOG=debug grexa
 ```
 
-The GUI is a Rust + Qt 6 / Kirigami binary built with
-[cxx-qt 0.8](https://github.com/KDAB/cxx-qt) — pure Cargo, no CMake.
-QML files under `apps/grexa-gui/qml/` are bundled into the binary at
-build time via Qt's resource system and registered under the
-`com.visorcraft.Grexa 1.0` QML module.
+### Optional integrations
 
-## Architecture
+- PDF search uses `pdftotext` when available.
+- Container search uses Docker or Podman from `PATH`.
+- AI-provider keys are stored in the system Secret Service, not in QML
+  or plain-text config files.
+- Localization currently ships English, German, and Japanese catalogs.
 
-Grexa is a Cargo workspace:
+Full usage details are in [docs/usage.md](docs/usage.md). CLI flags,
+settings, paths, and keyboard shortcuts are in
+[docs/reference.md](docs/reference.md).
 
-| Crate              | Responsibility |
-| ------------------ | -------------- |
-| `grexa-core`       | Search, replace, encoding, gitignore, glob filters, context preview, sorting, settings, history, profiles, document extraction, desktop integration helpers. |
-| `grexa-containers` | Docker + Podman detection, container listing, direct `exec` grep, archive mirror fallback. |
-| `grexa-ai`         | OpenAI-compatible HTTP client, model discovery, secret-service-backed API key storage. |
-| `grexa-cli`        | Headless `grexa-cli` binary with all search/replace/container flags + shell completions + man page generator. |
-| `grexa-i18n`       | Fluent-backed localization (en / de / ja today; plural-aware). |
-| `grexa` (apps/)    | Qt 6 / Kirigami GUI shell. |
+## Contribute
 
-See [docs/architecture.md](docs/architecture.md) for the full breakdown.
+Contributions are welcome through the standard fork-and-pull-request
+workflow. Start with [CONTRIBUTING.md](CONTRIBUTING.md), which covers
+local setup, coding standards, tests, documentation expectations,
+localization rules, dependency policy, and pull request requirements.
+
+The short version:
+
+```bash
+git clone https://github.com/<you>/grexa.git
+cd grexa
+git checkout -b fix-or-feature-name
+
+just ci
+```
+
+Before opening a pull request, include focused tests for behavior
+changes, update relevant docs, and make sure `just ci` passes.
 
 ## Documentation
 
-- [docs/features.md](docs/features.md) — what Grexa does, end to end
-- [docs/usage.md](docs/usage.md) — workflows for KDE, Docker, Podman,
-  AI, replace, CLI
-- [docs/architecture.md](docs/architecture.md) — module map + data
-  paths
-- [docs/build-and-test.md](docs/build-and-test.md) — distro
-  prerequisites and dev workflow
-- [docs/reference.md](docs/reference.md) — settings schema, CLI
-  reference, paths, keyboard shortcuts, encoding support
-- [docs/translations.md](docs/translations.md) — localization pipeline
-  for translators
-- [docs/security.md](docs/security.md) — threat model, telemetry
-  policy, secret storage
-- [docs/linux-decisions.md](docs/linux-decisions.md) — what was
-  intentionally removed or replaced from Grex
-- [docs/migration-from-grex.md](docs/migration-from-grex.md) —
-  bringing Grex settings / history / profiles into Grexa
-- [docs/gui-design.md](docs/gui-design.md) — cxx-qt bridge + QML
-  module map
-- [docs/release-notes-1.0.0.md](docs/release-notes-1.0.0.md) —
-  v1.0.0 stable release (schema + CLI freeze)
-- [docs/release-notes-0.3.0.md](docs/release-notes-0.3.0.md) —
-  v0.3.0 changes (polish + responsiveness)
-- [docs/release-notes-0.2.0.md](docs/release-notes-0.2.0.md) —
-  v0.2.0 changes (Phase 20 GUI parity)
-- [docs/release-notes-0.1.0.md](docs/release-notes-0.1.0.md) —
-  v0.1.0 changes
-- [AGENTS.md](AGENTS.md) — guidelines for AI assistants working on
-  this repo. AI tooling (Claude Code, Cursor, etc.) reads this first.
-- [CREDITS.md](CREDITS.md) — third-party attribution
+- [docs/features.md](docs/features.md) — feature inventory
+- [docs/usage.md](docs/usage.md) — user workflows
+- [docs/reference.md](docs/reference.md) — settings and CLI reference
+- [docs/build-and-test.md](docs/build-and-test.md) — build, test, and packaging guide
+- [docs/architecture.md](docs/architecture.md) — workspace architecture
+- [docs/gui-design.md](docs/gui-design.md) — Qt / cxx-qt bridge design
+- [docs/translations.md](docs/translations.md) — localization workflow
+- [docs/security.md](docs/security.md) — threat model and disclosure policy
+- [docs/feature-parity.md](docs/feature-parity.md) — Grex / Grexa parity matrix
 
-## Licensing
+## License
 
 Grexa is licensed under GPL-3.0-only, matching the upstream Grex
-project. See [LICENSE](LICENSE) for the full text.
-
-Third-party Rust crates and runtime components are credited in
-[CREDITS.md](CREDITS.md). Every dependency must use a
-GPL-3.0-compatible license; the allowlist lives in
-[`deny.toml`](deny.toml). Run `just deny` to enforce the policy.
-
-## Contributing
-
-- `just ci` runs format check, clippy, and tests. Pre-PR sanity check.
-- `just manpage` + `just completions` regenerate the CLI artifacts.
-- `python3 scripts/check_locale_sync.py` enforces the Fluent
-  translation key parity across locales.
-- New strings must land in `crates/grexa-i18n/locales/en/grexa.ftl`
-  before any caller can reference them.
-- `docs/grex-*-audit.md` pins upstream behavior; if you change
-  something an audit doc describes, update the audit and the code
-  in the same change. Intentional divergences belong in
-  `docs/linux-decisions.md`.
-- Every new source file gets a two-line SPDX REUSE header
-  (`SPDX-FileCopyrightText: 2026 VisorCraft LLC` +
-  `SPDX-License-Identifier: GPL-3.0-only`). See
-  [AGENTS.md](AGENTS.md) for the conventions in full.
-
-## Reporting issues
-
-Use the GitHub issue tracker. For security concerns, see
-[docs/security.md](docs/security.md).
+project. See [LICENSE](LICENSE) for the full text and
+[CREDITS.md](CREDITS.md) for third-party attribution.

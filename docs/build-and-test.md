@@ -90,6 +90,23 @@ your target distro on a host with that distro's tooling:
 | AppImage | `linuxdeploy`, `linuxdeploy-plugin-qt`, Qt 6 host stack, `jxrlib` | `NO_STRIP=1 QMAKE=/usr/bin/qmake6 bash packaging/appimage/build.sh` |
 | Flatpak | `flatpak-builder`, KDE 6.10 runtime, rust-stable//25.08 | `just flatpak-bundle` |
 
+## GitHub release automation
+
+Pushing a tag to GitHub triggers
+[`.github/workflows/release.yml`](../.github/workflows/release.yml).
+The workflow runs the release gate on Ubuntu 24.04, builds the GUI and
+CLI with the pinned Rust toolchain, smoke-tests the GUI under offscreen
+Qt, packages a Linux x86_64 archive, writes `sha256sums.txt`, and
+creates a GitHub Release with both files attached.
+
+For version-like tags such as `v1.0.1`, the tag version must match the
+workspace version in `Cargo.toml`.
+
+```bash
+git tag -a v1.0.1 -m "Grexa v1.0.1"
+git push origin v1.0.1
+```
+
 The Justfile exposes the Flatpak path as first-class targets:
 
 ```bash

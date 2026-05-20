@@ -157,7 +157,7 @@ Status legend:
 | User path classifier (abstract URLs) | ✅ | `classify_user_path`. |
 | KNotifications | ✅ | `notify_desktop` in `qobjects/search.rs` shells `notify-send` (which routes via `org.freedesktop.Notifications` / KNotifications). |
 | Portal file picker | ✅ | `QtQuick.Dialogs.FolderDialog` — Breeze on KDE, XDG desktop portal under Wayland / Flatpak. Recent-path store integrated. |
-| KDE color scheme + accent | 🟡 | Kirigami picks up the user's accent + theme today; full Qt palette swap via `KColorSchemeManager` still needs a cxx-qt-lib binding (v0.4 target — see release notes "Known limits"). |
+| KDE color scheme + accent | 🟡 | Kirigami picks up the user's accent + theme today; full Qt palette swap via `KColorSchemeManager` still needs a cxx-qt-lib binding and is tracked as future GUI work. |
 
 ## Localization
 

@@ -1,0 +1,160 @@
+# SPDX-FileCopyrightText: 2026 VisorCraft LLC
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: release
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  QMAKE: /usr/bin/qmake6
+
+jobs:
+  linux-x86_64:
+    name: Linux x86_64 release
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt 6 + Kirigami
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            pkg-config \
+            qt6-base-dev \
+            qt6-declarative-dev \
+            qt6-tools-dev \
+            qml6-module-qtquick \
+            qml6-module-qtquick-controls \
+            qml6-module-qtquick-layouts \
+            qml6-module-org-kde-kirigami \
+            libgl1-mesa-dev \
+            clang \
+            ninja-build \
+            poppler-utils
+
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check tag matches workspace version
+        run: |
+          workspace_version="$(awk -F'"' '
+              /^\[workspace\.package\]/ { in_section = 1; next }
+              in_section && /^\[/ { exit }
+              in_section && $1 ~ /^version[[:space:]]*=/ { print $2; exit }
+          ' Cargo.toml)"
+          tag_version="${GITHUB_REF_NAME#v}"
+
+          if [[ "$GITHUB_REF_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]] && [[ "$tag_version" != "$workspace_version" ]]; then
+            echo "tag ${GITHUB_REF_NAME} does not match workspace version ${workspace_version}" >&2
+            exit 1
+          fi
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --all-features
+
+      - name: Build release binaries
+        run: cargo build --workspace --release
+
+      - name: Smoke-test GUI binary under offscreen Qt
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set +e
+          timeout --preserve-status 5 target/release/grexa
+          exit_code=$?
+          set -e
+
+          # 124 = timeout reached while Qt event loop was running
+          # 143 = SIGTERM from --preserve-status
+          # 0   = clean shutdown
+          if [[ "$exit_code" -ne 124 && "$exit_code" -ne 143 && "$exit_code" -ne 0 ]]; then
+            echo "GUI binary exited unexpectedly with ${exit_code}" >&2
+            exit "$exit_code"
+          fi
+
+      - name: Generate CLI docs
+        run: |
+          mkdir -p target/man target/completions
+          target/release/grexa-cli manpage > target/man/grexa-cli.1
+          target/release/grexa-cli completions bash > target/completions/grexa-cli.bash
+          target/release/grexa-cli completions zsh > target/completions/_grexa-cli
+          target/release/grexa-cli completions fish > target/completions/grexa-cli.fish
+
+      - name: Package release archive
+        run: |
+          safe_ref="${GITHUB_REF_NAME//\//-}"
+          version="${safe_ref#v}"
+          archive_root="grexa-${version}-linux-x86_64"
+          staging="target/release-dist/${archive_root}"
+          dist="target/dist"
+
+          rm -rf "$staging" "$dist"
+          mkdir -p \
+            "$staging/bin" \
+            "$staging/share/applications" \
+            "$staging/share/bash-completion/completions" \
+            "$staging/share/fish/vendor_completions.d" \
+            "$staging/share/icons/hicolor" \
+            "$staging/share/man/man1" \
+            "$staging/share/metainfo" \
+            "$staging/share/zsh/site-functions" \
+            "$dist"
+
+          install -m755 target/release/grexa "$staging/bin/grexa"
+          install -m755 target/release/grexa-cli "$staging/bin/grexa-cli"
+          install -m644 target/man/grexa-cli.1 "$staging/share/man/man1/grexa-cli.1"
+          install -m644 target/completions/grexa-cli.bash "$staging/share/bash-completion/completions/grexa-cli"
+          install -m644 target/completions/_grexa-cli "$staging/share/zsh/site-functions/_grexa-cli"
+          install -m644 target/completions/grexa-cli.fish "$staging/share/fish/vendor_completions.d/grexa-cli.fish"
+          install -m644 packaging/io.visorcraft.Grexa.desktop "$staging/share/applications/io.visorcraft.Grexa.desktop"
+          install -m644 packaging/io.visorcraft.Grexa.metainfo.xml "$staging/share/metainfo/io.visorcraft.Grexa.metainfo.xml"
+          cp -R packaging/icons/* "$staging/share/icons/hicolor/"
+          mkdir -p "$staging/share/icons/hicolor/scalable/apps"
+          install -m644 packaging/icons/scalable/io.visorcraft.Grexa.svg \
+            "$staging/share/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg"
+          rm -f "$staging/share/icons/hicolor/scalable/io.visorcraft.Grexa.svg"
+          install -m644 README.md "$staging/README.md"
+          install -m644 CREDITS.md "$staging/CREDITS.md"
+          install -m644 LICENSE "$staging/LICENSE"
+
+          tar -C target/release-dist \
+            --sort=name \
+            --mtime="@${SOURCE_DATE_EPOCH:-0}" \
+            --owner=0 \
+            --group=0 \
+            --numeric-owner \
+            -czf "${dist}/${archive_root}.tar.gz" \
+            "$archive_root"
+
+          (cd "$dist" && sha256sum "${archive_root}.tar.gz" > sha256sums.txt)
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" target/dist/* \
+            --title "Grexa ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            --verify-tag
