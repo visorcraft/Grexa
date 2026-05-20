@@ -161,7 +161,7 @@ patterns with spaces / quotes / colons / globs / newlines are safe.
 
 - Catalog format: Fluent (`.ftl`).
 - Default locale: `en` (canonical, source of truth).
-- Bundled locales: `en`, `de`, `ja` (32 keys each at v0.3).
+- Bundled locales: `en`, `de`, `ja` (32 keys each at v1.0).
 - Sync gate: `scripts/check_locale_sync.py` + a `cargo test`.
 
 ## Tracing log levels

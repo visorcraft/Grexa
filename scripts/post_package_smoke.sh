@@ -39,7 +39,6 @@ mkdir -p "$TMP/tree/sub"
 printf 'TODO write tests\nother content\n' > "$TMP/tree/notes.txt"
 printf 'no marker here\n' > "$TMP/tree/sub/nope.log"
 
-RESULT="$("$CLI" "$TMP/tree" TODO --quiet || true)"
 if "$CLI" "$TMP/tree" TODO --quiet; then
     echo "  search matched ok"
 else

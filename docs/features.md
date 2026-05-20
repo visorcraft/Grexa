@@ -1,6 +1,6 @@
 # Grexa Features
 
-A user-facing inventory of what Grexa does today (v0.3). The
+A user-facing inventory of what Grexa does today (v1.0). The
 source-of-truth audits live in `docs/grex-*-audit.md`; this doc is
 the consumer-shaped view. The Grex ↔ Grexa parity matrix lives in
 [feature-parity.md](feature-parity.md).

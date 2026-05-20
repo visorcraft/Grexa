@@ -4468,12 +4468,12 @@ insights.
 ### GNU General Public License v3.0 only
 
 Used by:
-- [`grexa 0.3.0`](https://github.com/visorcraft/grexa)
-- [`grexa-ai 0.3.0`](https://github.com/visorcraft/grexa)
-- [`grexa-cli 0.3.0`](https://github.com/visorcraft/grexa)
-- [`grexa-containers 0.3.0`](https://github.com/visorcraft/grexa)
-- [`grexa-core 0.3.0`](https://github.com/visorcraft/grexa)
-- [`grexa-i18n 0.3.0`](https://github.com/visorcraft/grexa)
+- [`grexa 1.0.0`](https://github.com/visorcraft/grexa)
+- [`grexa-ai 1.0.0`](https://github.com/visorcraft/grexa)
+- [`grexa-cli 1.0.0`](https://github.com/visorcraft/grexa)
+- [`grexa-containers 1.0.0`](https://github.com/visorcraft/grexa)
+- [`grexa-core 1.0.0`](https://github.com/visorcraft/grexa)
+- [`grexa-i18n 1.0.0`](https://github.com/visorcraft/grexa)
 
 ```
 GNU GENERAL PUBLIC LICENSE

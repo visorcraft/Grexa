@@ -127,8 +127,8 @@ AiSearchClient<UreqTransport>
 
 ## Testing strategy
 
-- **Unit tests** live in each module's `#[cfg(test)]` block. 300
-  tests passing across the workspace as of v0.3.
+- **Unit tests** live in each module's `#[cfg(test)]` block. 279
+  tests passing across the workspace as of v1.0.
 - **Integration tests** are in `crates/<crate>/tests/*.rs`:
   - `grexa-core/tests/gitignore_parity.rs` — 61 cases mirroring
     `docs/grex-gitignore-audit.md`.

@@ -41,7 +41,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-Specific test groups (300 tests total as of v0.3):
+Specific test groups (279 tests total as of v1.0):
 
 ```bash
 cargo test -p grexa-core                      # 192 total (124 unit + integration)
@@ -52,7 +52,7 @@ cargo test -p grexa-cli                       # 16 CLI integration tests
 cargo test -p grexa-containers                # 24 mocked container tests
 cargo test -p grexa-ai                        # 17 mocked HTTP tests
 cargo test -p grexa-i18n                      # 9 locale + plural-helper tests
-cargo test -p grexa                           # 42 GUI controller tests (no Qt runtime)
+cargo test -p grexa                           # 21 QObject + workspace tests (no Qt runtime)
 ```
 
 ## Locale sync
