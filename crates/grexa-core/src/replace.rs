@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use std::fs;
-use std::io;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -13,7 +13,7 @@ use regex::RegexBuilder;
 use thiserror::Error;
 
 use crate::cancel::CancelToken;
-use crate::encoding::{DetectedEncoding, read_text};
+use crate::encoding::{DetectedEncoding, decode_text};
 use crate::models::SearchOptions;
 use crate::pattern::PatternEngine;
 use crate::search::{ProgressSink, SearchError, search_with};
@@ -262,8 +262,7 @@ fn rewrite_one(
     options: &ReplaceOptions,
     regex_engine: Option<&PatternEngine>,
 ) -> Result<FileResult, io::Error> {
-    let original_metadata = fs::symlink_metadata(path)?;
-    let (text, encoding) = read_text(path)?;
+    let (text, encoding, original_metadata) = read_regular_text(path)?;
     let (new_text, matches) = apply_substitution(&text, options, regex_engine);
     if matches == 0 || new_text == text {
         return Ok(FileResult::Unchanged);
@@ -273,6 +272,46 @@ fn rewrite_one(
     atomic_write(path, &encoded)?;
     restore_permissions(path, &original_metadata)?;
     Ok(FileResult::Replaced { matches, encoding })
+}
+
+fn read_regular_text(path: &Path) -> io::Result<(String, DetectedEncoding, fs::Metadata)> {
+    let mut file = open_regular_file(path)?;
+    let metadata = file.metadata()?;
+    if !metadata.file_type().is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "replace target is not a regular file",
+        ));
+    }
+
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    let (text, encoding) = decode_text(&bytes);
+    Ok((text, encoding, metadata))
+}
+
+#[cfg(unix)]
+fn open_regular_file(path: &Path) -> io::Result<fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    const O_NOFOLLOW: i32 = 0o400000;
+
+    fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(O_NOFOLLOW)
+        .open(path)
+}
+
+#[cfg(not(unix))]
+fn open_regular_file(path: &Path) -> io::Result<fs::File> {
+    let metadata = fs::symlink_metadata(path)?;
+    if metadata.file_type().is_symlink() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "replace target is a symbolic link",
+        ));
+    }
+    fs::File::open(path)
 }
 
 fn restore_permissions(path: &Path, original: &fs::Metadata) -> io::Result<()> {
@@ -398,6 +437,7 @@ fn atomic_write(target: &Path, bytes: &[u8]) -> io::Result<()> {
 mod tests {
     use std::fs;
 
+    use crate::encoding::read_text;
     use tempfile::tempdir;
 
     use super::*;
@@ -555,6 +595,33 @@ mod tests {
 
         let mode = fs::metadata(&target).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o755);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replace_refuses_symbolic_link_targets() {
+        use std::os::unix::fs::symlink;
+
+        let dir = tempdir().unwrap();
+        let outside = tempdir().unwrap();
+        let target = outside.path().join("secret.txt");
+        fs::write(&target, "TODO secret\n").unwrap();
+        let link = dir.path().join("link.txt");
+        symlink(&target, &link).unwrap();
+
+        let mut options = opts(dir.path(), "TODO", "FIXME");
+        options.search.include_symlinks = true;
+        let summary = replace_with(&options, &CancelToken::new(), None).unwrap();
+
+        assert_eq!(summary.files_modified, 0);
+        assert_eq!(summary.failures.len(), 1);
+        assert_eq!(fs::read_to_string(&target).unwrap(), "TODO secret\n");
+        assert!(
+            fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
     }
 
     #[test]

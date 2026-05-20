@@ -29,6 +29,10 @@ use quick_xml::events::Event;
 use thiserror::Error;
 use zip::ZipArchive;
 
+const MAX_ZIP_ENTRIES: usize = 1024;
+const MAX_TEXTUAL_ENTRY_BYTES: usize = 4 * 1024 * 1024;
+const MAX_EXTRACTED_TEXT_BYTES: usize = 16 * 1024 * 1024;
+
 #[derive(Debug, Error)]
 pub enum ExtractError {
     #[error("I/O error: {0}")]
@@ -39,6 +43,8 @@ pub enum ExtractError {
     Xml(String),
     #[error("pdftotext unavailable or failed: {0}")]
     Pdf(String),
+    #[error("document extraction limit exceeded: {0}")]
+    Limit(&'static str),
 }
 
 impl From<quick_xml::Error> for ExtractError {
@@ -70,6 +76,7 @@ pub fn extract_text(path: &Path) -> Result<Option<String>, ExtractError> {
 fn extract_ooxml(path: &Path, entries: &[&str]) -> Result<String, ExtractError> {
     let file = std::fs::File::open(path)?;
     let mut archive = ZipArchive::new(file)?;
+    check_zip_entry_count(&archive)?;
     let mut out = String::new();
     for entry in entries {
         let inner = match archive.by_name(entry) {
@@ -77,8 +84,11 @@ fn extract_ooxml(path: &Path, entries: &[&str]) -> Result<String, ExtractError> 
             Err(zip::result::ZipError::FileNotFound) => continue,
             Err(err) => return Err(err.into()),
         };
+        if inner.size() > MAX_TEXTUAL_ENTRY_BYTES as u64 {
+            return Err(ExtractError::Limit("ZIP entry too large"));
+        }
         push_xml_text(inner, &mut out)?;
-        out.push('\n');
+        push_limited(&mut out, "\n")?;
     }
     Ok(out)
 }
@@ -89,6 +99,7 @@ fn extract_ooxml(path: &Path, entries: &[&str]) -> Result<String, ExtractError> 
 fn extract_ooxml_glob(path: &Path, prefix: &str) -> Result<String, ExtractError> {
     let file = std::fs::File::open(path)?;
     let mut archive = ZipArchive::new(file)?;
+    check_zip_entry_count(&archive)?;
     let mut targets: Vec<String> = Vec::new();
     for i in 0..archive.len() {
         let entry = archive.by_index(i)?;
@@ -102,8 +113,11 @@ fn extract_ooxml_glob(path: &Path, prefix: &str) -> Result<String, ExtractError>
     let mut out = String::new();
     for name in targets {
         let inner = archive.by_name(&name)?;
+        if inner.size() > MAX_TEXTUAL_ENTRY_BYTES as u64 {
+            return Err(ExtractError::Limit("ZIP entry too large"));
+        }
         push_xml_text(inner, &mut out)?;
-        out.push('\n');
+        push_limited(&mut out, "\n")?;
     }
     Ok(out)
 }
@@ -113,6 +127,7 @@ fn extract_ooxml_glob(path: &Path, prefix: &str) -> Result<String, ExtractError>
 fn extract_zip(path: &Path) -> Result<String, ExtractError> {
     let file = std::fs::File::open(path)?;
     let mut archive = ZipArchive::new(file)?;
+    check_zip_entry_count(&archive)?;
 
     let mut out = String::new();
     let names: Vec<String> = (0..archive.len())
@@ -127,10 +142,10 @@ fn extract_zip(path: &Path) -> Result<String, ExtractError> {
 
     out.push_str("# Entries\n");
     for name in &names {
-        out.push_str(name);
-        out.push('\n');
+        push_limited(&mut out, name)?;
+        push_limited(&mut out, "\n")?;
     }
-    out.push_str("\n# Contents\n");
+    push_limited(&mut out, "\n# Contents\n")?;
 
     for name in names {
         if !is_textual_name(&name) {
@@ -140,14 +155,24 @@ fn extract_zip(path: &Path) -> Result<String, ExtractError> {
             Ok(inner) => inner,
             Err(_) => continue,
         };
-        let mut buf = Vec::new();
-        if inner.read_to_end(&mut buf).is_err() {
-            continue;
+        if inner.size() > MAX_TEXTUAL_ENTRY_BYTES as u64 {
+            return Err(ExtractError::Limit("ZIP entry too large"));
         }
-        out.push_str(&format!("\n--- {name} ---\n"));
-        out.push_str(&String::from_utf8_lossy(&buf));
+        let mut buf = Vec::new();
+        read_limited(&mut inner, MAX_TEXTUAL_ENTRY_BYTES, &mut buf)?;
+        push_limited(&mut out, &format!("\n--- {name} ---\n"))?;
+        push_limited(&mut out, &String::from_utf8_lossy(&buf))?;
     }
     Ok(out)
+}
+
+fn check_zip_entry_count<R: Read + std::io::Seek>(
+    archive: &ZipArchive<R>,
+) -> Result<(), ExtractError> {
+    if archive.len() > MAX_ZIP_ENTRIES {
+        return Err(ExtractError::Limit("too many ZIP entries"));
+    }
+    Ok(())
 }
 
 fn is_textual_name(name: &str) -> bool {
@@ -188,7 +213,8 @@ fn is_textual_name(name: &str) -> bool {
 
 /// Strip XML markup and concatenate the textual content into `out`.
 fn push_xml_text<R: Read>(reader: R, out: &mut String) -> Result<(), ExtractError> {
-    let mut reader = Reader::from_reader(std::io::BufReader::new(reader));
+    let limited = reader.take((MAX_TEXTUAL_ENTRY_BYTES + 1) as u64);
+    let mut reader = Reader::from_reader(std::io::BufReader::new(limited));
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
@@ -198,13 +224,13 @@ fn push_xml_text<R: Read>(reader: R, out: &mut String) -> Result<(), ExtractErro
                     quick_xml::escape::unescape(std::str::from_utf8(&bytes).unwrap_or(""))
                         .unwrap_or_default()
                         .into_owned();
-                out.push_str(&unescaped);
-                out.push(' ');
+                push_limited(out, &unescaped)?;
+                push_limited(out, " ")?;
             }
             Ok(Event::CData(e)) => {
                 let bytes = e.into_inner();
-                out.push_str(&String::from_utf8_lossy(&bytes));
-                out.push(' ');
+                push_limited(out, &String::from_utf8_lossy(&bytes))?;
+                push_limited(out, " ")?;
             }
             Ok(Event::Eof) => break,
             Ok(_) => {}
@@ -220,7 +246,9 @@ fn push_xml_text<R: Read>(reader: R, out: &mut String) -> Result<(), ExtractErro
 /// else. This is the standard "RTF degradation to text" algorithm and matches
 /// what Grex's WPF `RichTextBox` would show.
 fn extract_rtf(path: &Path) -> Result<String, ExtractError> {
-    let bytes = std::fs::read(path)?;
+    let mut file = std::fs::File::open(path)?;
+    let mut bytes = Vec::new();
+    read_limited(&mut file, MAX_EXTRACTED_TEXT_BYTES, &mut bytes)?;
     let text = std::str::from_utf8(&bytes)
         .map(str::to_string)
         .unwrap_or_else(|_| String::from_utf8_lossy(&bytes).into_owned());
@@ -300,13 +328,13 @@ fn extract_rtf(path: &Path) -> Result<String, ExtractError> {
                     _ if starred => {
                         skip_group_until = Some(group_depth);
                     }
-                    "par" | "line" | "lbr" => out.push('\n'),
-                    "tab" => out.push('\t'),
+                    "par" | "line" | "lbr" => push_limited(&mut out, "\n")?,
+                    "tab" => push_limited(&mut out, "\t")?,
                     "'" => {
                         // Hex escape: \'XX
                         let hex: String = chars.by_ref().take(2).collect();
                         if let Ok(byte) = u8::from_str_radix(&hex, 16) {
-                            out.push(byte as char);
+                            push_limited(&mut out, &(byte as char).to_string())?;
                         }
                     }
                     _ => {
@@ -315,7 +343,7 @@ fn extract_rtf(path: &Path) -> Result<String, ExtractError> {
                 }
             }
             '\r' | '\n' => {} // structural whitespace is ignored in RTF
-            _ => out.push(ch),
+            _ => push_limited(&mut out, &ch.to_string())?,
         }
     }
     Ok(out)
@@ -325,20 +353,35 @@ fn extract_rtf(path: &Path) -> Result<String, ExtractError> {
 /// `ExtractError::Pdf` when the binary isn't on `$PATH` or the file is
 /// encrypted/malformed; callers treat that as a skip.
 fn extract_pdf(path: &Path) -> Result<String, ExtractError> {
-    let result = Command::new("pdftotext")
+    let mut child = Command::new("pdftotext")
         .arg("-layout")
         .arg(path)
         .arg("-") // write to stdout
         .stdin(Stdio::null())
+        .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .output();
+        .spawn()
+        .map_err(|err| ExtractError::Pdf(err.to_string()))?;
 
-    match result {
-        Ok(output) if output.status.success() => {
-            Ok(String::from_utf8_lossy(&output.stdout).into_owned())
-        }
-        Ok(output) => Err(ExtractError::Pdf(format!("pdftotext exit status {}", output.status))),
-        Err(err) => Err(ExtractError::Pdf(err.to_string())),
+    let mut stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| ExtractError::Pdf("pdftotext stdout unavailable".to_string()))?;
+    let mut buf = Vec::new();
+    let read_result = read_limited(&mut stdout, MAX_EXTRACTED_TEXT_BYTES, &mut buf);
+    if read_result.is_err() {
+        let _ = child.kill();
+        let _ = child.wait();
+        read_result?;
+    }
+    let status = child
+        .wait()
+        .map_err(|err| ExtractError::Pdf(err.to_string()))?;
+
+    if status.success() {
+        Ok(String::from_utf8_lossy(&buf).into_owned())
+    } else {
+        Err(ExtractError::Pdf(format!("pdftotext exit status {status}")))
     }
 }
 
@@ -347,6 +390,29 @@ fn normalized_extension(path: &Path) -> Option<String> {
         .and_then(|ext| ext.to_str())
         .map(|ext| ext.to_ascii_lowercase())
         .filter(|ext| !ext.is_empty())
+}
+
+fn read_limited<R: Read>(
+    reader: &mut R,
+    max_bytes: usize,
+    out: &mut Vec<u8>,
+) -> Result<(), ExtractError> {
+    reader
+        .take((max_bytes + 1) as u64)
+        .read_to_end(out)
+        .map_err(ExtractError::Io)?;
+    if out.len() > max_bytes {
+        return Err(ExtractError::Limit("input too large"));
+    }
+    Ok(())
+}
+
+fn push_limited(out: &mut String, value: &str) -> Result<(), ExtractError> {
+    if out.len().saturating_add(value.len()) > MAX_EXTRACTED_TEXT_BYTES {
+        return Err(ExtractError::Limit("extracted text too large"));
+    }
+    out.push_str(value);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -462,6 +528,32 @@ mod tests {
         assert!(text.contains("binary.bin"));
         assert!(text.contains("Plain text TODO finish"));
         assert!(text.contains("More TODO content."));
+    }
+
+    #[test]
+    fn zip_text_entry_is_size_limited() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("bundle.zip");
+        write_zip(&path, |zip| {
+            write_entry(zip, "huge.txt", &vec![b'A'; MAX_TEXTUAL_ENTRY_BYTES + 1]);
+        });
+
+        let err = extract_text(&path).unwrap_err();
+        assert!(matches!(err, ExtractError::Limit(_)));
+    }
+
+    #[test]
+    fn zip_entry_count_is_limited() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("bundle.zip");
+        write_zip(&path, |zip| {
+            for i in 0..=MAX_ZIP_ENTRIES {
+                write_entry(zip, &format!("f{i}.txt"), b"x");
+            }
+        });
+
+        let err = extract_text(&path).unwrap_err();
+        assert!(matches!(err, ExtractError::Limit(_)));
     }
 
     #[test]

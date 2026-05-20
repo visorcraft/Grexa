@@ -1591,11 +1591,24 @@ fn export_as_csv(rows: &[&ResultRow]) -> String {
 }
 
 fn csv_escape(s: &str) -> String {
-    if s.contains(',') || s.contains('"') || s.contains('\n') {
-        let escaped = s.replace('"', "\"\"");
+    let value = neutralize_spreadsheet_formula(s);
+    if value.contains(',') || value.contains('"') || value.contains('\n') || value.contains('\r') {
+        let escaped = value.replace('"', "\"\"");
         format!("\"{escaped}\"")
     } else {
-        s.to_string()
+        value
+    }
+}
+
+fn neutralize_spreadsheet_formula(value: &str) -> String {
+    if value
+        .chars()
+        .next()
+        .is_some_and(|ch| matches!(ch, '=' | '+' | '-' | '@' | '\t' | '\r' | '\n'))
+    {
+        format!("'{value}")
+    } else {
+        value.to_string()
     }
 }
 
@@ -2163,5 +2176,24 @@ mod tests {
         assert_eq!(summary.matches, 3);
         assert_eq!(rows.len(), 3);
         assert!(rows.iter().all(|r| r.preview_match == "TODO"));
+    }
+
+    #[test]
+    fn csv_export_neutralizes_spreadsheet_formulas() {
+        let row = ResultRow {
+            full_path: PathBuf::from("=cmd.txt"),
+            relative_path: PathBuf::from("=cmd.txt"),
+            line: 1,
+            column: 1,
+            preview_before: String::new(),
+            preview_match: "=HYPERLINK(\"https://example.invalid\",\"TODO\")".into(),
+            preview_after: String::new(),
+        };
+        let rows = vec![&row];
+
+        let csv = export_as_csv(&rows);
+
+        assert!(csv.contains("\"'=HYPERLINK(\"\"https://example.invalid\"\""));
+        assert!(csv.contains("'=cmd.txt"));
     }
 }

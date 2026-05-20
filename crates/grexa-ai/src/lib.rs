@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use std::collections::HashMap;
+use std::io::{self, Read};
 use std::path::Path;
 use std::time::Duration;
 
@@ -14,6 +15,7 @@ pub use secret::{SecretError, delete_api_key, load_api_key, store_api_key};
 
 pub const DEFAULT_MODEL: &str = "gpt-4o-mini";
 pub const DEFAULT_TIMEOUT_SECS: u64 = 90;
+const MAX_RESPONSE_BODY_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AiSearchConfig {
@@ -167,21 +169,32 @@ impl HttpTransport for UreqTransport {
         match result {
             Ok(response) => {
                 let status = response.status();
-                let mut buf = Vec::new();
-                response
-                    .into_reader()
-                    .read_to_end(&mut buf)
+                let body = read_response_body_limited(response.into_reader())
                     .map_err(|err| HttpError::Transport(err.to_string()))?;
-                Ok(HttpResponse { status, body: buf })
+                Ok(HttpResponse { status, body })
             }
             Err(ureq::Error::Status(status, response)) => {
-                let mut buf = Vec::new();
-                let _ = response.into_reader().read_to_end(&mut buf);
-                Ok(HttpResponse { status, body: buf })
+                let body = read_response_body_limited(response.into_reader())
+                    .map_err(|err| HttpError::Transport(err.to_string()))?;
+                Ok(HttpResponse { status, body })
             }
             Err(err) => Err(HttpError::Transport(err.to_string())),
         }
     }
+}
+
+fn read_response_body_limited<R: Read>(reader: R) -> io::Result<Vec<u8>> {
+    let mut buf = Vec::new();
+    reader
+        .take((MAX_RESPONSE_BODY_BYTES + 1) as u64)
+        .read_to_end(&mut buf)?;
+    if buf.len() > MAX_RESPONSE_BODY_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "AI endpoint response exceeded 4 MiB",
+        ));
+    }
+    Ok(buf)
 }
 
 /// High-level AI search client. Tests construct with `with_transport`; the
@@ -607,6 +620,13 @@ mod tests {
             status,
             body: body.as_bytes().to_vec(),
         }
+    }
+
+    #[test]
+    fn response_body_reader_enforces_size_limit() {
+        let body = vec![b'a'; MAX_RESPONSE_BODY_BYTES + 1];
+        let err = read_response_body_limited(&body[..]).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
     }
 
     #[test]

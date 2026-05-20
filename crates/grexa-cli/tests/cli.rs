@@ -59,6 +59,18 @@ fn csv_output_has_header_and_escaping() {
 }
 
 #[test]
+fn csv_output_neutralizes_spreadsheet_formulas() {
+    let dir = tempdir().unwrap();
+    write(&dir.path().join("a.txt"), "=HYPERLINK(\"https://example.invalid\",\"TODO\")\n");
+
+    cmd()
+        .args([dir.path().to_str().unwrap(), "TODO", "--format", "csv"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"'=HYPERLINK(\"\"https://example.invalid\"\""));
+}
+
+#[test]
 fn count_output_prints_total() {
     let dir = tempdir().unwrap();
     write(&dir.path().join("a.txt"), "TODO\nTODO\n");

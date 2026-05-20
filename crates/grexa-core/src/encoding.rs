@@ -142,24 +142,29 @@ pub fn heuristic_label(bytes: &[u8]) -> &'static str {
 /// error from decoding — only filesystem errors propagate.
 pub fn read_text(path: &Path) -> io::Result<(String, DetectedEncoding)> {
     let bytes = fs::read(path)?;
-    let detected = detect_from_bytes(&bytes);
+    Ok(decode_text(&bytes))
+}
+
+/// Decode a byte buffer using the same cascade as [`read_text`].
+pub fn decode_text(bytes: &[u8]) -> (String, DetectedEncoding) {
+    let detected = detect_from_bytes(bytes);
     let payload = &bytes[detected.bom_len().min(bytes.len())..];
 
     // BOM-less UTF-8: short-circuit when the bytes are already valid UTF-8.
     if matches!(detected, DetectedEncoding::Utf8) {
         if let Ok(text) = std::str::from_utf8(payload) {
-            return Ok((text.to_string(), DetectedEncoding::Utf8));
+            return (text.to_string(), DetectedEncoding::Utf8);
         }
 
         // Strict UTF-8 failed → ask chardetng.
         let label = heuristic_label(payload);
         if let Some(encoding) = Encoding::for_label(label.as_bytes()) {
             let (decoded, _, _) = encoding.decode(payload);
-            return Ok((decoded.into_owned(), DetectedEncoding::Heuristic(label.to_string())));
+            return (decoded.into_owned(), DetectedEncoding::Heuristic(label.to_string()));
         }
         // chardetng returned a label encoding_rs doesn't recognize — fall
         // back to lossy UTF-8 rather than failing the search.
-        return Ok((String::from_utf8_lossy(payload).into_owned(), DetectedEncoding::Utf8));
+        return (String::from_utf8_lossy(payload).into_owned(), DetectedEncoding::Utf8);
     }
 
     let text = match detected.encoding_rs() {
@@ -169,7 +174,7 @@ pub fn read_text(path: &Path) -> io::Result<(String, DetectedEncoding)> {
         }
         None => String::from_utf8_lossy(payload).into_owned(),
     };
-    Ok((text, detected))
+    (text, detected)
 }
 
 #[cfg(test)]

@@ -469,8 +469,21 @@ fn print_csv(results: &[SearchResult]) {
 }
 
 fn csv_escape(value: &str) -> String {
+    let value = neutralize_spreadsheet_formula(value);
     if value.contains([',', '"', '\n', '\r']) {
         format!("\"{}\"", value.replace('"', "\"\""))
+    } else {
+        value
+    }
+}
+
+fn neutralize_spreadsheet_formula(value: &str) -> String {
+    if value
+        .chars()
+        .next()
+        .is_some_and(|ch| matches!(ch, '=' | '+' | '-' | '@' | '\t' | '\r' | '\n'))
+    {
+        format!("'{value}")
     } else {
         value.to_string()
     }
