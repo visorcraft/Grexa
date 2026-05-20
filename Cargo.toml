@@ -43,7 +43,7 @@ cxx-qt-lib = { version = "0.8", features = ["qt_gui", "qt_qml"] }
 cxx-qt-build = "0.8"
 unicode-normalization = "0.1"
 fancy-regex = "0.16"
-chardetng = "0.1"
+chardetng = "1.0"
 icu_casemap = "2.2"
 icu_locale_core = "2.2"
 keyring = { version = "3", default-features = false, features = ["linux-native"] }
