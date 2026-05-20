@@ -1,0 +1,36 @@
+grexa (1.0.0-1) unstable; urgency=medium
+
+  * v1.0.0 stable release — feature-complete against the Grex parity
+    matrix on Linux.
+  * Promotes the v0.3 polish + responsiveness pass to a 1.0 line:
+    per-tab result-row isolation, responsive action toolbar,
+    auto-saved Settings, locale-aware pluralization, taskbar icon
+    integration via setDesktopFileName, About page "Licenses &
+    Credits" card.
+  * Stable on-disk schemas: settings.json, recent_paths.json,
+    search_history.json, profiles.json, replace-journal.json all
+    forward-compatible with v0.3.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Tue, 19 May 2026 12:00:00 +0000
+
+grexa (0.3.0-1) unstable; urgency=medium
+
+  * v0.3.0 polish and responsiveness release.
+  * Preserve per-tab result buffers across tab switches.
+  * Add Settings auto-save, responsive Search toolbar, and updated icons.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Mon, 18 May 2026 14:00:00 +0000
+
+grexa (0.1.0-1) unstable; urgency=medium
+
+  * Initial alpha release.
+  * Rust core (search, replace, container adapter, AI HTTP, document
+    extraction, encoding detection, settings, history, profiles,
+    context preview).
+  * CLI: grexa-cli with all search flags, container mode, and shell
+    completion / man page generators.
+  * Localization framework with English, German, Japanese catalogs.
+  * GUI shell is in active development; this package ships the GUI
+    binary as a placeholder until Phase 4 lands.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Sat, 16 May 2026 12:00:00 +0000

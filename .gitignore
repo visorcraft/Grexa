@@ -1,0 +1,46 @@
+/target/
+**/*.rs.bk
+*.log
+
+# rustfmt backups
+**/*.orig
+
+# Build artifacts that may sneak in
+*.pdb
+*.exe
+*.dSYM/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+.zed/
+
+# Editor swap / temp / backup files
+**/*.tmp.*
+**/*.swp
+**/*.swo
+**/*~
+
+# Cargo / flatpak vendor scratch. `just flatpak` writes
+# .cargo/config.toml during the build under a trap that removes it on
+# exit; the gitignore is belt-and-suspenders if a build is killed
+# before the trap fires. `/vendor/` guards against an accidental
+# top-level `cargo vendor` (the supported path puts the tree at
+# target/flatpak/vendor).
+/.cargo/
+/vendor/
+
+# flatpak-builder writes its build cache + git mirror to this hidden
+# dir at the workspace root, separate from /target/.
+/.flatpak-builder/
+
+# Distro artifacts at the workspace root. `just flatpak-bundle` and
+# the per-distro recipes write into target/release*/ ; these patterns
+# catch artifacts that land at the root (e.g. linuxdeploy renames
+# Grexa-*.AppImage in-place before we move it).
+/*.AppImage
+/*.flatpak
+/*.deb
+/*.rpm
+/*.pkg.tar.zst

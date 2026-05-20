@@ -1,0 +1,37 @@
+#!/usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	cargo build --workspace --release --frozen
+
+override_dh_auto_test:
+	cargo test --workspace --release --frozen
+
+override_dh_auto_install:
+	install -Dm755 target/release/grexa $$(pwd)/debian/grexa/usr/bin/grexa
+	install -Dm755 target/release/grexa-cli $$(pwd)/debian/grexa-cli/usr/bin/grexa-cli
+	install -Dm644 packaging/io.visorcraft.Grexa.desktop \
+		$$(pwd)/debian/grexa/usr/share/applications/io.visorcraft.Grexa.desktop
+	install -Dm644 packaging/io.visorcraft.Grexa.metainfo.xml \
+		$$(pwd)/debian/grexa/usr/share/metainfo/io.visorcraft.Grexa.metainfo.xml
+	install -Dm644 packaging/icons/scalable/io.visorcraft.Grexa.svg \
+		$$(pwd)/debian/grexa/usr/share/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg
+	# Sized PNG icons for taskbars / HiDPI panels that don't render the
+	# scalable SVG. Each line installs from packaging/icons/{N}x{N}/apps/
+	# into the corresponding hicolor directory under the package root.
+	for sz in 16 24 32 48 64 96 128 192 256 512; do \
+		install -Dm644 packaging/icons/$${sz}x$${sz}/apps/io.visorcraft.Grexa.png \
+			$$(pwd)/debian/grexa/usr/share/icons/hicolor/$${sz}x$${sz}/apps/io.visorcraft.Grexa.png; \
+	done
+	target/release/grexa-cli manpage \
+		> $$(pwd)/debian/grexa-cli/usr/share/man/man1/grexa-cli.1
+	target/release/grexa-cli completions bash \
+		> $$(pwd)/debian/grexa-cli/usr/share/bash-completion/completions/grexa-cli
+	target/release/grexa-cli completions zsh \
+		> $$(pwd)/debian/grexa-cli/usr/share/zsh/vendor-completions/_grexa-cli
+	target/release/grexa-cli completions fish \
+		> $$(pwd)/debian/grexa-cli/usr/share/fish/vendor_completions.d/grexa-cli.fish

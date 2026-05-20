@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.visorcraft.Grexa</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <name>Grexa</name>
+  <summary>Fast Linux file content search with tabs, replace, and AI assistance</summary>
+  <developer id="io.visorcraft">
+    <name>VisorCraft LLC</name>
+  </developer>
+
+  <description>
+    <p>
+      Grexa is a fast, precise grep-style search workbench for Linux developers.
+      It feels at home on KDE Plasma, integrates with the Breeze icon set, and
+      respects the system color scheme by default.
+    </p>
+    <p>Highlights:</p>
+    <ul>
+      <li>Tabbed searches with per-tab state and isolated history</li>
+      <li>Text and regex search with culture-aware comparison</li>
+      <li>Content and Files result modes with sortable columns</li>
+      <li>Streaming results with cancellation and progress events</li>
+      <li>Safe atomic replace with capture-group support and same-filesystem temp files</li>
+      <li>Context preview with configurable before/after line counts</li>
+      <li>Docker and Podman container search with direct grep and archive mirror fallback</li>
+      <li>Optional AI Search chat with OpenAI-compatible endpoints</li>
+      <li>CLI mode with text / JSON / CSV output and shell completion</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">io.visorcraft.Grexa.desktop</launchable>
+
+  <url type="homepage">https://github.com/visorcraft/grexa</url>
+  <url type="bugtracker">https://github.com/visorcraft/grexa/issues</url>
+  <url type="vcs-browser">https://github.com/visorcraft/grexa</url>
+
+  <provides>
+    <binary>grexa</binary>
+    <binary>grexa-cli</binary>
+  </provides>
+
+  <categories>
+    <category>Utility</category>
+    <category>Development</category>
+    <category>TextTools</category>
+    <category>FileTools</category>
+  </categories>
+
+  <keywords>
+    <keyword>grep</keyword>
+    <keyword>search</keyword>
+    <keyword>find</keyword>
+    <keyword>regex</keyword>
+    <keyword>files</keyword>
+    <keyword>text</keyword>
+  </keywords>
+
+  <content_rating type="oars-1.1" />
+
+  <branding>
+    <color type="primary" scheme_preference="light">#FCE0EA</color>
+    <color type="primary" scheme_preference="dark">#3A0E1E</color>
+  </branding>
+
+  <recommends>
+    <display_length compare="ge">768</display_length>
+    <internet>offline-only</internet>
+  </recommends>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>touch</control>
+  </supports>
+
+  <releases>
+    <release version="1.0.0" date="2026-05-19">
+      <description>
+        <p>v1.0 — stable release. Feature-complete against Grex on Linux.</p>
+        <ul>
+          <li>Promotes the v0.3 polish + responsiveness pass to a 1.0
+              line — per-tab result-row isolation, responsive action
+              toolbar, auto-saved Settings, locale-aware
+              pluralization, taskbar icon integration, About page
+              "Licenses &amp; Credits" card.</li>
+          <li>Stable on-disk schemas: settings.json,
+              recent_paths.json, search_history.json, profiles.json,
+              replace-journal.json all forward-compatible with v0.3.
+              No data migration required.</li>
+          <li>All v0.3 known limits remain on the roadmap (Qt palette
+              swap via KColorSchemeManager; structured-field path
+              redaction in tracing spans).</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.0" date="2026-05-18">
+      <description>
+        <p>v0.3 — polish, responsiveness, true per-tab isolation.</p>
+        <ul>
+          <li>True per-tab result-row isolation via a Rust-side
+              snapshot store — switching tabs preserves the full
+              result buffer + counters + within-filter state.</li>
+          <li>Responsive action toolbar — buttons wrap to additional
+              rows instead of clipping when the window narrows.</li>
+          <li>Taskbar icon — the pink gecko now resolves correctly
+              under Wayland / KDE Plasma via `setDesktopFileName`
+              + auto-install of the user-local hicolor icon theme.</li>
+          <li>Settings auto-save — every input commits to disk on
+              change; the Apply button is gone. A "Saved" pill
+              fades in for visual confirmation.</li>
+          <li>UX cleanup: Filters toggle now closes the drawer on
+              second click; Esc closes drawers when no search is
+              running; Export menu toggles; re-clicking the active
+              tab or nav item is a no-op (was a hidden side
+              effect).</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.2.0" date="2026-05-18">
+      <description>
+        <p>v0.2 — full GUI feature parity with Grex on Linux.</p>
+        <ul>
+          <li>Folder picker, filter drawer, target selector for Docker/Podman.</li>
+          <li>Replace flow with confirmation, residual journal recovery on startup.</li>
+          <li>Result row context menu, search-within-results, sortable columns, export to CSV/JSON/Markdown.</li>
+          <li>In-session search tabs (Ctrl+T / Ctrl+W).</li>
+          <li>Saved-search Profiles page and search History page.</li>
+          <li>Settings: Editor presets + custom command template, Accessibility (reduced motion, high contrast), Privacy (path redaction in logs), Replace (confirm + journal-on-startup).</li>
+          <li>Single-instance lockfile, KNotification on long searches and replace, keyboard shortcuts (F1, Ctrl+1..4, Esc, Ctrl+Q).</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.1.0" date="2026-05-16">
+      <description>
+        <p>Initial alpha. Core Rust search engine, CLI, AI HTTP client, and container detection.</p>
+      </description>
+    </release>
+  </releases>
+</component>

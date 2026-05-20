@@ -1,0 +1,77 @@
+# Maintainer: VisorCraft LLC <maintainer@visorcraft.com>
+pkgname=grexa
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Fast Linux file content search with tabs, replace, and AI assistance"
+arch=('x86_64' 'aarch64')
+url="https://github.com/visorcraft/grexa"
+license=('GPL3')
+depends=(
+    'qt6-base'
+    'qt6-declarative'
+    'kirigami'
+    'poppler'         # for pdftotext (optional but recommended)
+)
+makedepends=(
+    'rust'
+    'cargo'
+    'pkgconf'
+    'qt6-tools'
+)
+optdepends=(
+    'podman: container search via rootless Podman'
+    'docker: container search via Docker'
+    'kwalletmanager: API key storage (KDE)'
+    'gnome-keyring: API key storage (non-KDE)'
+)
+provides=('grexa-cli')
+conflicts=()
+options=('!lto')
+source=("https://github.com/visorcraft/grexa/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+    cd "${pkgname}-${pkgver}"
+    cargo fetch --locked
+}
+
+build() {
+    cd "${pkgname}-${pkgver}"
+    cargo build --workspace --release --frozen
+}
+
+check() {
+    cd "${pkgname}-${pkgver}"
+    cargo test --workspace --release --frozen
+}
+
+package() {
+    cd "${pkgname}-${pkgver}"
+    install -Dm755 "target/release/grexa" "${pkgdir}/usr/bin/grexa"
+    install -Dm755 "target/release/grexa-cli" "${pkgdir}/usr/bin/grexa-cli"
+
+    install -Dm644 packaging/io.visorcraft.Grexa.desktop \
+        "${pkgdir}/usr/share/applications/io.visorcraft.Grexa.desktop"
+    install -Dm644 packaging/io.visorcraft.Grexa.metainfo.xml \
+        "${pkgdir}/usr/share/metainfo/io.visorcraft.Grexa.metainfo.xml"
+    install -Dm644 packaging/icons/scalable/io.visorcraft.Grexa.svg \
+        "${pkgdir}/usr/share/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg"
+    # Sized PNG icons for taskbars / HiDPI panels that don't render the
+    # scalable SVG cleanly at small sizes.
+    for sz in 16 24 32 48 64 96 128 192 256 512; do
+        install -Dm644 "packaging/icons/${sz}x${sz}/apps/io.visorcraft.Grexa.png" \
+            "${pkgdir}/usr/share/icons/hicolor/${sz}x${sz}/apps/io.visorcraft.Grexa.png"
+    done
+
+    "${pkgdir}/usr/bin/grexa-cli" manpage \
+        | install -Dm644 /dev/stdin "${pkgdir}/usr/share/man/man1/grexa-cli.1"
+
+    "${pkgdir}/usr/bin/grexa-cli" completions bash \
+        | install -Dm644 /dev/stdin "${pkgdir}/usr/share/bash-completion/completions/grexa-cli"
+    "${pkgdir}/usr/bin/grexa-cli" completions fish \
+        | install -Dm644 /dev/stdin "${pkgdir}/usr/share/fish/vendor_completions.d/grexa-cli.fish"
+    "${pkgdir}/usr/bin/grexa-cli" completions zsh \
+        | install -Dm644 /dev/stdin "${pkgdir}/usr/share/zsh/site-functions/_grexa-cli"
+
+    install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
