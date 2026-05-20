@@ -22,7 +22,7 @@ clap_complete = "4.5"
 clap_mangen = "0.2"
 ctrlc = "3.4"
 encoding_rs = "0.8"
-ureq = { version = "2.10", features = ["json"] }
+ureq = { version = "3.3", features = ["json"] }
 globset = "0.4"
 ignore = "0.4"
 regex = "1.11"
