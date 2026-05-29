@@ -1,0 +1,42 @@
+#!/usr/bin/make -f
+# SPDX-FileCopyrightText: 2026 VisorCraft LLC
+# SPDX-License-Identifier: GPL-3.0-only
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export CARGO_HOME = $(CURDIR)/debian/cargo_home
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	cargo build --workspace --release --locked
+
+override_dh_auto_test:
+	# The release workflow runs the full workspace test suite before any
+	# package build starts; keep distro packaging focused on installation.
+
+override_dh_auto_install:
+	install -Dm755 target/release/grexa debian/grexa/usr/bin/grexa
+	install -Dm755 target/release/grexa-cli debian/grexa-cli/usr/bin/grexa-cli
+	install -Dm644 packaging/io.visorcraft.Grexa.desktop \
+		debian/grexa/usr/share/applications/io.visorcraft.Grexa.desktop
+	install -Dm644 packaging/io.visorcraft.Grexa.metainfo.xml \
+		debian/grexa/usr/share/metainfo/io.visorcraft.Grexa.metainfo.xml
+	install -Dm644 packaging/icons/scalable/io.visorcraft.Grexa.svg \
+		debian/grexa/usr/share/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg
+	for size in 16 24 32 48 64 96 128 192 256 512; do \
+		install -Dm644 packaging/icons/$$size'x'$$size/apps/io.visorcraft.Grexa.png \
+			debian/grexa/usr/share/icons/hicolor/$$size'x'$$size/apps/io.visorcraft.Grexa.png; \
+	done
+	target/release/grexa-cli manpage \
+		| install -Dm644 /dev/stdin debian/grexa-cli/usr/share/man/man1/grexa-cli.1
+	target/release/grexa-cli completions bash \
+		| install -Dm644 /dev/stdin debian/grexa-cli/usr/share/bash-completion/completions/grexa-cli
+	target/release/grexa-cli completions zsh \
+		| install -Dm644 /dev/stdin debian/grexa-cli/usr/share/zsh/vendor-completions/_grexa-cli
+	target/release/grexa-cli completions fish \
+		| install -Dm644 /dev/stdin debian/grexa-cli/usr/share/fish/vendor_completions.d/grexa-cli.fish
+
+override_dh_auto_clean:
+	cargo clean || true
+	dh_auto_clean

@@ -1,0 +1,11 @@
+[package]
+name = "grexa-i18n"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+fluent.workspace = true
+thiserror.workspace = true
+unic-langid.workspace = true

@@ -1,0 +1,49 @@
+# cargo-deny configuration for Grexa.
+#
+# Grexa ships under GPL-3.0-only. Direct dependencies must use a license that
+# is compatible with that (GPL family, MIT, Apache-2.0, BSD family, ISC,
+# Unicode-DFS, Zlib). Anything else needs an explicit review entry below.
+#
+# Run with: `just deny`.
+
+[graph]
+all-features = true
+
+[output]
+feature-depth = 1
+
+[advisories]
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "warn"
+ignore = []
+
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "CDLA-Permissive-2.0",
+    "GPL-3.0-only",
+    "ISC",
+    "LGPL-2.1-or-later",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+    "0BSD",
+]
+confidence-threshold = 0.93
+
+# Per-crate license clarifications go here. None needed today.
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+deny = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

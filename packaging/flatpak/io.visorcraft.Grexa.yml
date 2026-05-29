@@ -1,0 +1,101 @@
+# Flatpak manifest for Grexa.
+#
+# This manifest pairs with the workspace `rust-toolchain.toml` pin (Rust
+# 1.95, 2024 edition) by selecting the KDE 6.10 runtime, which is built on
+# the FDO 25.08 SDK and gets us the matching rust-stable Sdk extension.
+#
+# Build the .flatpak bundle via `just flatpak-bundle` (recommended). The
+# Justfile target vendors cargo deps into target/flatpak/vendor, stages
+# the matching .cargo/config.toml under a trap (so it's removed even on
+# build failure), and produces target/release/grexa.flatpak.
+#
+# Requires:
+#   flatpak-builder
+#   org.kde.Platform//6.10
+#   org.kde.Sdk//6.10
+#   org.freedesktop.Sdk.Extension.rust-stable//25.08
+
+app-id: io.visorcraft.Grexa
+runtime: org.kde.Platform
+runtime-version: '6.10'
+sdk: org.kde.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: grexa
+
+# Skip the post-build `appstreamcli compose` pass — Grexa's metainfo
+# references the GitHub repo URL which appstreamcli treats as a hard
+# read-error when the repo is private / unpublished, and the resulting
+# `filters-but-no-output` failure aborts the whole build. The metainfo
+# is still bundled at /app/share/metainfo and consumed by software
+# centers at install time.
+appstream-compose: false
+
+finish-args:
+  # Wayland + X11 fallback for the QML shell.
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # Filesystem access. The Flatpak limitations doc records why a sandboxed
+  # Grexa can't browse arbitrary system paths without per-search portal
+  # prompts.
+  - --filesystem=home
+  - --filesystem=/run/media
+  # Networking — only for AI Search; user is gated by `ai_search_enabled`.
+  - --share=network
+  # KWallet / GNOME Keyring via Secret Service.
+  - --talk-name=org.freedesktop.secrets
+  # FileManager1 D-Bus for "reveal in file manager".
+  - --talk-name=org.freedesktop.FileManager1
+  # KNotifications.
+  - --talk-name=org.freedesktop.Notifications
+  # KDE color scheme tracking.
+  - --talk-name=org.kde.kglobalaccel
+  # XDG state for logs.
+  - --persist=.config/grexa
+  - --persist=.local/share/grexa
+  - --persist=.local/state/grexa
+  - --persist=.cache/grexa
+
+# Docker / Podman sockets are intentionally NOT exposed. Container search
+# requires the non-Flatpak build per docs/linux-decisions.md.
+
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  # No build-args network share — cargo reads from the vendored
+  # target/flatpak/vendor tree staged by `just flatpak-vendor`.
+  env:
+    CARGO_HOME: /run/build/grexa/cargo
+
+modules:
+  - name: grexa
+    buildsystem: simple
+    build-commands:
+      - cargo --offline build --release --workspace --frozen
+      - install -Dm755 target/release/grexa /app/bin/grexa
+      - install -Dm755 target/release/grexa-cli /app/bin/grexa-cli
+      - install -Dm644 packaging/io.visorcraft.Grexa.desktop /app/share/applications/io.visorcraft.Grexa.desktop
+      - install -Dm644 packaging/io.visorcraft.Grexa.metainfo.xml /app/share/metainfo/io.visorcraft.Grexa.metainfo.xml
+      # SVG icon intentionally skipped — newer librsvg dropped the
+      # gdk-pixbuf SVG loader, so `flatpak build-export` rejects it as
+      # "Format not recognized". The hicolor PNG set below (16..512px)
+      # covers every Plasma / GNOME icon-size request; KDE scales the
+      # nearest PNG cleanly at HiDPI. The SVG is still shipped in the
+      # other packaging targets (.deb / .rpm / Arch / AppImage).
+      - for sz in 16 24 32 48 64 96 128 192 256 512; do install -Dm644 "packaging/icons/${sz}x${sz}/apps/io.visorcraft.Grexa.png" "/app/share/icons/hicolor/${sz}x${sz}/apps/io.visorcraft.Grexa.png"; done
+      - target/release/grexa-cli manpage > grexa-cli.1
+      - install -Dm644 grexa-cli.1 /app/share/man/man1/grexa-cli.1
+      - install -d /app/share/bash-completion/completions /app/share/fish/vendor_completions.d /app/share/zsh/site-functions
+      - target/release/grexa-cli completions bash > /app/share/bash-completion/completions/grexa-cli
+      - target/release/grexa-cli completions fish > /app/share/fish/vendor_completions.d/grexa-cli.fish
+      - target/release/grexa-cli completions zsh > /app/share/zsh/site-functions/_grexa-cli
+      - install -Dm644 LICENSE /app/share/licenses/grexa/LICENSE
+    sources:
+      # The repo root. `just flatpak` stages
+      # target/flatpak/vendor + .cargo/config.toml before flatpak-builder
+      # runs, so this `type: dir` copies them into the sandbox alongside
+      # the workspace; `cargo --offline --frozen` then resolves every
+      # crate from the vendored tree.
+      - type: dir
+        path: ../..

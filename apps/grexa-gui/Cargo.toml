@@ -1,0 +1,28 @@
+[package]
+name = "grexa"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Grexa Qt 6 / Kirigami GUI shell"
+
+[dependencies]
+grexa-ai = { version = "1.2.0", path = "../../crates/grexa-ai" }
+grexa-containers = { version = "1.2.0", path = "../../crates/grexa-containers" }
+grexa-core = { version = "1.2.0", path = "../../crates/grexa-core" }
+grexa-i18n = { version = "1.2.0", path = "../../crates/grexa-i18n" }
+regex.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true
+cxx.workspace = true
+cxx-qt.workspace = true
+cxx-qt-lib.workspace = true
+
+[build-dependencies]
+cxx-qt-build.workspace = true
+qt-build-utils = "0.8"
+
+[dev-dependencies]
+tempfile.workspace = true

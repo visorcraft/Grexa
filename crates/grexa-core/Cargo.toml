@@ -1,0 +1,28 @@
+[package]
+name = "grexa-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+chardetng.workspace = true
+encoding_rs.workspace = true
+fancy-regex.workspace = true
+globset.workspace = true
+icu_casemap.workspace = true
+icu_locale_core.workspace = true
+ignore.workspace = true
+quick-xml.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_repr.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+unicode-normalization.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

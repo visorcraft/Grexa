@@ -1,0 +1,1047 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: GPL-3.0-only
+
+use std::collections::HashMap;
+use std::io::{self, Read};
+use std::path::Path;
+use std::time::Duration;
+
+use grexa_core::SearchOptions;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+pub mod secret;
+pub use secret::{SecretError, delete_api_key, load_api_key, store_api_key};
+
+pub const DEFAULT_MODEL: &str = "gpt-4o-mini";
+pub const DEFAULT_TIMEOUT_SECS: u64 = 90;
+const MAX_RESPONSE_BODY_BYTES: usize = 4 * 1024 * 1024;
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AiSearchConfig {
+    pub endpoint: String,
+    pub api_key: Option<String>,
+    pub model: Option<String>,
+}
+
+// Manual Debug so the secret API key never lands in logs or error messages.
+impl std::fmt::Debug for AiSearchConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AiSearchConfig")
+            .field("endpoint", &self.endpoint)
+            .field("api_key", &self.api_key.as_ref().map(|_| "<redacted>"))
+            .field("model", &self.model)
+            .finish()
+    }
+}
+
+impl Default for AiSearchConfig {
+    fn default() -> Self {
+        Self {
+            endpoint: "https://api.openai.com/v1".to_string(),
+            api_key: None,
+            model: Some(DEFAULT_MODEL.to_string()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AiSearchContext {
+    pub search_path: String,
+    pub search_query: String,
+    pub filter_suggestions: Vec<String>,
+    pub regex_search: bool,
+    pub files_search: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AiConversationTurn {
+    pub role: AiRole,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AiRole {
+    User,
+    Assistant,
+    System,
+}
+
+impl AiRole {
+    pub fn parse(raw: &str) -> Self {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "assistant" => Self::Assistant,
+            "system" => Self::System,
+            _ => Self::User,
+        }
+    }
+
+    pub fn wire(self) -> &'static str {
+        match self {
+            Self::User => "user",
+            Self::Assistant => "assistant",
+            Self::System => "system",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AiSearchResponse {
+    pub success: bool,
+    pub message: String,
+    pub error_message: String,
+}
+
+impl AiSearchResponse {
+    pub fn ok(message: impl Into<String>) -> Self {
+        Self {
+            success: true,
+            message: message.into(),
+            error_message: String::new(),
+        }
+    }
+
+    pub fn fail(error: impl Into<String>) -> Self {
+        Self {
+            success: false,
+            message: String::new(),
+            error_message: error.into(),
+        }
+    }
+}
+
+/// Wire-level HTTP transport. Production code uses [`UreqTransport`]; tests
+/// inject a fake to avoid network access.
+pub trait HttpTransport: Send + Sync {
+    fn send(&self, request: HttpRequest) -> Result<HttpResponse, HttpError>;
+}
+
+#[derive(Debug, Clone)]
+pub struct HttpRequest {
+    pub method: HttpMethod,
+    pub url: String,
+    pub headers: HashMap<String, String>,
+    pub body: Option<Vec<u8>>,
+    pub timeout: Duration,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HttpMethod {
+    Get,
+    Post,
+}
+
+impl HttpMethod {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Get => "GET",
+            Self::Post => "POST",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct HttpResponse {
+    pub status: u16,
+    pub body: Vec<u8>,
+}
+
+impl HttpResponse {
+    pub fn is_success(&self) -> bool {
+        (200..300).contains(&self.status)
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum HttpError {
+    #[error("transport error: {0}")]
+    Transport(String),
+}
+
+/// Synchronous ureq-backed transport.
+pub struct UreqTransport;
+
+impl HttpTransport for UreqTransport {
+    fn send(&self, request: HttpRequest) -> Result<HttpResponse, HttpError> {
+        let HttpRequest {
+            method,
+            url,
+            headers,
+            body,
+            timeout,
+        } = request;
+        let agent = ureq::Agent::config_builder()
+            .timeout_global(Some(timeout))
+            .http_status_as_error(false)
+            // Do not follow redirects: an OpenAI-style API never needs them, and
+            // following a 3xx to another host could replay the bearer token to
+            // an attacker-controlled target.
+            .max_redirects(0)
+            .build()
+            .new_agent();
+
+        let result = match method {
+            HttpMethod::Get => apply_headers(agent.get(&url), &headers).call(),
+            HttpMethod::Post => {
+                let builder = apply_headers(agent.post(&url), &headers);
+                match body {
+                    Some(body) => builder.send(body.as_slice()),
+                    None => builder.send_empty(),
+                }
+            }
+        };
+
+        match result {
+            Ok(response) => {
+                let (parts, body) = response.into_parts();
+                let body = read_response_body_limited(body.into_reader())
+                    .map_err(|err| HttpError::Transport(err.to_string()))?;
+                Ok(HttpResponse {
+                    status: parts.status.as_u16(),
+                    body,
+                })
+            }
+            Err(err) => Err(HttpError::Transport(err.to_string())),
+        }
+    }
+}
+
+fn apply_headers<S>(
+    mut builder: ureq::RequestBuilder<S>,
+    headers: &HashMap<String, String>,
+) -> ureq::RequestBuilder<S> {
+    for (name, value) in headers {
+        builder = builder.header(name, value);
+    }
+    builder
+}
+
+fn read_response_body_limited<R: Read>(reader: R) -> io::Result<Vec<u8>> {
+    let mut buf = Vec::new();
+    reader
+        .take((MAX_RESPONSE_BODY_BYTES + 1) as u64)
+        .read_to_end(&mut buf)?;
+    if buf.len() > MAX_RESPONSE_BODY_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "AI endpoint response exceeded 4 MiB",
+        ));
+    }
+    Ok(buf)
+}
+
+/// High-level AI search client. Tests construct with `with_transport`; the
+/// runtime defaults to [`UreqTransport`].
+pub struct AiSearchClient<T: HttpTransport = UreqTransport> {
+    transport: T,
+    timeout: Duration,
+}
+
+impl AiSearchClient<UreqTransport> {
+    pub fn new() -> Self {
+        Self::with_transport(UreqTransport)
+    }
+}
+
+impl Default for AiSearchClient<UreqTransport> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T: HttpTransport> AiSearchClient<T> {
+    pub fn with_transport(transport: T) -> Self {
+        Self {
+            transport,
+            timeout: Duration::from_secs(DEFAULT_TIMEOUT_SECS),
+        }
+    }
+
+    /// Send a one-shot test to `/v1/models`. Returns `(success, message)`.
+    pub fn test_endpoint(&self, config: &AiSearchConfig) -> AiSearchResponse {
+        if config.endpoint.trim().is_empty() {
+            return AiSearchResponse::fail("AI endpoint is not configured.");
+        }
+        let url = models_endpoint(&config.endpoint);
+        let request = HttpRequest {
+            method: HttpMethod::Get,
+            headers: auth_headers(config.api_key.as_deref(), &url),
+            url,
+            body: None,
+            timeout: self.timeout,
+        };
+        match self.transport.send(request) {
+            Ok(resp) if resp.is_success() => AiSearchResponse::ok("Endpoint reachable."),
+            Ok(resp) => AiSearchResponse::fail(format!(
+                "AI endpoint returned HTTP {}: {}",
+                resp.status,
+                extract_error_message(&resp.body)
+            )),
+            Err(err) => AiSearchResponse::fail(err.to_string()),
+        }
+    }
+
+    /// Discover the first available model id at `/v1/models`, falling back to
+    /// [`DEFAULT_MODEL`] on any failure.
+    pub fn discover_model(&self, config: &AiSearchConfig) -> String {
+        if config.endpoint.trim().is_empty() {
+            return DEFAULT_MODEL.to_string();
+        }
+        let url = models_endpoint(&config.endpoint);
+        let request = HttpRequest {
+            method: HttpMethod::Get,
+            headers: auth_headers(config.api_key.as_deref(), &url),
+            url,
+            body: None,
+            timeout: self.timeout,
+        };
+        match self.transport.send(request) {
+            Ok(resp) if resp.is_success() => {
+                parse_first_model_id(&resp.body).unwrap_or_else(|| DEFAULT_MODEL.to_string())
+            }
+            _ => DEFAULT_MODEL.to_string(),
+        }
+    }
+
+    /// Send a chat completion turn. Mirrors Grex `SendDiscussionTurnAsync`
+    /// behavior: blank endpoint → typed error, blank assistant text → error,
+    /// otherwise trimmed assistant text in `message`.
+    pub fn send_chat(
+        &self,
+        config: &AiSearchConfig,
+        context: &AiSearchContext,
+        conversation: &[AiConversationTurn],
+    ) -> AiSearchResponse {
+        if config.endpoint.trim().is_empty() {
+            return AiSearchResponse::fail("AI endpoint is not configured.");
+        }
+
+        let model = config
+            .model
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| self.discover_model(config));
+
+        let messages = build_messages(context, conversation);
+        let payload = serde_json::json!({
+            "model": model,
+            "temperature": 0.2,
+            "messages": messages,
+        });
+
+        let url = chat_completions_endpoint(&config.endpoint);
+        let mut headers = auth_headers(config.api_key.as_deref(), &url);
+        headers.insert("Content-Type".to_string(), "application/json; charset=utf-8".to_string());
+
+        let request = HttpRequest {
+            method: HttpMethod::Post,
+            url,
+            headers,
+            body: Some(serde_json::to_vec(&payload).unwrap_or_else(|_| b"{}".to_vec())),
+            timeout: self.timeout,
+        };
+
+        match self.transport.send(request) {
+            Ok(resp) if resp.is_success() => match extract_assistant_content(&resp.body) {
+                Some(message) => AiSearchResponse::ok(message),
+                None => AiSearchResponse::fail("AI endpoint returned an empty response."),
+            },
+            Ok(resp) => AiSearchResponse::fail(format!(
+                "AI endpoint returned HTTP {}: {}",
+                resp.status,
+                extract_error_message(&resp.body)
+            )),
+            Err(err) => AiSearchResponse::fail(err.to_string()),
+        }
+    }
+}
+
+/// Whether it is safe to send the API key (a bearer credential) to `url`. We
+/// allow it over HTTPS, or over plaintext HTTP only to loopback (local LLM
+/// servers such as Ollama / llama.cpp). Sending the key over plaintext to a
+/// remote host would expose it to network observers and to whatever host a
+/// poisoned `endpoint` setting points at, so the bearer is withheld there.
+fn url_can_carry_credentials(url: &str) -> bool {
+    let lower = url.trim().to_ascii_lowercase();
+    if lower.starts_with("https://") {
+        return true;
+    }
+    if let Some(rest) = lower.strip_prefix("http://") {
+        // Host is everything up to the first `/`, `:` (port) — `[::1]` keeps
+        // its brackets so it compares as a whole.
+        let authority = rest.split('/').next().unwrap_or("");
+        let host = match authority.strip_prefix('[') {
+            // IPv6 literal: `[::1]:port` → `[::1]`
+            Some(after) => after
+                .split_once(']')
+                .map(|(h, _)| format!("[{h}]"))
+                .unwrap_or_else(|| authority.to_string()),
+            None => authority.split(':').next().unwrap_or("").to_string(),
+        };
+        return matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1" | "[::1]");
+    }
+    false
+}
+
+fn auth_headers(api_key: Option<&str>, url: &str) -> HashMap<String, String> {
+    let mut headers = HashMap::new();
+    if let Some(key) = api_key.map(str::trim).filter(|key| !key.is_empty())
+        && url_can_carry_credentials(url)
+    {
+        headers.insert("Authorization".to_string(), format!("Bearer {key}"));
+    }
+    headers
+}
+
+fn build_messages(
+    context: &AiSearchContext,
+    conversation: &[AiConversationTurn],
+) -> Vec<serde_json::Value> {
+    let mut out = Vec::with_capacity(conversation.len() + 2);
+    out.push(serde_json::json!({
+        "role": "system",
+        "content": "You are Grexa AI Search. Help the user locate relevant files and code using the provided path, query, and filter suggestions. Ask concise follow-up questions when needed.",
+    }));
+    out.push(serde_json::json!({
+        "role": "system",
+        "content": build_context_prompt(context),
+    }));
+    for turn in conversation {
+        let trimmed = turn.content.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        out.push(serde_json::json!({
+            "role": turn.role.wire(),
+            "content": trimmed,
+        }));
+    }
+    out
+}
+
+fn build_context_prompt(context: &AiSearchContext) -> String {
+    let mut prompt = String::from("AI search context:\n");
+    prompt.push_str(&format!("- path: {}\n", context.search_path));
+    prompt.push_str(&format!("- query: {}\n", context.search_query));
+    prompt.push_str(&format!(
+        "- search type: {}\n",
+        if context.regex_search {
+            "Regex"
+        } else {
+            "Text"
+        }
+    ));
+    prompt.push_str(&format!(
+        "- result mode: {}\n",
+        if context.files_search {
+            "Files"
+        } else {
+            "Content lines"
+        }
+    ));
+    prompt.push_str("Filter suggestions:\n");
+    let active: Vec<_> = context
+        .filter_suggestions
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if active.is_empty() {
+        prompt.push_str("- No additional filters\n");
+    } else {
+        for suggestion in active {
+            prompt.push_str(&format!("- {suggestion}\n"));
+        }
+    }
+    prompt.push_str("Treat filters as suggestions and explain reasoning with concrete next steps.");
+    prompt
+}
+
+fn parse_first_model_id(body: &[u8]) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_slice(body).ok()?;
+    let arr = value.get("data")?.as_array()?;
+    for item in arr {
+        if let Some(id) = item.get("id").and_then(|value| value.as_str()) {
+            let trimmed = id.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn extract_assistant_content(body: &[u8]) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_slice(body).ok()?;
+
+    // OpenAI-style: choices[0].message.content
+    if let Some(content) = value
+        .get("choices")
+        .and_then(|choices| choices.get(0))
+        .and_then(|choice| choice.get("message"))
+        .and_then(|message| message.get("content"))
+        .and_then(|content| content.as_str())
+    {
+        let trimmed = content.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+
+    // Legacy completions: choices[0].text
+    if let Some(text) = value
+        .get("choices")
+        .and_then(|choices| choices.get(0))
+        .and_then(|choice| choice.get("text"))
+        .and_then(|text| text.as_str())
+    {
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+
+    // Responses-API style: output_text
+    if let Some(text) = value.get("output_text").and_then(|value| value.as_str()) {
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+
+    None
+}
+
+fn extract_error_message(body: &[u8]) -> String {
+    if let Ok(value) = serde_json::from_slice::<serde_json::Value>(body) {
+        if let Some(message) = value
+            .get("error")
+            .and_then(|error| error.get("message"))
+            .and_then(|message| message.as_str())
+        {
+            return message.to_string();
+        }
+        if let Some(message) = value.get("message").and_then(|message| message.as_str()) {
+            return message.to_string();
+        }
+    }
+    String::from_utf8_lossy(body).to_string()
+}
+
+/// Build Linux-aware filter suggestions to seed an [`AiSearchContext`]. The
+/// strings are user-facing and rendered verbatim in the AI prompt.
+///
+/// The audit (`grex-ai-search-service-audit.md`) calls out that Linux phrasing
+/// replaces "Windows Search index" with "Linux file index (Baloo)" and adds
+/// hints for hidden files, symlinks, mounted shares, pseudo filesystems, and
+/// container targets when relevant.
+pub fn linux_suggestions_for(options: &SearchOptions) -> Vec<String> {
+    let mut hints = Vec::new();
+
+    if options.respect_gitignore {
+        hints.push("respect .gitignore".to_string());
+    }
+    if options.case_sensitive {
+        hints.push("case-sensitive search".to_string());
+    }
+    if !options.include_subfolders {
+        hints.push("limit to the chosen directory (no subfolders)".to_string());
+    }
+    if options.include_hidden {
+        hints.push("include hidden dotfiles and dotdirs".to_string());
+    }
+    if options.include_binary {
+        hints.push("include searchable binary/document files".to_string());
+    }
+    if options.include_symlinks {
+        hints.push("follow symbolic links (watch for mount loops)".to_string());
+    }
+    if options.include_system {
+        hints.push(
+            "include system/dependency directories (.git, vendor, node_modules, /proc, /sys)"
+                .to_string(),
+        );
+    }
+    if options.use_file_index {
+        hints.push("seed candidates from the Linux file index (Baloo, KDE)".to_string());
+    }
+    if !options.match_file_names.trim().is_empty() {
+        hints.push(format!("match file names: {}", options.match_file_names.trim()));
+    }
+    if !options.exclude_dirs.trim().is_empty() {
+        hints.push(format!("exclude dirs: {}", options.exclude_dirs.trim()));
+    }
+
+    if let Some(label) = mount_kind_hint(&options.path) {
+        hints.push(label);
+    }
+
+    hints
+}
+
+fn mount_kind_hint(path: &Path) -> Option<String> {
+    let s = path.to_string_lossy();
+    let s_lower = s.to_ascii_lowercase();
+    if s == "/" {
+        return Some(
+            "root filesystem search; Grexa already guards /proc, /sys, /dev, /run pseudo filesystems"
+                .to_string(),
+        );
+    }
+    if s_lower.starts_with("/proc")
+        || s_lower.starts_with("/sys")
+        || s_lower.starts_with("/dev")
+        || s_lower.starts_with("/run")
+    {
+        return Some(format!(
+            "pseudo filesystem path {} — many files are virtual and may be empty or unstable",
+            s
+        ));
+    }
+    if s_lower.starts_with("/mnt/")
+        || s_lower.starts_with("/media/")
+        || s_lower.contains("/gvfs/")
+        || s_lower.contains("/kio-fuse/")
+    {
+        return Some(format!("mounted share or removable media path: {}", s));
+    }
+    None
+}
+
+pub fn normalize_endpoint_base(endpoint: &str) -> String {
+    let mut value = endpoint.trim().trim_end_matches('/').to_string();
+    if value.is_empty() {
+        return value;
+    }
+
+    if !value.starts_with("http://") && !value.starts_with("https://") {
+        value = format!("https://{value}");
+    }
+
+    if let Some(stripped) = value.strip_suffix("/chat/completions") {
+        value = stripped.trim_end_matches('/').to_string();
+    }
+
+    value
+        .trim_end_matches("/v1")
+        .trim_end_matches('/')
+        .to_string()
+}
+
+pub fn chat_completions_endpoint(endpoint: &str) -> String {
+    format!("{}/v1/chat/completions", normalize_endpoint_base(endpoint))
+}
+
+pub fn models_endpoint(endpoint: &str) -> String {
+    format!("{}/v1/models", normalize_endpoint_base(endpoint))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use super::*;
+
+    #[test]
+    fn url_can_carry_credentials_requires_https_or_loopback() {
+        assert!(url_can_carry_credentials("https://api.openai.com/v1/models"));
+        assert!(url_can_carry_credentials("http://localhost:11434/v1/models"));
+        assert!(url_can_carry_credentials("http://127.0.0.1:1234/v1/models"));
+        assert!(url_can_carry_credentials("http://[::1]:8080/v1/models"));
+        // Plaintext to a remote host must NOT carry the bearer token.
+        assert!(!url_can_carry_credentials("http://evil.example.com/v1/models"));
+        assert!(!url_can_carry_credentials("http://169.254.169.254/v1/models"));
+    }
+
+    #[test]
+    fn auth_headers_withholds_bearer_over_plaintext_remote() {
+        let key = Some("sk-secret");
+        assert!(
+            auth_headers(key, "https://api.openai.com/v1/models").contains_key("Authorization"),
+            "https must carry the key"
+        );
+        assert!(
+            auth_headers(key, "http://localhost:11434/v1/models").contains_key("Authorization"),
+            "loopback http may carry the key for local LLMs"
+        );
+        assert!(
+            !auth_headers(key, "http://evil.example.com/v1/models").contains_key("Authorization"),
+            "plaintext to a remote host must not leak the key"
+        );
+    }
+
+    #[test]
+    fn debug_redacts_api_key() {
+        let config = AiSearchConfig {
+            endpoint: "https://api.openai.com/v1".to_string(),
+            api_key: Some("sk-supersecret-value".to_string()),
+            model: None,
+        };
+        let rendered = format!("{config:?}");
+        assert!(
+            !rendered.contains("sk-supersecret-value"),
+            "Debug must not print the API key, got: {rendered}"
+        );
+        assert!(
+            rendered.contains("redacted"),
+            "Debug should indicate a key is present, got: {rendered}"
+        );
+    }
+
+    #[derive(Debug, Default, Clone)]
+    struct MockTransport {
+        responses: Arc<Mutex<Vec<HttpResponse>>>,
+        captured: Arc<Mutex<Vec<HttpRequest>>>,
+    }
+
+    impl MockTransport {
+        fn with_responses(values: Vec<HttpResponse>) -> Self {
+            Self {
+                responses: Arc::new(Mutex::new(values)),
+                captured: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn captured(&self) -> Vec<HttpRequest> {
+            self.captured.lock().unwrap().clone()
+        }
+    }
+
+    impl HttpTransport for MockTransport {
+        fn send(&self, request: HttpRequest) -> Result<HttpResponse, HttpError> {
+            self.captured.lock().unwrap().push(request);
+            let mut queue = self.responses.lock().unwrap();
+            if queue.is_empty() {
+                return Err(HttpError::Transport("no canned response".into()));
+            }
+            Ok(queue.remove(0))
+        }
+    }
+
+    fn response(status: u16, body: &str) -> HttpResponse {
+        HttpResponse {
+            status,
+            body: body.as_bytes().to_vec(),
+        }
+    }
+
+    #[test]
+    fn response_body_reader_enforces_size_limit() {
+        let body = vec![b'a'; MAX_RESPONSE_BODY_BYTES + 1];
+        let err = read_response_body_limited(&body[..]).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn normalizes_common_endpoint_shapes() {
+        assert_eq!(
+            chat_completions_endpoint("api.example.com/v1/"),
+            "https://api.example.com/v1/chat/completions"
+        );
+        assert_eq!(
+            models_endpoint("https://api.example.com/v1/chat/completions"),
+            "https://api.example.com/v1/models"
+        );
+        assert_eq!(
+            chat_completions_endpoint("https://api.example.com/"),
+            "https://api.example.com/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn test_endpoint_succeeds_on_200() {
+        let transport = MockTransport::with_responses(vec![response(200, "{\"data\":[]}")]);
+        let client = AiSearchClient::with_transport(transport.clone());
+        let config = AiSearchConfig {
+            endpoint: "https://api.example.com/v1".into(),
+            api_key: Some("sk-test".into()),
+            model: None,
+        };
+        let result = client.test_endpoint(&config);
+        assert!(result.success);
+
+        let captured = transport.captured();
+        assert_eq!(captured.len(), 1);
+        assert_eq!(captured[0].url, "https://api.example.com/v1/models");
+        assert_eq!(captured[0].headers.get("Authorization"), Some(&"Bearer sk-test".to_string()));
+    }
+
+    #[test]
+    fn test_endpoint_fails_on_non_200() {
+        let transport = MockTransport::with_responses(vec![response(
+            401,
+            "{\"error\":{\"message\":\"bad key\"}}",
+        )]);
+        let client = AiSearchClient::with_transport(transport);
+        let config = AiSearchConfig {
+            endpoint: "https://api.example.com/v1".into(),
+            api_key: Some("sk-test".into()),
+            model: None,
+        };
+        let result = client.test_endpoint(&config);
+        assert!(!result.success);
+        assert!(result.error_message.contains("HTTP 401"));
+        assert!(result.error_message.contains("bad key"));
+    }
+
+    #[test]
+    fn discover_model_returns_first_data_id() {
+        let transport = MockTransport::with_responses(vec![response(
+            200,
+            "{\"data\":[{\"id\":\"gpt-4.1-mini\"},{\"id\":\"gpt-3.5-turbo\"}]}",
+        )]);
+        let client = AiSearchClient::with_transport(transport);
+        let config = AiSearchConfig {
+            endpoint: "https://api.example.com/v1".into(),
+            api_key: None,
+            model: None,
+        };
+        assert_eq!(client.discover_model(&config), "gpt-4.1-mini");
+    }
+
+    #[test]
+    fn discover_model_falls_back_on_error() {
+        let transport = MockTransport::with_responses(vec![response(500, "{}")]);
+        let client = AiSearchClient::with_transport(transport);
+        let config = AiSearchConfig {
+            endpoint: "https://api.example.com/v1".into(),
+            api_key: None,
+            model: None,
+        };
+        assert_eq!(client.discover_model(&config), DEFAULT_MODEL);
+    }
+
+    #[test]
+    fn send_chat_parses_openai_choices_message_content() {
+        let transport = MockTransport::with_responses(vec![response(
+            200,
+            "{\"choices\":[{\"message\":{\"content\":\"  hello user  \"}}]}",
+        )]);
+        let client = AiSearchClient::with_transport(transport.clone());
+        let config = AiSearchConfig {
+            endpoint: "https://api.example.com/v1".into(),
+            api_key: Some("sk".into()),
+            model: Some("gpt-4o-mini".into()),
+        };
+        let context = AiSearchContext {
+            search_path: "/home/me/code".into(),
+            search_query: "TODO".into(),
+            filter_suggestions: vec!["respect gitignore".into(), "  ".into()],
+            regex_search: false,
+            files_search: false,
+        };
+        let conversation = vec![AiConversationTurn {
+            role: AiRole::User,
+            content: "Help me find todos".to_string(),
+        }];
+        let result = client.send_chat(&config, &context, &conversation);
+        assert!(result.success, "{result:?}");
+        assert_eq!(result.message, "hello user");
+
+        let request = transport.captured().pop().unwrap();
+        assert_eq!(request.url, "https://api.example.com/v1/chat/completions");
+        assert_eq!(
+            request.headers.get("Content-Type").map(String::as_str),
+            Some("application/json; charset=utf-8")
+        );
+        let body: serde_json::Value =
+            serde_json::from_slice(request.body.as_ref().unwrap()).unwrap();
+        assert_eq!(body["model"], "gpt-4o-mini");
+        let messages = body["messages"].as_array().unwrap();
+        assert!(messages.len() >= 3);
+        assert_eq!(messages[0]["role"], "system");
+        assert_eq!(messages[1]["role"], "system");
+        assert!(
+            messages[1]["content"]
+                .as_str()
+                .unwrap()
+                .contains("respect gitignore")
+        );
+    }
+
+    #[test]
+    fn send_chat_returns_empty_response_when_choice_blank() {
+        let transport = MockTransport::with_responses(vec![response(
+            200,
+            "{\"choices\":[{\"message\":{\"content\":\"\"}}]}",
+        )]);
+        let client = AiSearchClient::with_transport(transport);
+        let result = client.send_chat(
+            &AiSearchConfig {
+                endpoint: "https://api.example.com/v1".into(),
+                api_key: None,
+                model: Some("gpt-4o-mini".into()),
+            },
+            &AiSearchContext {
+                search_path: "/".into(),
+                search_query: "x".into(),
+                filter_suggestions: vec![],
+                regex_search: false,
+                files_search: false,
+            },
+            &[],
+        );
+        assert!(!result.success);
+        assert!(result.error_message.contains("empty response"));
+    }
+
+    #[test]
+    fn send_chat_parses_legacy_choices_text() {
+        let transport = MockTransport::with_responses(vec![response(
+            200,
+            "{\"choices\":[{\"text\":\"legacy reply\"}]}",
+        )]);
+        let client = AiSearchClient::with_transport(transport);
+        let result = client.send_chat(
+            &AiSearchConfig {
+                endpoint: "https://api.example.com/v1".into(),
+                api_key: None,
+                model: Some("local".into()),
+            },
+            &AiSearchContext {
+                search_path: "/".into(),
+                search_query: "x".into(),
+                filter_suggestions: vec![],
+                regex_search: false,
+                files_search: false,
+            },
+            &[],
+        );
+        assert!(result.success);
+        assert_eq!(result.message, "legacy reply");
+    }
+
+    #[test]
+    fn send_chat_parses_output_text() {
+        let transport =
+            MockTransport::with_responses(vec![response(200, "{\"output_text\":\"resp\"}")]);
+        let client = AiSearchClient::with_transport(transport);
+        let result = client.send_chat(
+            &AiSearchConfig {
+                endpoint: "https://api.example.com/v1".into(),
+                api_key: None,
+                model: Some("local".into()),
+            },
+            &AiSearchContext {
+                search_path: "/".into(),
+                search_query: "x".into(),
+                filter_suggestions: vec![],
+                regex_search: false,
+                files_search: false,
+            },
+            &[],
+        );
+        assert!(result.success);
+        assert_eq!(result.message, "resp");
+    }
+
+    #[test]
+    fn send_chat_blank_endpoint_short_circuits() {
+        let client = AiSearchClient::with_transport(MockTransport::default());
+        let result = client.send_chat(
+            &AiSearchConfig {
+                endpoint: " ".into(),
+                api_key: None,
+                model: None,
+            },
+            &AiSearchContext {
+                search_path: "/".into(),
+                search_query: "".into(),
+                filter_suggestions: vec![],
+                regex_search: false,
+                files_search: false,
+            },
+            &[],
+        );
+        assert!(!result.success);
+        assert!(result.error_message.contains("not configured"));
+    }
+
+    #[test]
+    fn send_chat_falls_back_to_model_discovery_when_model_blank() {
+        let transport = MockTransport::with_responses(vec![
+            // Discovery
+            response(200, "{\"data\":[{\"id\":\"discovered-model\"}]}"),
+            // Chat
+            response(200, "{\"choices\":[{\"message\":{\"content\":\"hi\"}}]}"),
+        ]);
+        let client = AiSearchClient::with_transport(transport.clone());
+        let result = client.send_chat(
+            &AiSearchConfig {
+                endpoint: "https://api.example.com/v1".into(),
+                api_key: None,
+                model: None,
+            },
+            &AiSearchContext {
+                search_path: "/".into(),
+                search_query: "".into(),
+                filter_suggestions: vec![],
+                regex_search: false,
+                files_search: false,
+            },
+            &[],
+        );
+        assert!(result.success);
+        let chat_request = transport.captured().pop().unwrap();
+        let body: serde_json::Value =
+            serde_json::from_slice(chat_request.body.as_ref().unwrap()).unwrap();
+        assert_eq!(body["model"], "discovered-model");
+    }
+
+    #[test]
+    fn role_parser_is_tolerant() {
+        assert_eq!(AiRole::parse("assistant"), AiRole::Assistant);
+        assert_eq!(AiRole::parse("  System "), AiRole::System);
+        assert_eq!(AiRole::parse("anything"), AiRole::User);
+        assert_eq!(AiRole::parse(""), AiRole::User);
+    }
+
+    #[test]
+    fn linux_suggestions_cover_active_flags() {
+        let mut options = SearchOptions::new("/home/me/code", "TODO");
+        options.respect_gitignore = true;
+        options.include_hidden = true;
+        options.include_symlinks = true;
+        options.match_file_names = "*.rs".to_string();
+        options.exclude_dirs = "target".to_string();
+        options.use_file_index = true;
+
+        let hints = linux_suggestions_for(&options);
+        assert!(hints.iter().any(|h| h.contains("respect .gitignore")));
+        assert!(hints.iter().any(|h| h.contains("hidden dotfiles")));
+        assert!(hints.iter().any(|h| h.contains("symbolic links")));
+        assert!(hints.iter().any(|h| h.contains("match file names: *.rs")));
+        assert!(hints.iter().any(|h| h.contains("exclude dirs: target")));
+        assert!(hints.iter().any(|h| h.contains("Baloo")));
+    }
+
+    #[test]
+    fn linux_suggestions_flags_pseudo_filesystems() {
+        let options = SearchOptions::new("/proc/1", "x");
+        let hints = linux_suggestions_for(&options);
+        assert!(hints.iter().any(|h| h.contains("pseudo filesystem")));
+    }
+
+    #[test]
+    fn linux_suggestions_flags_mounts() {
+        let options = SearchOptions::new("/mnt/data", "x");
+        let hints = linux_suggestions_for(&options);
+        assert!(hints.iter().any(|h| h.contains("mounted share")));
+    }
+
+    #[test]
+    fn context_prompt_renders_with_no_filters() {
+        let prompt = build_context_prompt(&AiSearchContext {
+            search_path: "/p".into(),
+            search_query: "q".into(),
+            filter_suggestions: vec![],
+            regex_search: true,
+            files_search: false,
+        });
+        assert!(prompt.contains("No additional filters"));
+        assert!(prompt.contains("search type: Regex"));
+        assert!(prompt.contains("result mode: Content lines"));
+    }
+}

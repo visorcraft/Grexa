@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- SPDX-FileCopyrightText: 2026 VisorCraft LLC -->
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <defs>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.6">
+      <stop offset="0" stop-color="#2D7FF9" stop-opacity="0.22"/>
+      <stop offset="0.55" stop-color="#2D7FF9" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#2D7FF9" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#EEF1F6" stop-opacity="0.9"/>
+    </linearGradient>
+    <linearGradient id="paperDark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2A3140" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#1A1F2A" stop-opacity="0.95"/>
+    </linearGradient>
+    <linearGradient id="lens" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5DA0FB"/>
+      <stop offset="1" stop-color="#2D7FF9"/>
+    </linearGradient>
+    <linearGradient id="lensShade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.25"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Ambient halo behind everything -->
+  <circle cx="84" cy="92" r="84" fill="url(#halo)"/>
+
+  <!-- Stack of two document slips behind the lens, with subtle
+       tilt for depth. We use a neutral grey stroke that reads on
+       both light + dark themes. -->
+  <g opacity="0.92">
+    <g transform="translate(108 26) rotate(10)">
+      <rect x="0" y="0" width="58" height="74" rx="6" fill="#FFFFFF" stroke="#B9C3D6" stroke-width="1.4" opacity="0.5"/>
+    </g>
+    <g transform="translate(96 36) rotate(4)">
+      <rect x="0" y="0" width="58" height="74" rx="6" fill="url(#paper)" stroke="#B9C3D6" stroke-width="1.4"/>
+      <line x1="8"  y1="16" x2="50" y2="16" stroke="#B9C3D6" stroke-width="2" stroke-linecap="round"/>
+      <line x1="8"  y1="26" x2="50" y2="26" stroke="#B9C3D6" stroke-width="2" stroke-linecap="round"/>
+      <!-- Highlighted "match" line on the paper -->
+      <rect x="6" y="32" width="46" height="9" rx="2" fill="#FFD24C" opacity="0.55"/>
+      <line x1="8"  y1="36" x2="40" y2="36" stroke="#8893A6" stroke-width="2" stroke-linecap="round"/>
+      <line x1="8"  y1="48" x2="50" y2="48" stroke="#B9C3D6" stroke-width="2" stroke-linecap="round"/>
+      <line x1="8"  y1="58" x2="38" y2="58" stroke="#B9C3D6" stroke-width="2" stroke-linecap="round"/>
+    </g>
+  </g>
+
+  <!-- Magnifying glass — accent-colored circle with a soft shine -->
+  <g>
+    <!-- Handle (under the lens so the rim overlaps it neatly) -->
+    <line x1="105" y1="115" x2="148" y2="158"
+          stroke="#2D7FF9" stroke-width="10" stroke-linecap="round" opacity="0.85"/>
+    <line x1="105" y1="115" x2="148" y2="158"
+          stroke="#1656B8" stroke-width="5" stroke-linecap="round" opacity="0.4"/>
+
+    <!-- Lens rim -->
+    <circle cx="78" cy="88" r="38" fill="none" stroke="url(#lens)" stroke-width="8"/>
+    <!-- Inner subtle ring (glass) -->
+    <circle cx="78" cy="88" r="32" fill="#FFFFFF" fill-opacity="0.32"
+            stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="1"/>
+    <!-- Lens highlight (top-left sheen) -->
+    <path d="M 62,68 Q 50,80 56,98" fill="none"
+          stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-opacity="0.6"/>
+    <!-- Glass tint -->
+    <circle cx="78" cy="88" r="32" fill="url(#lensShade)"/>
+
+    <!-- The "{}" mark in the centre, a coder's wink -->
+    <text x="78" y="100" text-anchor="middle"
+          font-family="JetBrains Mono, Fira Code, monospace"
+          font-size="30" font-weight="700" fill="#1656B8" opacity="0.85">{}</text>
+  </g>
+</svg>
