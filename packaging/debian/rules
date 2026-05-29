@@ -18,15 +18,15 @@ override_dh_auto_test:
 override_dh_auto_install:
 	install -Dm755 target/release/grexa debian/grexa/usr/bin/grexa
 	install -Dm755 target/release/grexa-cli debian/grexa-cli/usr/bin/grexa-cli
-	install -Dm644 packaging/io.visorcraft.Grexa.desktop \
-		debian/grexa/usr/share/applications/io.visorcraft.Grexa.desktop
-	install -Dm644 packaging/io.visorcraft.Grexa.metainfo.xml \
-		debian/grexa/usr/share/metainfo/io.visorcraft.Grexa.metainfo.xml
-	install -Dm644 packaging/icons/scalable/io.visorcraft.Grexa.svg \
-		debian/grexa/usr/share/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg
+	install -Dm644 packaging/com.visorcraft.Grexa.desktop \
+		debian/grexa/usr/share/applications/com.visorcraft.Grexa.desktop
+	install -Dm644 packaging/com.visorcraft.Grexa.metainfo.xml \
+		debian/grexa/usr/share/metainfo/com.visorcraft.Grexa.metainfo.xml
+	install -Dm644 packaging/icons/scalable/com.visorcraft.Grexa.svg \
+		debian/grexa/usr/share/icons/hicolor/scalable/apps/com.visorcraft.Grexa.svg
 	for size in 16 24 32 48 64 96 128 192 256 512; do \
-		install -Dm644 packaging/icons/$$size'x'$$size/apps/io.visorcraft.Grexa.png \
-			debian/grexa/usr/share/icons/hicolor/$$size'x'$$size/apps/io.visorcraft.Grexa.png; \
+		install -Dm644 packaging/icons/$$size'x'$$size/apps/com.visorcraft.Grexa.png \
+			debian/grexa/usr/share/icons/hicolor/$$size'x'$$size/apps/com.visorcraft.Grexa.png; \
 	done
 	target/release/grexa-cli manpage \
 		| install -Dm644 /dev/stdin debian/grexa-cli/usr/share/man/man1/grexa-cli.1

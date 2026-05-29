@@ -6107,7 +6107,7 @@ Used by:
 - [`serde 1.0.228`](https://github.com/serde-rs/serde)
 - [`serde_core 1.0.228`](https://github.com/serde-rs/serde)
 - [`serde_derive 1.0.228`](https://github.com/serde-rs/serde)
-- [`serde_json 1.0.149`](https://github.com/serde-rs/json)
+- [`serde_json 1.0.150`](https://github.com/serde-rs/json)
 - [`serde_repr 0.1.20`](https://github.com/dtolnay/serde-repr)
 - [`shlex 1.3.0`](https://github.com/comex/rust-shlex)
 - [`syn 2.0.117`](https://github.com/dtolnay/syn)
@@ -6356,12 +6356,12 @@ insights.
 ### GNU General Public License v3.0 only
 
 Used by:
-- [`grexa 1.2.0`](https://github.com/visorcraft/grexa)
-- [`grexa-ai 1.2.0`](https://github.com/visorcraft/grexa)
-- [`grexa-cli 1.2.0`](https://github.com/visorcraft/grexa)
-- [`grexa-containers 1.2.0`](https://github.com/visorcraft/grexa)
-- [`grexa-core 1.2.0`](https://github.com/visorcraft/grexa)
-- [`grexa-i18n 1.2.0`](https://github.com/visorcraft/grexa)
+- [`grexa 1.3.0`](https://github.com/visorcraft/grexa)
+- [`grexa-ai 1.3.0`](https://github.com/visorcraft/grexa)
+- [`grexa-cli 1.3.0`](https://github.com/visorcraft/grexa)
+- [`grexa-containers 1.3.0`](https://github.com/visorcraft/grexa)
+- [`grexa-core 1.3.0`](https://github.com/visorcraft/grexa)
+- [`grexa-i18n 1.3.0`](https://github.com/visorcraft/grexa)
 
 ```
 GNU GENERAL PUBLIC LICENSE

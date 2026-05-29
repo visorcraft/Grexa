@@ -1833,7 +1833,7 @@ fn plural_count(key: &str, n: usize) -> String {
 fn notify_desktop(summary: &str, body: &str) {
     let _ = std::process::Command::new("notify-send")
         .arg("--app-name=Grexa")
-        .arg("--icon=io.visorcraft.Grexa")
+        .arg("--icon=com.visorcraft.Grexa")
         .arg(summary)
         .arg(body)
         .spawn();

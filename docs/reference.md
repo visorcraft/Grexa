@@ -116,7 +116,7 @@ Import semantics from a Grex backup are documented in
 | `$XDG_CACHE_HOME/grexa/container-mirrors/<runtime>/<id>/<unix-ts>/` | mirrored container paths |
 
 API keys (any AI endpoint) live in the keyring under service id
-`io.visorcraft.Grexa.ai`, account = canonical endpoint URL.
+`com.visorcraft.Grexa.ai`, account = canonical endpoint URL.
 
 ## Encoding labels
 

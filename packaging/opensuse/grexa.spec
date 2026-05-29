@@ -6,7 +6,7 @@
 #
 
 Name:           grexa
-Version:        1.2.0
+Version:        1.3.0
 Release:        0
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 License:        GPL-3.0-only
@@ -55,15 +55,15 @@ cargo build --workspace --release --frozen
 install -Dm755 target/release/grexa %{buildroot}%{_bindir}/grexa
 install -Dm755 target/release/grexa-cli %{buildroot}%{_bindir}/grexa-cli
 
-install -Dm644 packaging/io.visorcraft.Grexa.desktop \
-    %{buildroot}%{_datadir}/applications/io.visorcraft.Grexa.desktop
-install -Dm644 packaging/io.visorcraft.Grexa.metainfo.xml \
-    %{buildroot}%{_datadir}/metainfo/io.visorcraft.Grexa.metainfo.xml
-install -Dm644 packaging/icons/scalable/io.visorcraft.Grexa.svg \
-    %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg
+install -Dm644 packaging/com.visorcraft.Grexa.desktop \
+    %{buildroot}%{_datadir}/applications/com.visorcraft.Grexa.desktop
+install -Dm644 packaging/com.visorcraft.Grexa.metainfo.xml \
+    %{buildroot}%{_datadir}/metainfo/com.visorcraft.Grexa.metainfo.xml
+install -Dm644 packaging/icons/scalable/com.visorcraft.Grexa.svg \
+    %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/com.visorcraft.Grexa.svg
 for sz in 16 24 32 48 64 96 128 192 256 512; do
-    install -Dm644 packaging/icons/${sz}x${sz}/apps/io.visorcraft.Grexa.png \
-        %{buildroot}%{_datadir}/icons/hicolor/${sz}x${sz}/apps/io.visorcraft.Grexa.png
+    install -Dm644 packaging/icons/${sz}x${sz}/apps/com.visorcraft.Grexa.png \
+        %{buildroot}%{_datadir}/icons/hicolor/${sz}x${sz}/apps/com.visorcraft.Grexa.png
 done
 
 target/release/grexa-cli manpage > grexa-cli.1
@@ -89,10 +89,10 @@ cargo test --workspace --release --frozen
 %license LICENSE
 %doc README.md docs/*.md
 %{_bindir}/grexa
-%{_datadir}/applications/io.visorcraft.Grexa.desktop
-%{_datadir}/metainfo/io.visorcraft.Grexa.metainfo.xml
-%{_datadir}/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg
-%{_datadir}/icons/hicolor/*x*/apps/io.visorcraft.Grexa.png
+%{_datadir}/applications/com.visorcraft.Grexa.desktop
+%{_datadir}/metainfo/com.visorcraft.Grexa.metainfo.xml
+%{_datadir}/icons/hicolor/scalable/apps/com.visorcraft.Grexa.svg
+%{_datadir}/icons/hicolor/*x*/apps/com.visorcraft.Grexa.png
 
 %files -n %{name}-cli
 %{_bindir}/grexa-cli
@@ -102,6 +102,11 @@ cargo test --workspace --release --frozen
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Fri May 29 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.3.0-0
+- Rename the application ID to com.visorcraft.Grexa and set the
+  organization domain to visorcraft.com. Breaking identity change:
+  earlier installs do not upgrade in place; stored API keys are not
+  migrated to the new keyring service.
 * Fri May 29 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.2.0-0
 - Security hardening: replace pipeline refuses to write outside the
   search root and restores permissions via the file descriptor; AI API

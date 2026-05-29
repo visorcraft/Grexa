@@ -2,7 +2,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 
 <p align="center">
-  <img src="packaging/icons/512x512/apps/io.visorcraft.Grexa.png" alt="Grexa logo" width="250">
+  <img src="packaging/icons/512x512/apps/com.visorcraft.Grexa.png" alt="Grexa logo" width="250">
 </p>
 
 <h1 align="center">Grexa</h1>

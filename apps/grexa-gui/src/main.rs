@@ -74,7 +74,7 @@ fn main() {
     // app contacts the compositor; if we wrote the file after
     // QGuiApplication::new(), the portal would log
     // `Could not register app ID: App info not found for
-    // 'io.visorcraft.Grexa'` on the user's very first launch (the
+    // 'com.visorcraft.Grexa'` on the user's very first launch (the
     // file exists by the second launch, so the warning self-heals).
     // Front-loading the write keeps the first launch clean too.
     ensure_user_desktop_integration();
@@ -104,18 +104,18 @@ fn main() {
         app.as_mut()
             .set_organization_name(&QString::from("VisorCraft"));
         app.as_mut()
-            .set_organization_domain(&QString::from("visorcraft.io"));
+            .set_organization_domain(&QString::from("visorcraft.com"));
     }
 
     // Wayland's `app_id` and X11's `WM_CLASS` map to this string.
     // Setting it BEFORE the first window is shown ties the live
-    // application to the io.visorcraft.Grexa.desktop file (and its
+    // application to the com.visorcraft.Grexa.desktop file (and its
     // Icon= entry), so the taskbar / dock / alt-tab switcher
     // resolves the pink-gecko icon from the user's hicolor theme.
     // The `.desktop` was already written above (before
     // QGuiApplication::new()), so the portal can resolve this id
     // immediately on first launch.
-    cxx_qt_lib::QGuiApplication::set_desktop_file_name(&QString::from("io.visorcraft.Grexa"));
+    cxx_qt_lib::QGuiApplication::set_desktop_file_name(&QString::from("com.visorcraft.Grexa"));
 
     // App-wide font. Inter first; fall through to Cantarell (GNOME),
     // Noto Sans (most distros), then the platform default.
@@ -335,7 +335,7 @@ fn ensure_user_desktop_integration() {
         None => return,
     };
 
-    let desktop_template = include_bytes!("../../../packaging/io.visorcraft.Grexa.desktop");
+    let desktop_template = include_bytes!("../../../packaging/com.visorcraft.Grexa.desktop");
     // The packaged template uses `Exec=grexa %f` which is fine for a
     // distro install where `/usr/bin/grexa` is on $PATH. For a dev run
     // out of `target/release/grexa`, `gio` / `GAppInfo` validates the
@@ -367,41 +367,41 @@ fn ensure_user_desktop_integration() {
         .unwrap_or_default();
     let force_rewrite = have_rev != want_rev;
 
-    let scalable_svg = include_bytes!("../../../packaging/icons/scalable/io.visorcraft.Grexa.svg");
+    let scalable_svg = include_bytes!("../../../packaging/icons/scalable/com.visorcraft.Grexa.svg");
     let icon_16 =
-        include_bytes!("../../../packaging/icons/16x16/apps/io.visorcraft.Grexa.png").as_slice();
+        include_bytes!("../../../packaging/icons/16x16/apps/com.visorcraft.Grexa.png").as_slice();
     let icon_24 =
-        include_bytes!("../../../packaging/icons/24x24/apps/io.visorcraft.Grexa.png").as_slice();
+        include_bytes!("../../../packaging/icons/24x24/apps/com.visorcraft.Grexa.png").as_slice();
     let icon_32 =
-        include_bytes!("../../../packaging/icons/32x32/apps/io.visorcraft.Grexa.png").as_slice();
+        include_bytes!("../../../packaging/icons/32x32/apps/com.visorcraft.Grexa.png").as_slice();
     let icon_48 =
-        include_bytes!("../../../packaging/icons/48x48/apps/io.visorcraft.Grexa.png").as_slice();
+        include_bytes!("../../../packaging/icons/48x48/apps/com.visorcraft.Grexa.png").as_slice();
     let icon_64 =
-        include_bytes!("../../../packaging/icons/64x64/apps/io.visorcraft.Grexa.png").as_slice();
+        include_bytes!("../../../packaging/icons/64x64/apps/com.visorcraft.Grexa.png").as_slice();
     let icon_96 =
-        include_bytes!("../../../packaging/icons/96x96/apps/io.visorcraft.Grexa.png").as_slice();
+        include_bytes!("../../../packaging/icons/96x96/apps/com.visorcraft.Grexa.png").as_slice();
     let icon_128 =
-        include_bytes!("../../../packaging/icons/128x128/apps/io.visorcraft.Grexa.png").as_slice();
+        include_bytes!("../../../packaging/icons/128x128/apps/com.visorcraft.Grexa.png").as_slice();
     let icon_192 =
-        include_bytes!("../../../packaging/icons/192x192/apps/io.visorcraft.Grexa.png").as_slice();
+        include_bytes!("../../../packaging/icons/192x192/apps/com.visorcraft.Grexa.png").as_slice();
     let icon_256 =
-        include_bytes!("../../../packaging/icons/256x256/apps/io.visorcraft.Grexa.png").as_slice();
+        include_bytes!("../../../packaging/icons/256x256/apps/com.visorcraft.Grexa.png").as_slice();
     let icon_512 =
-        include_bytes!("../../../packaging/icons/512x512/apps/io.visorcraft.Grexa.png").as_slice();
+        include_bytes!("../../../packaging/icons/512x512/apps/com.visorcraft.Grexa.png").as_slice();
 
     let pairs: [(&str, &[u8]); 12] = [
-        ("applications/io.visorcraft.Grexa.desktop", desktop_bytes),
-        ("icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg", scalable_svg),
-        ("icons/hicolor/16x16/apps/io.visorcraft.Grexa.png", icon_16),
-        ("icons/hicolor/24x24/apps/io.visorcraft.Grexa.png", icon_24),
-        ("icons/hicolor/32x32/apps/io.visorcraft.Grexa.png", icon_32),
-        ("icons/hicolor/48x48/apps/io.visorcraft.Grexa.png", icon_48),
-        ("icons/hicolor/64x64/apps/io.visorcraft.Grexa.png", icon_64),
-        ("icons/hicolor/96x96/apps/io.visorcraft.Grexa.png", icon_96),
-        ("icons/hicolor/128x128/apps/io.visorcraft.Grexa.png", icon_128),
-        ("icons/hicolor/192x192/apps/io.visorcraft.Grexa.png", icon_192),
-        ("icons/hicolor/256x256/apps/io.visorcraft.Grexa.png", icon_256),
-        ("icons/hicolor/512x512/apps/io.visorcraft.Grexa.png", icon_512),
+        ("applications/com.visorcraft.Grexa.desktop", desktop_bytes),
+        ("icons/hicolor/scalable/apps/com.visorcraft.Grexa.svg", scalable_svg),
+        ("icons/hicolor/16x16/apps/com.visorcraft.Grexa.png", icon_16),
+        ("icons/hicolor/24x24/apps/com.visorcraft.Grexa.png", icon_24),
+        ("icons/hicolor/32x32/apps/com.visorcraft.Grexa.png", icon_32),
+        ("icons/hicolor/48x48/apps/com.visorcraft.Grexa.png", icon_48),
+        ("icons/hicolor/64x64/apps/com.visorcraft.Grexa.png", icon_64),
+        ("icons/hicolor/96x96/apps/com.visorcraft.Grexa.png", icon_96),
+        ("icons/hicolor/128x128/apps/com.visorcraft.Grexa.png", icon_128),
+        ("icons/hicolor/192x192/apps/com.visorcraft.Grexa.png", icon_192),
+        ("icons/hicolor/256x256/apps/com.visorcraft.Grexa.png", icon_256),
+        ("icons/hicolor/512x512/apps/com.visorcraft.Grexa.png", icon_512),
     ];
 
     let mut wrote_anything = false;

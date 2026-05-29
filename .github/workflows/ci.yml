@@ -131,7 +131,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - run: sudo apt-get update && sudo apt-get install -y appstream
-      - run: appstreamcli validate packaging/io.visorcraft.Grexa.metainfo.xml
+      - run: appstreamcli validate packaging/com.visorcraft.Grexa.metainfo.xml
 
   desktop-validate:
     name: desktop file
@@ -139,4 +139,4 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - run: sudo apt-get update && sudo apt-get install -y desktop-file-utils
-      - run: desktop-file-validate packaging/io.visorcraft.Grexa.desktop
+      - run: desktop-file-validate packaging/com.visorcraft.Grexa.desktop

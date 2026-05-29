@@ -22,15 +22,15 @@ rm -rf "$appdir"
 install -Dm755 "${root}/target/release/grexa" "${appdir}/usr/bin/grexa"
 install -Dm755 "${root}/target/release/grexa-cli" "${appdir}/usr/bin/grexa-cli"
 
-install -Dm644 "${root}/packaging/io.visorcraft.Grexa.desktop" \
-    "${appdir}/usr/share/applications/io.visorcraft.Grexa.desktop"
-install -Dm644 "${root}/packaging/io.visorcraft.Grexa.metainfo.xml" \
-    "${appdir}/usr/share/metainfo/io.visorcraft.Grexa.metainfo.xml"
-install -Dm644 "${root}/packaging/icons/scalable/io.visorcraft.Grexa.svg" \
-    "${appdir}/usr/share/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg"
+install -Dm644 "${root}/packaging/com.visorcraft.Grexa.desktop" \
+    "${appdir}/usr/share/applications/com.visorcraft.Grexa.desktop"
+install -Dm644 "${root}/packaging/com.visorcraft.Grexa.metainfo.xml" \
+    "${appdir}/usr/share/metainfo/com.visorcraft.Grexa.metainfo.xml"
+install -Dm644 "${root}/packaging/icons/scalable/com.visorcraft.Grexa.svg" \
+    "${appdir}/usr/share/icons/hicolor/scalable/apps/com.visorcraft.Grexa.svg"
 for size in 16 24 32 48 64 96 128 192 256 512; do
-    install -Dm644 "${root}/packaging/icons/${size}x${size}/apps/io.visorcraft.Grexa.png" \
-        "${appdir}/usr/share/icons/hicolor/${size}x${size}/apps/io.visorcraft.Grexa.png"
+    install -Dm644 "${root}/packaging/icons/${size}x${size}/apps/com.visorcraft.Grexa.png" \
+        "${appdir}/usr/share/icons/hicolor/${size}x${size}/apps/com.visorcraft.Grexa.png"
 done
 
 mkdir -p "${appdir}/usr/share/man/man1"
@@ -49,10 +49,10 @@ exec "$HERE/usr/bin/grexa" "$@"
 APPRUN
 chmod +x "$apprun_src"
 
-cp "${root}/packaging/icons/scalable/io.visorcraft.Grexa.svg" \
-    "${appdir}/io.visorcraft.Grexa.svg"
-cp "${root}/packaging/io.visorcraft.Grexa.desktop" \
-    "${appdir}/io.visorcraft.Grexa.desktop"
+cp "${root}/packaging/icons/scalable/com.visorcraft.Grexa.svg" \
+    "${appdir}/com.visorcraft.Grexa.svg"
+cp "${root}/packaging/com.visorcraft.Grexa.desktop" \
+    "${appdir}/com.visorcraft.Grexa.desktop"
 
 if ! command -v linuxdeploy >/dev/null 2>&1; then
     echo "linuxdeploy not on PATH; AppDir staged at ${appdir} but no AppImage produced." >&2
@@ -61,7 +61,7 @@ fi
 
 linuxdeploy --appdir "$appdir" --plugin qt --output appimage \
     --custom-apprun "$apprun_src" \
-    --desktop-file "${appdir}/usr/share/applications/io.visorcraft.Grexa.desktop"
+    --desktop-file "${appdir}/usr/share/applications/com.visorcraft.Grexa.desktop"
 
 mv Grexa*.AppImage "$output"
 echo "wrote $output"

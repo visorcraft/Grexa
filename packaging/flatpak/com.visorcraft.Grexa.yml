@@ -15,7 +15,7 @@
 #   org.kde.Sdk//6.10
 #   org.freedesktop.Sdk.Extension.rust-stable//25.08
 
-app-id: io.visorcraft.Grexa
+app-id: com.visorcraft.Grexa
 runtime: org.kde.Platform
 runtime-version: '6.10'
 sdk: org.kde.Sdk
@@ -75,15 +75,15 @@ modules:
       - cargo --offline build --release --workspace --frozen
       - install -Dm755 target/release/grexa /app/bin/grexa
       - install -Dm755 target/release/grexa-cli /app/bin/grexa-cli
-      - install -Dm644 packaging/io.visorcraft.Grexa.desktop /app/share/applications/io.visorcraft.Grexa.desktop
-      - install -Dm644 packaging/io.visorcraft.Grexa.metainfo.xml /app/share/metainfo/io.visorcraft.Grexa.metainfo.xml
+      - install -Dm644 packaging/com.visorcraft.Grexa.desktop /app/share/applications/com.visorcraft.Grexa.desktop
+      - install -Dm644 packaging/com.visorcraft.Grexa.metainfo.xml /app/share/metainfo/com.visorcraft.Grexa.metainfo.xml
       # SVG icon intentionally skipped — newer librsvg dropped the
       # gdk-pixbuf SVG loader, so `flatpak build-export` rejects it as
       # "Format not recognized". The hicolor PNG set below (16..512px)
       # covers every Plasma / GNOME icon-size request; KDE scales the
       # nearest PNG cleanly at HiDPI. The SVG is still shipped in the
       # other packaging targets (.deb / .rpm / Arch / AppImage).
-      - for sz in 16 24 32 48 64 96 128 192 256 512; do install -Dm644 "packaging/icons/${sz}x${sz}/apps/io.visorcraft.Grexa.png" "/app/share/icons/hicolor/${sz}x${sz}/apps/io.visorcraft.Grexa.png"; done
+      - for sz in 16 24 32 48 64 96 128 192 256 512; do install -Dm644 "packaging/icons/${sz}x${sz}/apps/com.visorcraft.Grexa.png" "/app/share/icons/hicolor/${sz}x${sz}/apps/com.visorcraft.Grexa.png"; done
       - target/release/grexa-cli manpage > grexa-cli.1
       - install -Dm644 grexa-cli.1 /app/share/man/man1/grexa-cli.1
       - install -d /app/share/bash-completion/completions /app/share/fish/vendor_completions.d /app/share/zsh/site-functions

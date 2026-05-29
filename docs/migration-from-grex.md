@@ -114,7 +114,7 @@ After the first launch, check:
 ```bash
 cat $XDG_CONFIG_HOME/grexa/settings.json | jq .ai_search_endpoint   # your URL
 cat $XDG_DATA_HOME/grexa/search_history.json | jq 'length'          # ≤ 20
-secret-tool lookup service io.visorcraft.Grexa.ai account \
+secret-tool lookup service com.visorcraft.Grexa.ai account \
     https://api.openai.com/v1                                        # your key
 ```
 

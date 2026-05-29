@@ -106,8 +106,8 @@ jobs:
 
       - name: Validate desktop file + AppStream metainfo
         run: |
-          desktop-file-validate packaging/io.visorcraft.Grexa.desktop
-          appstreamcli validate --no-net packaging/io.visorcraft.Grexa.metainfo.xml
+          desktop-file-validate packaging/com.visorcraft.Grexa.desktop
+          appstreamcli validate --no-net packaging/com.visorcraft.Grexa.metainfo.xml
 
       - name: Build release binaries
         run: cargo build --workspace --release
@@ -163,13 +163,13 @@ jobs:
           install -m644 target/completions/grexa-cli.bash "$staging/share/bash-completion/completions/grexa-cli"
           install -m644 target/completions/_grexa-cli "$staging/share/zsh/site-functions/_grexa-cli"
           install -m644 target/completions/grexa-cli.fish "$staging/share/fish/vendor_completions.d/grexa-cli.fish"
-          install -m644 packaging/io.visorcraft.Grexa.desktop "$staging/share/applications/io.visorcraft.Grexa.desktop"
-          install -m644 packaging/io.visorcraft.Grexa.metainfo.xml "$staging/share/metainfo/io.visorcraft.Grexa.metainfo.xml"
+          install -m644 packaging/com.visorcraft.Grexa.desktop "$staging/share/applications/com.visorcraft.Grexa.desktop"
+          install -m644 packaging/com.visorcraft.Grexa.metainfo.xml "$staging/share/metainfo/com.visorcraft.Grexa.metainfo.xml"
           cp -R packaging/icons/* "$staging/share/icons/hicolor/"
           mkdir -p "$staging/share/icons/hicolor/scalable/apps"
-          install -m644 packaging/icons/scalable/io.visorcraft.Grexa.svg \
-            "$staging/share/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg"
-          rm -f "$staging/share/icons/hicolor/scalable/io.visorcraft.Grexa.svg"
+          install -m644 packaging/icons/scalable/com.visorcraft.Grexa.svg \
+            "$staging/share/icons/hicolor/scalable/apps/com.visorcraft.Grexa.svg"
+          rm -f "$staging/share/icons/hicolor/scalable/com.visorcraft.Grexa.svg"
           install -m644 README.md "$staging/README.md"
           install -m644 CREDITS.md "$staging/CREDITS.md"
           install -m644 LICENSE "$staging/LICENSE"
@@ -481,11 +481,11 @@ jobs:
           flatpak-builder --user --force-clean --disable-rofiles-fuse \
             --repo=target/flatpak/repo \
             target/flatpak/build \
-            packaging/flatpak/io.visorcraft.Grexa.yml
+            packaging/flatpak/com.visorcraft.Grexa.yml
           mkdir -p target/dist
           flatpak build-bundle target/flatpak/repo \
             "target/dist/grexa-${VERSION}.flatpak" \
-            io.visorcraft.Grexa master
+            com.visorcraft.Grexa master
           (cd target/dist && sha256sum "grexa-${VERSION}.flatpak" > sha256sums.txt)
 
       - name: Upload Flatpak artifact

@@ -119,7 +119,7 @@ just flatpak-vendor   # `cargo vendor --locked target/flatpak/vendor`
                       # Cargo.lock changes.
 
 just flatpak          # flatpak-builder against
-                      # packaging/flatpak/io.visorcraft.Grexa.yml.
+                      # packaging/flatpak/com.visorcraft.Grexa.yml.
                       # Produces target/flatpak/repo + target/flatpak/build.
 
 just flatpak-bundle   # flatpak build-bundle → target/release/grexa.flatpak.
@@ -147,7 +147,7 @@ reads only from that directory.
 ### Why the Flatpak skips the .svg icon
 
 Newer librsvg releases on Arch (≥ 2.62) dropped the gdk-pixbuf SVG
-loader, so `flatpak build-export` rejects `io.visorcraft.Grexa.svg`
+loader, so `flatpak build-export` rejects `com.visorcraft.Grexa.svg`
 with "Format not recognized" on those hosts. The Flatpak manifest
 intentionally installs only the PNG hicolor set (16..512 px) — KDE
 Plasma scales the closest PNG cleanly at HiDPI. The .deb / .rpm /
@@ -225,8 +225,8 @@ See [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
 2. `cargo clippy --workspace --all-targets -- -D warnings`
 3. `cargo test --workspace --all-features`
 4. `cargo deny check`
-5. `appstreamcli validate packaging/io.visorcraft.Grexa.metainfo.xml`
-6. `desktop-file-validate packaging/io.visorcraft.Grexa.desktop`
+5. `appstreamcli validate packaging/com.visorcraft.Grexa.metainfo.xml`
+6. `desktop-file-validate packaging/com.visorcraft.Grexa.desktop`
 
 ## Performance baselines
 

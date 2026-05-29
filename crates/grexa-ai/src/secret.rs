@@ -15,7 +15,7 @@
 //!
 //! The keyring entry key is fixed:
 //!
-//! - Service: `io.visorcraft.Grexa.ai`
+//! - Service: `com.visorcraft.Grexa.ai`
 //! - Account: the AI endpoint base URL (canonicalized via
 //!   [`crate::normalize_endpoint_base`])
 //!
@@ -28,7 +28,7 @@ use thiserror::Error;
 
 use crate::normalize_endpoint_base;
 
-const SERVICE: &str = "io.visorcraft.Grexa.ai";
+const SERVICE: &str = "com.visorcraft.Grexa.ai";
 
 #[derive(Debug, Error)]
 pub enum SecretError {

@@ -101,7 +101,7 @@ API keys for the AI endpoint are stored in the system keyring via the
 talks to `org.freedesktop.secrets` (KWallet / GNOME Keyring /
 KeePassXC).
 
-- Service id: `io.visorcraft.Grexa.ai`
+- Service id: `com.visorcraft.Grexa.ai`
 - Account: canonical endpoint base URL
 - Multiple endpoints can each have their own key without overwriting.
 

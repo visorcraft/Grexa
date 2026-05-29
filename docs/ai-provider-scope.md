@@ -60,7 +60,7 @@ context (search path, query, filter list) the first request will send.
 
 The API key never lives in `settings.json`. `grexa-ai` stores it in the
 system keyring (`org.freedesktop.secrets` on Linux) keyed by
-`service = "io.visorcraft.Grexa.ai"` and `account = <endpoint-base>`,
+`service = "com.visorcraft.Grexa.ai"` and `account = <endpoint-base>`,
 which means one user can keep multiple distinct keys for multiple
 endpoints.
 

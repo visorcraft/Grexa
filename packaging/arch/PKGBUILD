@@ -8,7 +8,7 @@
 #     makepkg -si
 
 pkgname=grexa
-pkgver=1.2.0
+pkgver=1.3.0
 pkgrel=1
 pkgdesc="Fast Linux file content search with tabs, replace, and AI assistance"
 arch=('x86_64')
@@ -59,15 +59,15 @@ package() {
     install -Dm755 "target/release/grexa" "${pkgdir}/usr/bin/grexa"
     install -Dm755 "target/release/grexa-cli" "${pkgdir}/usr/bin/grexa-cli"
 
-    install -Dm644 packaging/io.visorcraft.Grexa.desktop \
-        "${pkgdir}/usr/share/applications/io.visorcraft.Grexa.desktop"
-    install -Dm644 packaging/io.visorcraft.Grexa.metainfo.xml \
-        "${pkgdir}/usr/share/metainfo/io.visorcraft.Grexa.metainfo.xml"
-    install -Dm644 packaging/icons/scalable/io.visorcraft.Grexa.svg \
-        "${pkgdir}/usr/share/icons/hicolor/scalable/apps/io.visorcraft.Grexa.svg"
+    install -Dm644 packaging/com.visorcraft.Grexa.desktop \
+        "${pkgdir}/usr/share/applications/com.visorcraft.Grexa.desktop"
+    install -Dm644 packaging/com.visorcraft.Grexa.metainfo.xml \
+        "${pkgdir}/usr/share/metainfo/com.visorcraft.Grexa.metainfo.xml"
+    install -Dm644 packaging/icons/scalable/com.visorcraft.Grexa.svg \
+        "${pkgdir}/usr/share/icons/hicolor/scalable/apps/com.visorcraft.Grexa.svg"
     for size in 16 24 32 48 64 96 128 192 256 512; do
-        install -Dm644 "packaging/icons/${size}x${size}/apps/io.visorcraft.Grexa.png" \
-            "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/io.visorcraft.Grexa.png"
+        install -Dm644 "packaging/icons/${size}x${size}/apps/com.visorcraft.Grexa.png" \
+            "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/com.visorcraft.Grexa.png"
     done
 
     "${pkgdir}/usr/bin/grexa-cli" manpage \

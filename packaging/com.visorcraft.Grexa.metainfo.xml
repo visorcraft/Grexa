@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.visorcraft.Grexa</id>
+  <id>com.visorcraft.Grexa</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-only</project_license>
   <name>Grexa</name>
@@ -29,7 +29,7 @@
     </ul>
   </description>
 
-  <launchable type="desktop-id">io.visorcraft.Grexa.desktop</launchable>
+  <launchable type="desktop-id">com.visorcraft.Grexa.desktop</launchable>
 
   <url type="homepage">https://github.com/visorcraft/grexa</url>
   <url type="bugtracker">https://github.com/visorcraft/grexa/issues</url>
@@ -75,6 +75,20 @@
   </supports>
 
   <releases>
+    <release version="1.3.0" date="2026-05-29">
+      <description>
+        <p>Application identity update.</p>
+        <ul>
+          <li>The application ID is now com.visorcraft.Grexa (desktop
+              file, AppStream component, icons, D-Bus/Wayland app_id, and
+              the Secret Service keyring), matching the visorcraft.com
+              domain.</li>
+          <li>Breaking identity change: installations of earlier versions
+              do not upgrade in place, and previously stored API keys are
+              not carried over to the new keyring service.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.0" date="2026-05-29">
       <description>
         <p>Security hardening and cleanup release.</p>

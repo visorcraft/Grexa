@@ -99,7 +99,7 @@ flatpak: flatpak-vendor
         flatpak-builder --user --force-clean --disable-rofiles-fuse \
             --repo=target/flatpak/repo \
             target/flatpak/build \
-            packaging/flatpak/io.visorcraft.Grexa.yml
+            packaging/flatpak/com.visorcraft.Grexa.yml
     @echo "built target/flatpak/repo"
 
 # The container path matters because cxx-qt-build's QML AOT compiler
@@ -116,7 +116,7 @@ flatpak-bundle: flatpak
     mkdir -p target/release
     flatpak build-bundle target/flatpak/repo \
         target/release/grexa.flatpak \
-        io.visorcraft.Grexa master
+        com.visorcraft.Grexa master
     @echo "wrote target/release/grexa.flatpak"
 
 # Convenience target — everything CI does. Useful before pushing.

@@ -301,7 +301,7 @@ Linux equivalent:
      `/work/repos/visorcraft/grexa/Cargo.toml` via `cargo set-version`
      (`cargo install cargo-edit`) — Cargo's workspace inheritance then
      propagates to every member crate without a regex sweep.
-  2. Stamps `/work/repos/visorcraft/grexa/packaging/io.visorcraft.Grexa.metainfo.xml`
+  2. Stamps `/work/repos/visorcraft/grexa/packaging/com.visorcraft.Grexa.metainfo.xml`
      with a new `<release version="X.Y.Z" date="YYYY-MM-DD"/>` row. This is
      the AppStream metadata Flatpak and AppImage consume.
   3. Optionally regenerates the manpage (`just manpage`) and shell
