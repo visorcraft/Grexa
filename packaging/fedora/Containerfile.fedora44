@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: 2026 VisorCraft LLC
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Build environment for the Grexa Fedora 44 RPM.
+#
+# Why this exists: cxx-qt-build runs qmlcachegen in full AOT-to-C++
+# mode, which links against Qt's *private* API. Private symbols are
+# pinned to the exact Qt minor version they were compiled against, so
+# an RPM built on a host with Qt 6.11 (Arch / CachyOS) cannot install
+# on Fedora 44 (Qt 6.9) - dnf rejects it with "nothing provides
+# libQt6Qml.so.6(Qt_6_PRIVATE_API)". Building inside this container
+# produces an RPM linked against Fedora 44's Qt 6.9 instead, so it
+# installs cleanly there.
+#
+# Build:   podman build -f Containerfile.fedora44 -t grexa-rpm-fedora44 .
+# Use:     packaging/fedora/build-in-container.sh
+#          (or `just fedora-pkg` from repo root)
+
+FROM fedora:44
+
+# rpm-build + spec deps from packaging/fedora/grexa.spec, plus cxx-qt
+# build prereqs (clang/libclang for bindgen, qt6 private headers via
+# *-private-devel packages, OpenSSL for the TLS-using crates in the
+# workspace). sccache + mold are installed so cargo's wrapper/linker
+# config from .cargo/config.toml doesn't fail to start; we then
+# disable them via env vars in the entrypoint because sccache's CC
+# wrapper breaks cxx-qt's C++ codegen.
+RUN dnf install -y --setopt=install_weak_deps=False \
+        rpm-build rpmdevtools \
+        git tar gzip make \
+        cargo rust clang \
+        sccache mold \
+        pkgconf-pkg-config \
+        openssl-devel \
+        qt6-qtbase-devel \
+        qt6-qtbase-private-devel \
+        qt6-qtdeclarative-devel \
+        qt6-qtdeclarative-private-devel \
+        qt6-qttools-devel \
+        kf6-kirigami-devel \
+        desktop-file-utils \
+        libappstream-glib \
+    && dnf clean all
+
+# rpmbuild should not run as root. Set up a builder user with the
+# standard rpmbuild dir tree, owned and writable by the user.
+RUN useradd --create-home --shell /bin/bash builder \
+    && su - builder -c 'rpmdev-setuptree'
+
+# Persistent caches live on named volumes (mounted by build-in-container.sh):
+#   /home/builder/.cargo       - cargo registry + git deps
+#   /home/builder/target-cache - container-private cargo target dir
+# These keep host-side target/ (CachyOS Qt 6.11) and container-side
+# builds (Fedora Qt 6.9) from contaminating each other.
+
+WORKDIR /home/builder
+
+COPY container-entrypoint.sh /usr/local/bin/container-entrypoint.sh
+RUN chmod 755 /usr/local/bin/container-entrypoint.sh
+
+USER builder
+ENTRYPOINT ["/usr/local/bin/container-entrypoint.sh"]

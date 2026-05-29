@@ -89,16 +89,26 @@ flatpak-vendor:
 flatpak: flatpak-vendor
     # Stage the vendor config at .cargo/config.toml just long enough for
     # flatpak-builder to copy the source tree into the sandbox, then
-    # remove it so subsequent host cargo builds use the registry cache
-    # again. The trap also fires on failure to keep the worktree clean.
+    # restore the original so subsequent host cargo builds use the
+    # registry cache (and the per-repo sccache+mold acceleration). The
+    # trap also fires on failure to keep the worktree clean.
     mkdir -p .cargo
+    if [ -f .cargo/config.toml ]; then mv .cargo/config.toml .cargo/config.toml.flatpak-backup; fi
     cp target/flatpak/vendor-config.toml .cargo/config.toml
-    trap 'rm -f .cargo/config.toml' EXIT INT TERM; \
+    trap 'rm -f .cargo/config.toml; if [ -f .cargo/config.toml.flatpak-backup ]; then mv .cargo/config.toml.flatpak-backup .cargo/config.toml; fi' EXIT INT TERM; \
         flatpak-builder --user --force-clean --disable-rofiles-fuse \
             --repo=target/flatpak/repo \
             target/flatpak/build \
             packaging/flatpak/io.visorcraft.Grexa.yml
     @echo "built target/flatpak/repo"
+
+# The container path matters because cxx-qt-build's QML AOT compiler
+# links against Qt's private API, which is pinned to the exact Qt
+# minor version. An RPM built on Arch / CachyOS (Qt 6.11) fails to
+# install on Fedora 44 (Qt 6.9). See packaging/fedora/Containerfile.fedora44.
+# Build the Fedora 44 .rpm inside a podman container (Qt 6.9 matched).
+fedora-pkg:
+    bash packaging/fedora/build-in-container.sh
 
 # Bundle the Flatpak repo into a single redistributable .flatpak file
 # at target/release/grexa.flatpak.
