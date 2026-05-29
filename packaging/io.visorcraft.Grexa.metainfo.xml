@@ -75,6 +75,24 @@
   </supports>
 
   <releases>
+    <release version="1.2.0" date="2026-05-29">
+      <description>
+        <p>Security hardening and cleanup release.</p>
+        <ul>
+          <li>The replace pipeline refuses to write outside the search
+              root and restores file permissions through the file
+              descriptor (no post-rename chmod window).</li>
+          <li>AI API keys are never transmitted over plaintext HTTP and
+              are redacted from logs and debug output.</li>
+          <li>Bounded regex backtracking, a 512 MiB search read cap, and a
+              pdftotext watchdog guard against pathological inputs.</li>
+          <li>Container exec/cp argument-injection hardening and CLI
+              terminal-escape sanitization.</li>
+          <li>API keys use the pure-Rust Secret Service keyring backend.</li>
+          <li>Hardened release CI and removed dead code / unused deps.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.1" date="2026-05-20">
       <description>
         <p>Packaging refresh with expanded Linux release artifacts and

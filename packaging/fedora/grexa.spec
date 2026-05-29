@@ -1,5 +1,5 @@
 Name:           grexa
-Version:        1.0.1
+Version:        1.2.0
 Release:        1%{?dist}
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 
@@ -89,6 +89,17 @@ command -v appstream-util >/dev/null && \
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Fri May 29 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.2.0-1
+- Security hardening: replace pipeline refuses to write outside the
+  search root and restores permissions via the file descriptor; AI API
+  keys are never sent over plaintext HTTP and are redacted from logs;
+  bounded regex backtracking, a 512 MiB search read cap, and a pdftotext
+  watchdog guard pathological inputs; container exec/cp argument-injection
+  hardening; CLI terminal-escape sanitization.
+- API keys now use the pure-Rust Secret Service keyring backend.
+- Hardened release CI (pinned actions + image digests, build provenance).
+- Removed dead code and unused dependencies.
+
 * Wed May 20 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.0.1-1
 - Expands the GitHub release pipeline to publish tarball, AppImage,
   Arch/CachyOS, Debian/Ubuntu, and Fedora/RHEL artifacts.

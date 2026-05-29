@@ -1,3 +1,17 @@
+grexa (1.2.0-1) unstable; urgency=medium
+
+  * Security hardening: replace stays within the search root and restores
+    permissions via the file descriptor; AI API keys are never sent over
+    plaintext HTTP and are redacted from logs; bounded regex backtracking,
+    a 512 MiB search read cap, and a pdftotext watchdog guard pathological
+    inputs; container exec/cp argument-injection hardening; CLI
+    terminal-escape sanitization.
+  * API keys now use the pure-Rust Secret Service keyring backend.
+  * Hardened release CI (pinned actions + image digests, build provenance).
+  * Removed dead code and unused dependencies.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Fri, 29 May 2026 00:00:00 +0000
+
 grexa (1.0.1-1) unstable; urgency=medium
 
   * Expand the GitHub release pipeline to publish tarball, AppImage,

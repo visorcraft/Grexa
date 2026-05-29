@@ -44,3 +44,13 @@
 /*.deb
 /*.rpm
 /*.pkg.tar.zst
+
+# Local packaging build output. `makepkg` builds in place under
+# packaging/arch/ — emitting the package plus pkg/ and src/ work dirs —
+# and the per-distro recipes stage a source tarball into the packaging
+# tree. None of that lives at the workspace root the patterns above
+# cover, so match these build artifacts anywhere they land.
+packaging/arch/pkg/
+packaging/arch/src/
+**/*.pkg.tar.zst
+packaging/**/*.tar.gz

@@ -86,7 +86,7 @@ your target distro on a host with that distro's tooling:
 
 | Target | Tooling | Command |
 | ------ | ------- | ------- |
-| Source tarball | `tar` | `tar --exclude='./target' --exclude='./.git' --transform 's,^\./,grexa-1.0.1/,' -czf grexa-1.0.1.tar.gz .` |
+| Source tarball | `tar` | `tar --exclude='./target' --exclude='./.git' --transform 's,^\./,grexa-1.2.0/,' -czf grexa-1.2.0.tar.gz .` |
 | Debian / Ubuntu (.deb) | `dpkg-deb`, `fakeroot` | `fakeroot dpkg-deb --build --root-owner-group <staged-tree> grexa.deb` (see `packaging/debian/`) |
 | Fedora / RHEL (.rpm) | `rpmbuild` | `rpmbuild -bb packaging/fedora/grexa.spec` |
 | openSUSE (.rpm) | `rpmbuild` | `rpmbuild -bb packaging/opensuse/grexa.spec` |
@@ -103,12 +103,12 @@ CLI with the pinned Rust toolchain, smoke-tests the GUI under offscreen
 Qt, packages a Linux x86_64 archive, writes `sha256sums.txt`, and
 creates a GitHub Release with both files attached.
 
-For version-like tags such as `v1.0.1`, the tag version must match the
+For version-like tags such as `v1.2.0`, the tag version must match the
 workspace version in `Cargo.toml`.
 
 ```bash
-git tag -a v1.0.1 -m "Grexa v1.0.1"
-git push origin v1.0.1
+git tag -a v1.2.0 -m "Grexa v1.2.0"
+git push origin v1.2.0
 ```
 
 The Justfile exposes the Flatpak path as first-class targets:

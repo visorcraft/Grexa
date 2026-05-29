@@ -65,7 +65,7 @@ sudo dnf install rpm-build cargo rust clang \
 
 # Stage a source tarball matching the spec's Source0 expectation.
 ( cd ../.. && git archive --format=tar.gz \
-    --prefix=grexa-1.0.1/ --output=packaging/fedora/grexa-1.0.1.tar.gz HEAD )
+    --prefix=grexa-1.2.0/ --output=packaging/fedora/grexa-1.2.0.tar.gz HEAD )
 
 rpmbuild --define "_topdir $(pwd)/_rpmbuild" \
          --define "_sourcedir $(pwd)" \
