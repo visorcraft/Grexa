@@ -123,8 +123,16 @@ fn write_journal(entry: &ReplaceJournalEntry) {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    if let Ok(bytes) = serde_json::to_vec_pretty(entry) {
-        let _ = fs::write(&path, bytes);
+    if let Ok(bytes) = serde_json::to_vec_pretty(entry)
+        && fs::write(&path, bytes).is_ok()
+    {
+        // The journal records absolute paths of files being rewritten;
+        // keep it readable only by the owner.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+        }
     }
 }
 
@@ -262,6 +270,7 @@ fn rewrite_one(
     options: &ReplaceOptions,
     regex_engine: Option<&PatternEngine>,
 ) -> Result<FileResult, io::Error> {
+    ensure_within_root(path, &options.search.path)?;
     let (text, encoding, original_metadata) = read_regular_text(path)?;
     let (new_text, matches) = apply_substitution(&text, options, regex_engine);
     if matches == 0 || new_text == text {
@@ -269,9 +278,27 @@ fn rewrite_one(
     }
 
     let encoded = encode_for_writeback(&new_text, &encoding);
-    atomic_write(path, &encoded)?;
-    restore_permissions(path, &original_metadata)?;
+    atomic_write(path, &encoded, &original_metadata)?;
     Ok(FileResult::Replaced { matches, encoding })
+}
+
+/// Refuse to rewrite a file whose real (symlink-resolved) path escapes the
+/// search root. With "follow symlinks" enabled, the walker descends through
+/// directory symlinks and can surface a match whose physical location is
+/// outside the root; `O_NOFOLLOW` only guards the final path component, so the
+/// kernel still traverses intermediate symlinked directories. Replace is a
+/// destructive, irreversible operation, so we canonicalize both sides and
+/// require containment before touching the file.
+fn ensure_within_root(path: &Path, root: &Path) -> io::Result<()> {
+    let real_path = fs::canonicalize(path)?;
+    let real_root = fs::canonicalize(root)?;
+    if !real_path.starts_with(&real_root) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "replace target resolves outside the search root",
+        ));
+    }
+    Ok(())
 }
 
 fn read_regular_text(path: &Path) -> io::Result<(String, DetectedEncoding, fs::Metadata)> {
@@ -312,14 +339,6 @@ fn open_regular_file(path: &Path) -> io::Result<fs::File> {
         ));
     }
     fs::File::open(path)
-}
-
-fn restore_permissions(path: &Path, original: &fs::Metadata) -> io::Result<()> {
-    // Atomic rename installs the temp file with its own permissions (default
-    // `0600` on Linux for `tempfile`). Re-apply the original permission bits
-    // so replace doesn't silently downgrade group/world access.
-    fs::set_permissions(path, original.permissions())?;
-    Ok(())
 }
 
 fn apply_substitution(
@@ -421,11 +440,19 @@ fn encode_utf16(text: &str, bom: &[u8], little_endian: bool) -> Vec<u8> {
     bytes
 }
 
-fn atomic_write(target: &Path, bytes: &[u8]) -> io::Result<()> {
+fn atomic_write(target: &Path, bytes: &[u8], original: &fs::Metadata) -> io::Result<()> {
     let parent = target.parent().unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(parent)?;
     let mut tmp = tempfile::NamedTempFile::new_in(parent)?;
     std::io::Write::write_all(&mut tmp, bytes)?;
+    // Re-apply the original permission bits through the temp file's *descriptor*
+    // (`fchmod`), before the rename, rather than a path-based `set_permissions`
+    // afterwards. `tempfile` creates the temp at `0600`, so without this the
+    // replace would silently downgrade group/world access. Doing it on the fd
+    // (a) targets the exact inode we just wrote — immune to a symlink swap on
+    // the path — and (b) makes the original mode visible atomically with the
+    // new content at rename time, leaving no post-rename chmod window.
+    tmp.as_file().set_permissions(original.permissions())?;
     tmp.as_file().sync_all()?;
     // `persist` renames atomically on the same filesystem.
     tmp.persist(target)
@@ -579,6 +606,34 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn atomic_write_restores_original_mode_via_the_file_descriptor() {
+        use std::os::unix::fs::PermissionsExt;
+
+        // `atomic_write` must carry the original permission bits onto the new
+        // inode *before* the rename, through the temp file's descriptor, so
+        // there is never a post-rename path-based chmod a symlink swap could
+        // redirect. We assert the end state here; the fd-based path is what
+        // makes that end state race-free.
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("a.txt");
+        fs::write(&target, "old contents\n").unwrap();
+        let mut perms = fs::metadata(&target).unwrap().permissions();
+        perms.set_mode(0o640);
+        fs::set_permissions(&target, perms).unwrap();
+        let original = fs::metadata(&target).unwrap();
+
+        atomic_write(&target, b"new contents\n", &original).unwrap();
+
+        assert_eq!(fs::read_to_string(&target).unwrap(), "new contents\n");
+        assert_eq!(
+            fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+            0o640,
+            "atomic_write must restore the original mode on the new inode"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn preserves_unix_file_permissions() {
         use std::os::unix::fs::PermissionsExt;
 
@@ -659,5 +714,60 @@ mod tests {
         cancel.cancel();
         let summary = replace_with(&opts(dir.path(), "TODO", "DONE"), &cancel, None).unwrap();
         assert!(summary.cancelled);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replace_does_not_write_through_directory_symlink_outside_root() {
+        use std::os::unix::fs::symlink;
+
+        // A file that physically lives outside the search root.
+        let outside = tempdir().unwrap();
+        let secret = outside.path().join("secret.txt");
+        fs::write(&secret, "TODO outside the root\n").unwrap();
+
+        // The search root contains only a *directory symlink* pointing out.
+        let root = tempdir().unwrap();
+        symlink(outside.path(), root.path().join("linkdir")).unwrap();
+
+        // The user enabled "follow symlinks", so the walker descends through
+        // `linkdir` and surfaces `linkdir/secret.txt` as a match.
+        let mut options = opts(root.path(), "TODO", "PWNED");
+        options.search.include_symlinks = true;
+
+        let summary = replace_with(&options, &CancelToken::new(), None).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(&secret).unwrap(),
+            "TODO outside the root\n",
+            "replace must not write through a directory symlink to a file outside the root"
+        );
+        assert_eq!(summary.files_modified, 0, "no file outside the root should be modified");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replace_still_rewrites_symlink_target_inside_root() {
+        // A symlinked directory whose target is *inside* the root is legitimate
+        // and must still be rewritten — the containment guard keys off the real
+        // resolved path, not the mere presence of a symlink.
+        use std::os::unix::fs::symlink;
+
+        let root = tempdir().unwrap();
+        let real_dir = root.path().join("real");
+        fs::create_dir(&real_dir).unwrap();
+        fs::write(real_dir.join("a.txt"), "TODO inside\n").unwrap();
+        symlink(&real_dir, root.path().join("alias")).unwrap();
+
+        let mut options = opts(root.path(), "TODO", "DONE");
+        options.search.include_symlinks = true;
+
+        let summary = replace_with(&options, &CancelToken::new(), None).unwrap();
+        assert_eq!(
+            fs::read_to_string(real_dir.join("a.txt")).unwrap(),
+            "DONE inside\n",
+            "an in-root file must still be rewritten even when reached via a symlink"
+        );
+        assert!(summary.files_modified >= 1);
     }
 }

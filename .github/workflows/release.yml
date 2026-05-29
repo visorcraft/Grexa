@@ -18,8 +18,11 @@ on:
     tags:
       - "*"
 
+# Least privilege by default: only the `publish` job needs write access (and
+# the provenance permissions). The build jobs run the most untrusted code and
+# get read-only.
 permissions:
-  contents: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -31,7 +34,7 @@ jobs:
     name: Linux x86_64 tarball + AppImage
     runs-on: ubuntu-24.04
     container:
-      image: archlinux:base-devel
+      image: archlinux:base-devel@sha256:25074821d28e54a0bbbd87a88d392f1489be9bd815ee5c60744be6e57fd500d8
     concurrency:
       group: release-linux-${{ github.ref }}
       cancel-in-progress: false
@@ -62,13 +65,14 @@ jobs:
             appstream \
             github-cli
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
         with:
+          toolchain: "1.95.0"
           components: rustfmt, clippy
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: Resolve workspace version + verify tag
         id: version
@@ -194,6 +198,13 @@ jobs:
           wget -q --tries=3 \
             https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage \
             -O linuxdeploy-plugin-qt
+          # linuxdeploy only publishes under the mutable `continuous` tag, so we
+          # verify the downloaded bytes against known-good hashes before
+          # executing them. If upstream ships a new `continuous` build these
+          # hashes must be refreshed deliberately (a fail-closed supply-chain
+          # gate, not an accident).
+          echo "f2aa8e8bb6265d0edc0b0c666c494dc8975650af589408748d75c9b99434b570  linuxdeploy" | sha256sum -c -
+          echo "be1b7e166bf9975cfb694ebe6759ba40502ffc6196440d3e64aa90c4dbd67e9f  linuxdeploy-plugin-qt" | sha256sum -c -
           chmod +x linuxdeploy linuxdeploy-plugin-qt
           export PATH="/opt/linuxdeploy:$PATH"
 
@@ -210,7 +221,7 @@ jobs:
           fi
 
       - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: linux-tarball
           path: target/dist/*
@@ -221,7 +232,7 @@ jobs:
     name: Arch / CachyOS pkg.tar.zst
     runs-on: ubuntu-24.04
     container:
-      image: archlinux:base-devel
+      image: archlinux:base-devel@sha256:25074821d28e54a0bbbd87a88d392f1489be9bd815ee5c60744be6e57fd500d8
     needs: [linux-tarball]
 
     steps:
@@ -243,7 +254,7 @@ jobs:
             rust \
             cargo
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Create unprivileged build user
         run: |
@@ -266,7 +277,7 @@ jobs:
           (cd target/dist && sha256sum grexa-*.pkg.tar.zst > sha256sums.txt)
 
       - name: Upload Arch artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: arch-pkg
           path: target/dist/*
@@ -277,7 +288,7 @@ jobs:
     name: Debian / Ubuntu .deb
     runs-on: ubuntu-24.04
     container:
-      image: debian:trixie-slim
+      image: debian:trixie-slim@sha256:b6e2a152f22a40ff69d92cb397223c906017e1391a73c952b588e51af8883bf8
     needs: [linux-tarball]
 
     steps:
@@ -317,7 +328,7 @@ jobs:
           } >> "$GITHUB_ENV"
           echo "/usr/local/cargo/bin" >> "$GITHUB_PATH"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Mark workspace safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -337,7 +348,7 @@ jobs:
           (cd target/dist && sha256sum grexa*.deb > sha256sums.txt)
 
       - name: Upload Debian artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: deb-pkg
           path: target/dist/*
@@ -348,7 +359,8 @@ jobs:
     name: Fedora / RHEL .rpm
     runs-on: ubuntu-24.04
     container:
-      image: fedora:latest
+      # Pinned to a fixed Fedora release by digest (was the mutable `latest`).
+      image: fedora:44@sha256:6c75d5bf57cb0fa5aa4b92c6a83c86c791644496d9ac230de7711f5b8ec3b898
     needs: [linux-tarball]
 
     steps:
@@ -371,7 +383,7 @@ jobs:
             desktop-file-utils \
             libappstream-glib
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Mark workspace safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -403,7 +415,7 @@ jobs:
           (cd target/dist && sha256sum grexa-*.rpm > sha256sums.txt)
 
       - name: Upload RPM artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: rpm-pkg
           path: target/dist/*
@@ -414,15 +426,19 @@ jobs:
     name: Create GitHub release
     runs-on: ubuntu-latest
     needs: [linux-tarball, arch-pkg, deb-pkg, rpm-pkg]
+    permissions:
+      contents: write # create/upload the GitHub Release
+      id-token: write # mint the OIDC token for build provenance
+      attestations: write # record the provenance attestation
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Mark workspace safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: dist-staging
 
@@ -433,6 +449,11 @@ jobs:
             -exec mv {} dist/ \;
           (cd dist && sha256sum * > sha256sums.txt)
           echo "Release payload:" && ls -la dist/
+
+      - name: Attest build provenance for release artifacts
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: "dist/*"
 
       - name: Create or update GitHub release
         env:

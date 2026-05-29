@@ -1665,12 +1665,18 @@ fn expand_editor_template(
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.to_string());
     let line_str = line.map(|n| n.to_string()).unwrap_or_default();
-    let expanded = template
-        .replace("{path}", path)
-        .replace("{file}", &file)
-        .replace("{line}", &line_str);
-    split_shell_argv(&expanded)
+    // Tokenize the *template* first, then substitute into each token. This
+    // keeps a substituted path/filename confined to a single argv element even
+    // when it contains spaces or quotes, so a crafted filename can't introduce
+    // extra arguments or flags to the editor.
+    split_shell_argv(template)
         .into_iter()
+        .map(|token| {
+            token
+                .replace("{path}", path)
+                .replace("{file}", &file)
+                .replace("{line}", &line_str)
+        })
         .map(std::ffi::OsString::from)
         .collect()
 }
@@ -2040,6 +2046,35 @@ mod tests {
     use std::fs;
     use std::rc::Rc;
     use tempfile::tempdir;
+
+    #[test]
+    fn editor_template_keeps_path_in_a_single_argv_slot() {
+        // A file path containing spaces must not split into multiple argv
+        // elements (which could inject extra flags into the user's editor).
+        let argv =
+            expand_editor_template("editor --flag {path}", "/tmp/a b/has space.txt", Some(3));
+        assert_eq!(
+            argv,
+            vec![
+                std::ffi::OsString::from("editor"),
+                std::ffi::OsString::from("--flag"),
+                std::ffi::OsString::from("/tmp/a b/has space.txt"),
+            ]
+        );
+    }
+
+    #[test]
+    fn editor_template_substitutes_line_and_file_placeholders() {
+        let argv = expand_editor_template("vim +{line} {file}", "/x/y/report final.txt", Some(42));
+        assert_eq!(
+            argv,
+            vec![
+                std::ffi::OsString::from("vim"),
+                std::ffi::OsString::from("+42"),
+                std::ffi::OsString::from("report final.txt"),
+            ]
+        );
+    }
 
     #[test]
     fn append_batch_returns_inclusive_range() {

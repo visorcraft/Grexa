@@ -12,12 +12,11 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use thiserror::Error;
 
 use crate::models::{SearchOptions, SizeUnit, StringComparisonMode, UnicodeNormalizationMode};
+use crate::preview::{DEFAULT_CONTEXT_LINES, MAX_CONTEXT_LINES, MIN_CONTEXT_LINES};
 
 const APP_DIR: &str = "grexa";
 const RECENT_PATH_LIMIT: usize = 20;
 const RECENT_SEARCH_LIMIT: usize = 20;
-const CONTEXT_PREVIEW_MIN: u8 = 1;
-const CONTEXT_PREVIEW_MAX: u8 = 20;
 const MIN_IMPORTED_WINDOW_DIM: u32 = 400;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,17 +99,6 @@ pub enum ImportError {
     Io(#[from] std::io::Error),
     #[error("save error: {0}")]
     Save(#[from] JsonStoreError),
-}
-
-impl ImportError {
-    pub fn user_message(&self) -> String {
-        match self {
-            ImportError::NullDocument => "Invalid settings file format.".to_string(),
-            ImportError::Parse(err) => format!("Invalid JSON format: {err}"),
-            ImportError::Io(err) => format!("Error importing settings: {err}"),
-            ImportError::Save(err) => format!("Error importing settings: {err}"),
-        }
-    }
 }
 
 /// Theme identifier. Serialized as the integer values Grex uses on Windows so
@@ -238,8 +226,8 @@ impl Default for DefaultSettings {
             files_date_modified_column_visible: true,
             window_width: Some(1100),
             window_height: Some(700),
-            context_preview_lines_before: 5,
-            context_preview_lines_after: 5,
+            context_preview_lines_before: DEFAULT_CONTEXT_LINES,
+            context_preview_lines_after: DEFAULT_CONTEXT_LINES,
             ai_search_endpoint: "https://api.openai.com/v1".to_string(),
             ai_search_model: "gpt-4o-mini".to_string(),
             ai_search_enabled: false,
@@ -258,10 +246,10 @@ impl DefaultSettings {
     pub fn clamp_context_preview(&mut self) {
         self.context_preview_lines_before = self
             .context_preview_lines_before
-            .clamp(CONTEXT_PREVIEW_MIN, CONTEXT_PREVIEW_MAX);
+            .clamp(MIN_CONTEXT_LINES, MAX_CONTEXT_LINES);
         self.context_preview_lines_after = self
             .context_preview_lines_after
-            .clamp(CONTEXT_PREVIEW_MIN, CONTEXT_PREVIEW_MAX);
+            .clamp(MIN_CONTEXT_LINES, MAX_CONTEXT_LINES);
     }
 }
 

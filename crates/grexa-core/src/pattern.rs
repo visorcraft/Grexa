@@ -23,6 +23,14 @@
 
 use thiserror::Error;
 
+/// Upper bound on backtracking steps for the `fancy-regex` engine. The crate's
+/// default (1,000,000) is high enough that a catastrophic-backtracking pattern
+/// (e.g. `(a+)+$`) can burn tens of milliseconds *per line*, which multiplies
+/// into minutes of pegged CPU across a large tree. Capping the steps bounds the
+/// worst case while leaving plenty of headroom for legitimate lookaround /
+/// backreference patterns.
+const FANCY_BACKTRACK_LIMIT: usize = 100_000;
+
 #[derive(Debug, Error)]
 pub enum PatternError {
     #[error("invalid regex pattern: {0}")]
@@ -54,7 +62,10 @@ impl PatternEngine {
                 } else {
                     pattern.to_string()
                 };
-                match fancy_regex::Regex::new(&amended) {
+                match fancy_regex::RegexBuilder::new(&amended)
+                    .backtrack_limit(FANCY_BACKTRACK_LIMIT)
+                    .build()
+                {
                     Ok(re) => Ok(PatternEngine::Extended(re)),
                     Err(_) => Err(PatternError::Invalid(fast_err.to_string())),
                 }
@@ -144,6 +155,20 @@ mod tests {
         let engine = PatternEngine::build(r"(?<=foo)bar", true).unwrap();
         assert!(engine.is_extended());
         assert_eq!(engine.find_iter("FOObar foobar").len(), 2);
+    }
+
+    #[test]
+    fn extended_engine_bounds_catastrophic_backtracking() {
+        // `(a+)+\1$` is a classic catastrophic-backtracking pattern, and the
+        // backreference forces the fancy-regex (backtracking) engine rather
+        // than the linear-time fast engine. With the backtrack limit in place
+        // the call must return promptly on a non-matching input instead of
+        // spending unbounded CPU — the property under test is that it *returns
+        // at all* (yielding no match once the step budget is exhausted).
+        let engine = PatternEngine::build(r"(a+)+\1$", false).unwrap();
+        assert!(engine.is_extended());
+        let haystack = format!("{}!", "a".repeat(60));
+        assert!(engine.find_iter(&haystack).is_empty());
     }
 
     #[test]

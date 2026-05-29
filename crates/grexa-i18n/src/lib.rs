@@ -27,8 +27,6 @@
 //! assert!(msg.contains("42 matches"));
 //! ```
 
-use std::collections::HashMap;
-
 use fluent::types::FluentValue;
 use fluent::{FluentArgs, FluentBundle, FluentResource};
 use thiserror::Error;
@@ -37,9 +35,6 @@ use unic_langid::{LanguageIdentifier, langid};
 // Re-export for callers that want to construct FluentValue without depending
 // on the `fluent` crate directly.
 pub use fluent::types::FluentValue as Value;
-
-/// Forward-declared in case future code wants the raw map for batch lookups.
-pub type StringMap = HashMap<String, String>;
 
 /// Locale ids Grexa ships catalogs for. Adding a new locale = ship a
 /// `locales/<tag>/grexa.ftl` and add a variant here.

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use std::io;
+use std::io::IsTerminal;
 use std::path::PathBuf;
 
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
@@ -370,9 +371,26 @@ fn run_search(args: SearchArgs) -> anyhow::Result<i32> {
     Ok(if summary.results.is_empty() { 1 } else { 0 })
 }
 
+/// Resolve a user-supplied `--container` value against the live container
+/// list, matching by exact id, exact name, or id prefix. Returns `None` when
+/// nothing matches, so a bogus or flag-shaped value (e.g. `--privileged`) can
+/// never be forwarded to the runtime as a container identifier. An empty
+/// request never matches (an empty prefix would otherwise match everything).
+fn select_container<'a>(
+    requested: &str,
+    available: &'a [grexa_containers::ContainerInfo],
+) -> Option<&'a grexa_containers::ContainerInfo> {
+    if requested.is_empty() {
+        return None;
+    }
+    available
+        .iter()
+        .find(|c| c.id == requested || c.name == requested || c.id.starts_with(requested))
+}
+
 fn run_container_search(args: SearchArgs) -> anyhow::Result<i32> {
     use grexa_containers::{
-        ContainerInfo, ContainerRuntime, ContainerRuntimeKind, ContainerSearchOptions, LiveProbe,
+        ContainerRuntime, ContainerRuntimeKind, ContainerSearchOptions, LiveProbe,
         RuntimeOperations, SystemCommandRunner, detect_runtimes, search_container,
     };
 
@@ -394,14 +412,20 @@ fn run_container_search(args: SearchArgs) -> anyhow::Result<i32> {
     };
 
     let cli = grexa_containers::CliRuntime::new(runtime, SystemCommandRunner);
-    let container = ContainerInfo {
-        runtime: cli.kind(),
-        id: args.container.clone().expect("container set"),
-        name: args.container.clone().unwrap_or_default(),
-        image: String::new(),
-        status: String::new(),
-        state: String::new(),
-    };
+
+    // Resolve the requested container against the live list rather than
+    // trusting the raw `--container` string. This guarantees the id forwarded
+    // to `docker/podman exec` is a real container identifier (the `--`
+    // terminator in the runtime layer is the second line of defense).
+    let requested = args.container.clone().expect("container set");
+    let available = cli
+        .list_containers()
+        .map_err(|err| anyhow::anyhow!("failed to list containers: {err}"))?;
+    let container = select_container(&requested, &available).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no running container matches '{requested}'; pass an id or name from the container list"
+        )
+    })?;
 
     let opts = ContainerSearchOptions {
         container_path: args.path.to_string_lossy().to_string(),
@@ -409,7 +433,7 @@ fn run_container_search(args: SearchArgs) -> anyhow::Result<i32> {
         case_sensitive: args.case_sensitive,
         regex: args.regex,
     };
-    let summary = search_container(&cli, &container, &opts)?;
+    let summary = search_container(&cli, container, &opts)?;
     if summary.used_mirror {
         eprintln!("grexa-cli: used mirror fallback (no grep in container)");
     }
@@ -430,20 +454,49 @@ fn run_container_search(args: SearchArgs) -> anyhow::Result<i32> {
         }
         return Ok(if summary.hits.is_empty() { 1 } else { 0 });
     }
+    let tty = io::stdout().is_terminal();
     for hit in &summary.hits {
-        println!("{}:{}:{}", hit.container_path, hit.line_number, hit.line_content);
+        println!(
+            "{}:{}:{}",
+            sanitize_for_terminal(&hit.container_path, tty),
+            hit.line_number,
+            sanitize_for_terminal(&hit.line_content, tty)
+        );
     }
     Ok(if summary.hits.is_empty() { 1 } else { 0 })
 }
 
+/// Neutralize terminal control sequences in attacker-controlled output (a
+/// matched line, or a crafted file path) before printing to a TTY. Matched
+/// file content can contain ANSI/OSC escapes that rewrite the screen, change
+/// the window title, or worse; ripgrep/git guard against this the same way.
+/// When stdout is *not* a terminal (piped/redirected), bytes pass through
+/// unchanged so downstream tools see faithful output.
+fn sanitize_for_terminal(value: &str, is_tty: bool) -> std::borrow::Cow<'_, str> {
+    // A control char is anything dangerous to a terminal: C0 (incl. ESC, BEL,
+    // CR, LF, NUL), DEL, and C1. Tabs are kept — they're benign and common.
+    let is_dangerous = |c: char| c.is_control() && c != '\t';
+
+    if !is_tty || !value.chars().any(is_dangerous) {
+        return std::borrow::Cow::Borrowed(value);
+    }
+    std::borrow::Cow::Owned(
+        value
+            .chars()
+            .map(|c| if is_dangerous(c) { '\u{FFFD}' } else { c })
+            .collect(),
+    )
+}
+
 fn print_text(results: &[SearchResult]) {
+    let tty = io::stdout().is_terminal();
     for result in results {
         println!(
             "{}:{}:{}:{}",
-            result.full_path.display(),
+            sanitize_for_terminal(&result.full_path.display().to_string(), tty),
             result.line_number,
             result.column_number,
-            result.line_content
+            sanitize_for_terminal(&result.line_content, tty)
         );
     }
 }
@@ -490,10 +543,13 @@ fn neutralize_spreadsheet_formula(value: &str) -> String {
 }
 
 fn convert_to_kb(value: u64, unit: CliSizeUnit) -> u64 {
+    // Saturate rather than overflow: clap accepts the full u64 range for
+    // `--size-limit`, so `value * 1024 * 1024` would panic in debug builds and
+    // silently wrap in release. A saturated ceiling is a correct size limit.
     match unit {
         CliSizeUnit::KB => value,
-        CliSizeUnit::MB => value * 1024,
-        CliSizeUnit::GB => value * 1024 * 1024,
+        CliSizeUnit::MB => value.saturating_mul(1024),
+        CliSizeUnit::GB => value.saturating_mul(1024).saturating_mul(1024),
     }
 }
 
@@ -547,5 +603,76 @@ impl From<CliNormalizationMode> for UnicodeNormalizationMode {
             CliNormalizationMode::FormKc => Self::FormKC,
             CliNormalizationMode::FormKd => Self::FormKD,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use grexa_containers::{ContainerInfo, ContainerRuntimeKind};
+
+    fn ci(id: &str, name: &str) -> ContainerInfo {
+        ContainerInfo {
+            runtime: ContainerRuntimeKind::Docker,
+            id: id.to_string(),
+            name: name.to_string(),
+            image: String::new(),
+            status: String::new(),
+            state: String::new(),
+        }
+    }
+
+    #[test]
+    fn convert_to_kb_saturates_instead_of_overflowing() {
+        assert_eq!(convert_to_kb(5, CliSizeUnit::MB), 5 * 1024);
+        // u64::MAX GiB would overflow `* 1024 * 1024` (panic in debug); it must
+        // saturate to a valid (huge) ceiling instead.
+        assert_eq!(convert_to_kb(u64::MAX, CliSizeUnit::GB), u64::MAX);
+    }
+
+    #[test]
+    fn sanitize_for_terminal_strips_controls_on_tty_passes_through_otherwise() {
+        let evil = "ok\u{1b}[31mRED\u{7}\r\nmore";
+
+        // On a TTY: ANSI ESC, BEL, CR and LF are neutralized.
+        let cleaned = sanitize_for_terminal(evil, true);
+        assert!(!cleaned.contains('\u{1b}'), "ESC must be stripped");
+        assert!(!cleaned.contains('\u{7}'), "BEL must be stripped");
+        assert!(!cleaned.contains('\r'), "CR must be stripped");
+        assert!(!cleaned.contains('\n'), "LF must be stripped");
+        assert!(cleaned.contains("ok") && cleaned.contains("RED") && cleaned.contains("more"));
+
+        // Tabs are preserved (legitimate, harmless).
+        assert_eq!(sanitize_for_terminal("a\tb", true), "a\tb");
+
+        // Not a TTY: output is byte-faithful for piping into other tools.
+        assert_eq!(sanitize_for_terminal(evil, false), evil);
+    }
+
+    #[test]
+    fn select_container_matches_by_id_name_or_prefix_and_rejects_bogus() {
+        let available = vec![ci("abc123def", "web"), ci("999fff000", "db")];
+
+        assert_eq!(
+            select_container("web", &available).map(|c| c.id.as_str()),
+            Some("abc123def"),
+            "exact name should match"
+        );
+        assert_eq!(
+            select_container("abc123def", &available).map(|c| c.id.as_str()),
+            Some("abc123def"),
+            "exact id should match"
+        );
+        assert_eq!(
+            select_container("abc", &available).map(|c| c.id.as_str()),
+            Some("abc123def"),
+            "id prefix should match"
+        );
+
+        // A flag-shaped value must never resolve to a real container.
+        assert!(select_container("--privileged", &available).is_none());
+        assert!(select_container("nonexistent", &available).is_none());
+        // An empty request must not match everything via the empty prefix.
+        assert!(select_container("", &available).is_none());
     }
 }

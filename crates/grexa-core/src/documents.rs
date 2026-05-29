@@ -22,7 +22,10 @@
 use std::ffi::OsStr;
 use std::io::{self, Read};
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 use quick_xml::Reader;
 use quick_xml::events::Event;
@@ -30,6 +33,11 @@ use thiserror::Error;
 use zip::ZipArchive;
 
 const MAX_ZIP_ENTRIES: usize = 1024;
+/// Wall-clock budget for the `pdftotext` subprocess. A malicious or
+/// pathological PDF can make `pdftotext` spin or dribble output indefinitely;
+/// without a deadline the reading thread (and, on the single-threaded CLI, the
+/// whole process) hangs forever. After this elapses the child is killed.
+const PDF_EXTRACT_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_TEXTUAL_ENTRY_BYTES: usize = 4 * 1024 * 1024;
 const MAX_EXTRACTED_TEXT_BYTES: usize = 16 * 1024 * 1024;
 
@@ -353,8 +361,11 @@ fn extract_rtf(path: &Path) -> Result<String, ExtractError> {
 /// `ExtractError::Pdf` when the binary isn't on `$PATH` or the file is
 /// encrypted/malformed; callers treat that as a skip.
 fn extract_pdf(path: &Path) -> Result<String, ExtractError> {
-    let mut child = Command::new("pdftotext")
+    let child = Command::new("pdftotext")
         .arg("-layout")
+        // `--` terminates option parsing so a path beginning with `-` can never
+        // be misread as a poppler flag.
+        .arg("--")
         .arg(path)
         .arg("-") // write to stdout
         .stdin(Stdio::null())
@@ -363,26 +374,8 @@ fn extract_pdf(path: &Path) -> Result<String, ExtractError> {
         .spawn()
         .map_err(|err| ExtractError::Pdf(err.to_string()))?;
 
-    let mut stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| ExtractError::Pdf("pdftotext stdout unavailable".to_string()))?;
-    let mut buf = Vec::new();
-    let read_result = read_limited(&mut stdout, MAX_EXTRACTED_TEXT_BYTES, &mut buf);
-    if read_result.is_err() {
-        let _ = child.kill();
-        let _ = child.wait();
-        read_result?;
-    }
-    let status = child
-        .wait()
-        .map_err(|err| ExtractError::Pdf(err.to_string()))?;
-
-    if status.success() {
-        Ok(String::from_utf8_lossy(&buf).into_owned())
-    } else {
-        Err(ExtractError::Pdf(format!("pdftotext exit status {status}")))
-    }
+    let buf = run_with_timeout(child, PDF_EXTRACT_TIMEOUT)?;
+    Ok(String::from_utf8_lossy(&buf).into_owned())
 }
 
 fn normalized_extension(path: &Path) -> Option<String> {
@@ -390,6 +383,59 @@ fn normalized_extension(path: &Path) -> Option<String> {
         .and_then(|ext| ext.to_str())
         .map(|ext| ext.to_ascii_lowercase())
         .filter(|ext| !ext.is_empty())
+}
+
+/// Drive a spawned child to completion under a wall-clock deadline, returning
+/// its captured stdout (capped at [`MAX_EXTRACTED_TEXT_BYTES`]). stdout is read
+/// on a worker thread so a hung child can be killed when the deadline elapses
+/// instead of blocking the caller forever. Returns `Err` on timeout, read
+/// error, or a non-zero exit status.
+fn run_with_timeout(mut child: Child, timeout: Duration) -> Result<Vec<u8>, ExtractError> {
+    let mut stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| ExtractError::Pdf("child stdout unavailable".to_string()))?;
+
+    // Read on a worker thread; the pipe read blocks until EOF, so a child that
+    // never produces output (or spins) would otherwise hang us indefinitely.
+    let (tx, rx) = mpsc::channel();
+    let reader = thread::spawn(move || {
+        let mut buf = Vec::new();
+        let outcome = read_limited(&mut stdout, MAX_EXTRACTED_TEXT_BYTES, &mut buf);
+        let _ = tx.send(outcome.map(|()| buf));
+    });
+
+    let kill_and_join = |child: &mut Child, reader: thread::JoinHandle<()>| {
+        let _ = child.kill();
+        let _ = child.wait();
+        let _ = reader.join();
+    };
+
+    match rx.recv_timeout(timeout) {
+        Ok(Ok(buf)) => {
+            let status = child
+                .wait()
+                .map_err(|err| ExtractError::Pdf(err.to_string()))?;
+            let _ = reader.join();
+            if status.success() {
+                Ok(buf)
+            } else {
+                Err(ExtractError::Pdf(format!("exit status {status}")))
+            }
+        }
+        Ok(Err(read_err)) => {
+            kill_and_join(&mut child, reader);
+            Err(read_err)
+        }
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            kill_and_join(&mut child, reader);
+            Err(ExtractError::Pdf(format!("timed out after {}s", timeout.as_secs())))
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            kill_and_join(&mut child, reader);
+            Err(ExtractError::Pdf("reader thread disconnected".to_string()))
+        }
+    }
 }
 
 fn read_limited<R: Read>(
@@ -429,6 +475,48 @@ mod tests {
         let mut zip = zip::ZipWriter::new(file);
         body(&mut zip);
         zip.finish().unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_with_timeout_returns_output_for_a_fast_process() {
+        let child = Command::new("printf")
+            .arg("hello world")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let buf = run_with_timeout(child, Duration::from_secs(5)).unwrap();
+        assert_eq!(buf, b"hello world");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_with_timeout_kills_a_hanging_process() {
+        use std::time::Instant;
+
+        let child = Command::new("sleep")
+            .arg("30")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+
+        let start = Instant::now();
+        let result = run_with_timeout(child, Duration::from_millis(200));
+        let elapsed = start.elapsed();
+
+        assert!(result.is_err(), "a hung process must yield an error");
+        assert!(
+            elapsed >= Duration::from_millis(150),
+            "must actually wait for the deadline, waited {elapsed:?}"
+        );
+        assert!(
+            elapsed < Duration::from_secs(10),
+            "must not block for the full sleep, waited {elapsed:?}"
+        );
     }
 
     fn write_entry(zip: &mut zip::ZipWriter<std::fs::File>, name: &str, content: &[u8]) {

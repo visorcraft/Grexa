@@ -113,3 +113,50 @@ fn search_tolerates_unreadable_directory() {
     // visible (if running as root) or skipped (the normal case).
     assert!(summary.matches >= 1);
 }
+
+#[test]
+fn searches_files_under_a_root_named_like_a_system_dir() {
+    // The auto-exclusion of `bin`, `vendor`, `node_modules`, etc. must apply
+    // only to directories *below* the user-chosen root. If a user points Grexa
+    // at a directory that itself happens to be named `bin` (or sits under a
+    // path component like `dev`/`vendor`), every file would otherwise be
+    // silently skipped — a security-relevant false "no matches".
+    let dir = tempdir().unwrap();
+    let root = dir.path().join("bin");
+    fs::create_dir(&root).unwrap();
+    fs::write(root.join("notes.txt"), "TODO real match\n").unwrap();
+
+    let summary = search(&SearchOptions::new(&root, "TODO")).unwrap();
+    assert_eq!(
+        summary.results.len(),
+        1,
+        "a file under a root named 'bin' must still be searched"
+    );
+}
+
+#[test]
+fn still_excludes_system_dirs_below_a_root_named_like_one() {
+    // The relative-to-root check must not regress the core invariant: a
+    // `node_modules` *under* the root is still skipped even when the root
+    // itself is named `bin`.
+    let dir = tempdir().unwrap();
+    let root = dir.path().join("bin");
+    fs::create_dir(&root).unwrap();
+    write_under(&root, "src/app.rs", "TODO keep me\n");
+    write_under(&root, "node_modules/pkg/index.js", "TODO drop me\n");
+
+    let summary = search(&SearchOptions::new(&root, "TODO")).unwrap();
+    let paths: Vec<_> = summary
+        .results
+        .iter()
+        .map(|r| r.full_path.to_string_lossy().to_string())
+        .collect();
+    assert!(
+        paths.iter().any(|p| p.ends_with("/src/app.rs")),
+        "real source must be found, got {paths:?}"
+    );
+    assert!(
+        !paths.iter().any(|p| p.contains("/node_modules/")),
+        "node_modules below the root must still be skipped, got {paths:?}"
+    );
+}

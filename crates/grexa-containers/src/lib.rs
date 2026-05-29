@@ -50,24 +50,6 @@ pub struct ContainerInfo {
     pub state: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ContainerSearchTarget {
-    pub runtime: ContainerRuntimeKind,
-    pub container_id: String,
-    pub container_path: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ContainerMirrorInfo {
-    pub runtime: ContainerRuntimeKind,
-    pub container_id: String,
-    pub container_name: String,
-    pub container_path: String,
-    pub local_mirror_path: PathBuf,
-    pub local_search_path: PathBuf,
-    pub created_unix: u64,
-}
-
 /// Filesystem probe abstraction so detection can run against fixtures.
 pub trait FsProbe: Send + Sync {
     fn env_var(&self, key: &str) -> Option<String>;

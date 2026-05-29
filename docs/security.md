@@ -74,6 +74,26 @@ during a search, and never elevates privileges on its own.
 The Settings UI must surface "this is privileged access" explicitly
 when the user enables `enable_container_search`.
 
+## External helper binaries and `$PATH`
+
+Grexa shells out to a few helper programs — `pdftotext` (PDF text
+extraction), `docker`/`podman` (container search), `xdg-open` and the
+configured editor (opening results), and `baloosearch` (optional KDE
+index). These are resolved by name from `$PATH`, which is the expected
+behavior for a desktop application and what lets Grexa work across
+distros, Flatpak, and non-standard install prefixes (Nix, `/usr/local`,
+…) without hardcoding paths.
+
+The security implication: **Grexa trusts its inherited `$PATH`.** Launch
+it the normal way (desktop entry, or a shell with a trusted `PATH`). Do
+not run Grexa with a `PATH` that includes attacker-writable directories
+ahead of the system ones, since a planted `pdftotext`/`xdg-open` would
+then run with your privileges — the same caveat that applies to any
+program that calls helpers by name. Subprocess arguments are always
+passed as an argv vector (never via a shell) and untrusted positional
+arguments are guarded with a `--` terminator, so this is the only
+remaining `$PATH`-related consideration.
+
 ## API key handling
 
 API keys for the AI endpoint are stored in the system keyring via the

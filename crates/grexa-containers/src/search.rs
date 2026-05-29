@@ -511,7 +511,8 @@ mod tests {
 
         let inv = runner.invocations();
         // First invocation: has_grep probe via `which grep`.
-        assert_eq!(inv[0].args[2], OsString::from("which"));
+        // Args are `exec -- <container> which grep`, so `which` is at index 3.
+        assert_eq!(inv[0].args[3], OsString::from("which"));
         // Second invocation: the actual grep call.
         let grep_args = &inv[1].args;
         assert!(grep_args.iter().any(|a| a == &OsString::from("grep")));

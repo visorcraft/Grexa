@@ -73,6 +73,19 @@ static SEARCHABLE_BINARY_EXTENSIONS: &[&str] = &[
     "docx", "xlsx", "pptx", "odt", "ods", "odp", "zip", "pdf", "rtf",
 ];
 
+/// Hard upper bound on the size of a single file the search/replace engine
+/// will read into memory. The user-facing size filter defaults to "no limit",
+/// so without this safety net a single multi-gigabyte file could exhaust
+/// memory (decoding/normalization roughly doubles the footprint). Files above
+/// the cap are reported as `SkipReason::SizeLimit` rather than scanned.
+const MAX_SEARCH_FILE_BYTES: u64 = 512 * 1024 * 1024;
+
+/// `true` when a file of `len` bytes exceeds the hard in-memory read cap. The
+/// cap itself is allowed; only strictly larger files are rejected.
+fn file_exceeds_hard_cap(len: u64) -> bool {
+    len > MAX_SEARCH_FILE_BYTES
+}
+
 static SYSTEM_DIRS: &[&str] = &[
     ".git",
     "vendor",
@@ -402,7 +415,7 @@ fn classify_skip(
 ) -> Result<Option<SkipReason>, SearchError> {
     let path = entry.path();
 
-    if !options.include_system && is_system_path(path) {
+    if !options.include_system && is_system_path(path, root) {
         return Ok(Some(SkipReason::SystemPath));
     }
 
@@ -422,6 +435,12 @@ fn classify_skip(
         Ok(metadata) => metadata,
         Err(_) => return Ok(Some(SkipReason::IoError)),
     };
+
+    // Safety net independent of the user's (default-unlimited) size filter:
+    // never read a pathologically large file into memory.
+    if file_exceeds_hard_cap(metadata.len()) {
+        return Ok(Some(SkipReason::SizeLimit));
+    }
 
     if !size_matches(
         metadata.len(),
@@ -677,8 +696,15 @@ fn size_matches(
     }
 }
 
-fn is_system_path(path: &Path) -> bool {
-    let components: Vec<String> = path
+fn is_system_path(path: &Path, root: &Path) -> bool {
+    // Only auto-exclude system directory names that appear *below* the
+    // user-chosen root. Examining the absolute path (including the root and
+    // its ancestors) would silently skip every file when the root itself is
+    // named like a system dir (e.g. searching `~/project/bin`), reporting a
+    // false "no matches". `ExcludeDirFilter::matches` already scopes to the
+    // root the same way.
+    let relative = path.strip_prefix(root).unwrap_or(path);
+    let components: Vec<String> = relative
         .components()
         .filter_map(|component| component.as_os_str().to_str().map(str::to_string))
         .collect();
@@ -998,6 +1024,19 @@ mod tests {
             .filter(|event| matches!(event, ProgressEvent::FileScanned { .. }))
             .collect();
         assert!(!scanned.is_empty());
+    }
+
+    #[test]
+    fn hard_size_cap_rejects_only_files_above_the_limit() {
+        assert!(!file_exceeds_hard_cap(0), "an empty file is within the cap");
+        assert!(
+            !file_exceeds_hard_cap(MAX_SEARCH_FILE_BYTES),
+            "a file exactly at the cap is allowed"
+        );
+        assert!(
+            file_exceeds_hard_cap(MAX_SEARCH_FILE_BYTES + 1),
+            "a file one byte over the cap is rejected"
+        );
     }
 
     #[test]

@@ -17,11 +17,22 @@ pub const DEFAULT_MODEL: &str = "gpt-4o-mini";
 pub const DEFAULT_TIMEOUT_SECS: u64 = 90;
 const MAX_RESPONSE_BODY_BYTES: usize = 4 * 1024 * 1024;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AiSearchConfig {
     pub endpoint: String,
     pub api_key: Option<String>,
     pub model: Option<String>,
+}
+
+// Manual Debug so the secret API key never lands in logs or error messages.
+impl std::fmt::Debug for AiSearchConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AiSearchConfig")
+            .field("endpoint", &self.endpoint)
+            .field("api_key", &self.api_key.as_ref().map(|_| "<redacted>"))
+            .field("model", &self.model)
+            .finish()
+    }
 }
 
 impl Default for AiSearchConfig {
@@ -162,6 +173,10 @@ impl HttpTransport for UreqTransport {
         let agent = ureq::Agent::config_builder()
             .timeout_global(Some(timeout))
             .http_status_as_error(false)
+            // Do not follow redirects: an OpenAI-style API never needs them, and
+            // following a 3xx to another host could replay the bearer token to
+            // an attacker-controlled target.
+            .max_redirects(0)
             .build()
             .new_agent();
 
@@ -242,11 +257,6 @@ impl<T: HttpTransport> AiSearchClient<T> {
         }
     }
 
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = timeout;
-        self
-    }
-
     /// Send a one-shot test to `/v1/models`. Returns `(success, message)`.
     pub fn test_endpoint(&self, config: &AiSearchConfig) -> AiSearchResponse {
         if config.endpoint.trim().is_empty() {
@@ -255,8 +265,8 @@ impl<T: HttpTransport> AiSearchClient<T> {
         let url = models_endpoint(&config.endpoint);
         let request = HttpRequest {
             method: HttpMethod::Get,
+            headers: auth_headers(config.api_key.as_deref(), &url),
             url,
-            headers: auth_headers(config.api_key.as_deref()),
             body: None,
             timeout: self.timeout,
         };
@@ -277,10 +287,11 @@ impl<T: HttpTransport> AiSearchClient<T> {
         if config.endpoint.trim().is_empty() {
             return DEFAULT_MODEL.to_string();
         }
+        let url = models_endpoint(&config.endpoint);
         let request = HttpRequest {
             method: HttpMethod::Get,
-            url: models_endpoint(&config.endpoint),
-            headers: auth_headers(config.api_key.as_deref()),
+            headers: auth_headers(config.api_key.as_deref(), &url),
+            url,
             body: None,
             timeout: self.timeout,
         };
@@ -320,12 +331,13 @@ impl<T: HttpTransport> AiSearchClient<T> {
             "messages": messages,
         });
 
-        let mut headers = auth_headers(config.api_key.as_deref());
+        let url = chat_completions_endpoint(&config.endpoint);
+        let mut headers = auth_headers(config.api_key.as_deref(), &url);
         headers.insert("Content-Type".to_string(), "application/json; charset=utf-8".to_string());
 
         let request = HttpRequest {
             method: HttpMethod::Post,
-            url: chat_completions_endpoint(&config.endpoint),
+            url,
             headers,
             body: Some(serde_json::to_vec(&payload).unwrap_or_else(|_| b"{}".to_vec())),
             timeout: self.timeout,
@@ -346,9 +358,38 @@ impl<T: HttpTransport> AiSearchClient<T> {
     }
 }
 
-fn auth_headers(api_key: Option<&str>) -> HashMap<String, String> {
+/// Whether it is safe to send the API key (a bearer credential) to `url`. We
+/// allow it over HTTPS, or over plaintext HTTP only to loopback (local LLM
+/// servers such as Ollama / llama.cpp). Sending the key over plaintext to a
+/// remote host would expose it to network observers and to whatever host a
+/// poisoned `endpoint` setting points at, so the bearer is withheld there.
+fn url_can_carry_credentials(url: &str) -> bool {
+    let lower = url.trim().to_ascii_lowercase();
+    if lower.starts_with("https://") {
+        return true;
+    }
+    if let Some(rest) = lower.strip_prefix("http://") {
+        // Host is everything up to the first `/`, `:` (port) — `[::1]` keeps
+        // its brackets so it compares as a whole.
+        let authority = rest.split('/').next().unwrap_or("");
+        let host = match authority.strip_prefix('[') {
+            // IPv6 literal: `[::1]:port` → `[::1]`
+            Some(after) => after
+                .split_once(']')
+                .map(|(h, _)| format!("[{h}]"))
+                .unwrap_or_else(|| authority.to_string()),
+            None => authority.split(':').next().unwrap_or("").to_string(),
+        };
+        return matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1" | "[::1]");
+    }
+    false
+}
+
+fn auth_headers(api_key: Option<&str>, url: &str) -> HashMap<String, String> {
     let mut headers = HashMap::new();
-    if let Some(key) = api_key.map(str::trim).filter(|key| !key.is_empty()) {
+    if let Some(key) = api_key.map(str::trim).filter(|key| !key.is_empty())
+        && url_can_carry_credentials(url)
+    {
         headers.insert("Authorization".to_string(), format!("Bearer {key}"));
     }
     headers
@@ -602,6 +643,52 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use super::*;
+
+    #[test]
+    fn url_can_carry_credentials_requires_https_or_loopback() {
+        assert!(url_can_carry_credentials("https://api.openai.com/v1/models"));
+        assert!(url_can_carry_credentials("http://localhost:11434/v1/models"));
+        assert!(url_can_carry_credentials("http://127.0.0.1:1234/v1/models"));
+        assert!(url_can_carry_credentials("http://[::1]:8080/v1/models"));
+        // Plaintext to a remote host must NOT carry the bearer token.
+        assert!(!url_can_carry_credentials("http://evil.example.com/v1/models"));
+        assert!(!url_can_carry_credentials("http://169.254.169.254/v1/models"));
+    }
+
+    #[test]
+    fn auth_headers_withholds_bearer_over_plaintext_remote() {
+        let key = Some("sk-secret");
+        assert!(
+            auth_headers(key, "https://api.openai.com/v1/models").contains_key("Authorization"),
+            "https must carry the key"
+        );
+        assert!(
+            auth_headers(key, "http://localhost:11434/v1/models").contains_key("Authorization"),
+            "loopback http may carry the key for local LLMs"
+        );
+        assert!(
+            !auth_headers(key, "http://evil.example.com/v1/models").contains_key("Authorization"),
+            "plaintext to a remote host must not leak the key"
+        );
+    }
+
+    #[test]
+    fn debug_redacts_api_key() {
+        let config = AiSearchConfig {
+            endpoint: "https://api.openai.com/v1".to_string(),
+            api_key: Some("sk-supersecret-value".to_string()),
+            model: None,
+        };
+        let rendered = format!("{config:?}");
+        assert!(
+            !rendered.contains("sk-supersecret-value"),
+            "Debug must not print the API key, got: {rendered}"
+        );
+        assert!(
+            rendered.contains("redacted"),
+            "Debug should indicate a key is present, got: {rendered}"
+        );
+    }
 
     #[derive(Debug, Default, Clone)]
     struct MockTransport {

@@ -323,7 +323,14 @@ impl<R: CommandRunner> RuntimeOperations for CliRuntime<R> {
         container_id: &str,
         argv: &[&str],
     ) -> Result<CommandResult, RuntimeError> {
-        let mut args = vec![OsString::from("exec"), OsString::from(container_id)];
+        // `--` terminates option parsing so an untrusted container id (e.g.
+        // `--user=root`, podman `--privileged`) can never be interpreted as a
+        // flag to `exec`.
+        let mut args = vec![
+            OsString::from("exec"),
+            OsString::from("--"),
+            OsString::from(container_id),
+        ];
         for arg in argv {
             args.push(OsString::from(*arg));
         }
@@ -361,6 +368,7 @@ impl<R: CommandRunner> RuntimeOperations for CliRuntime<R> {
         );
         let args = vec![
             OsString::from("cp"),
+            OsString::from("--"),
             OsString::from(format!("{container_id}:{path}")),
             target.clone().into_os_string(),
         ];
@@ -450,10 +458,13 @@ mod tests {
         let runtime = CliRuntime::new(fake_runtime(), runner.clone());
         runtime.exec_capture("abc", &["which", "grep"]).unwrap();
         let inv = runner.invocations();
+        // `--` must terminate option parsing before the (untrusted) container
+        // id so a value like `--user=root` can't be smuggled in as a flag.
         assert_eq!(
             inv[0].args,
             vec![
                 OsString::from("exec"),
+                OsString::from("--"),
                 OsString::from("abc"),
                 OsString::from("which"),
                 OsString::from("grep"),
@@ -492,6 +503,7 @@ mod tests {
             inv[0].args,
             vec![
                 OsString::from("cp"),
+                OsString::from("--"),
                 OsString::from("abc:/etc/hostname"),
                 dir.path().join("hostname").into_os_string(),
             ]
