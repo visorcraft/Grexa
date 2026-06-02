@@ -7,6 +7,10 @@
 # Generate the supplement: `just credits`.
 # Output: docs/credits-third-party.md (auto-regenerated, do not edit).
 
+# Exclude the unpublished workspace crates (publish = false) from the generated supplement.
+private = { ignore = true }
+
+# Mirrors deny.toml [licenses].allow exactly.
 accepted = [
     "0BSD",
     "Apache-2.0",
@@ -21,12 +25,3 @@ accepted = [
     "Unlicense",
     "Zlib",
 ]
-
-# Skip workspace members in the auto-generated supplement — they're
-# our own code, credited in CREDITS.md's narrative.
-[grexa]
-[grexa-core]
-[grexa-cli]
-[grexa-containers]
-[grexa-ai]
-[grexa-i18n]

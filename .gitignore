@@ -27,6 +27,9 @@
 /CLAUDE.md
 /GEMINI.md
 
+# Local design/planning scratch (kept local, not committed)
+/docs/superpowers/
+
 # Cargo / flatpak vendor scratch. `just flatpak` writes
 # .cargo/config.toml during the build under a trap that removes it on
 # exit; the gitignore is belt-and-suspenders if a build is killed

@@ -79,12 +79,138 @@ pub mod ffi {
         /// Return table-ready third-party crate credit metadata.
         #[qinvokable]
         fn third_party_credits_json(self: &SettingsController) -> QString;
+
+        /// Return table-ready system/runtime-component metadata.
+        #[qinvokable]
+        fn runtime_components_json(self: &SettingsController) -> QString;
+
+        /// Return the combined, sectioned runtime-component license bundle.
+        #[qinvokable]
+        fn runtime_licenses_text(self: &SettingsController) -> QString;
+
+        /// Return the full license text for one canonical SPDX id.
+        #[qinvokable]
+        fn runtime_license_text(self: &SettingsController, spdx_id: &QString) -> QString;
     }
 }
 
 const GPL_LICENSE_TEXT: &str = include_str!("../../../../LICENSE");
 const THIRD_PARTY_LICENSES_TEXT: &str = include_str!("../../../../docs/credits-third-party.md");
 const CREDITS_TEXT: &str = include_str!("../../../../CREDITS.md");
+
+const APACHE_2_0_TEXT: &str = include_str!("../../../../LICENSES/Apache-2.0.txt");
+const GPL_2_0_TEXT: &str = include_str!("../../../../LICENSES/GPL-2.0-or-later.txt");
+const LGPL_2_1_TEXT: &str = include_str!("../../../../LICENSES/LGPL-2.1-or-later.txt");
+const LGPL_3_0_TEXT: &str = include_str!("../../../../LICENSES/LGPL-3.0-only.txt");
+
+struct RuntimeComponent {
+    name: &'static str,
+    url: &'static str,
+    license_display: &'static str,
+    spdx_ids: &'static [&'static str],
+}
+
+const RUNTIME_COMPONENTS: &[RuntimeComponent] = &[
+    RuntimeComponent {
+        name: "Qt 6 (Core, Qml, Gui, Quick)",
+        url: "https://www.qt.io",
+        license_display: "LGPL-3.0 / GPL-3.0 / commercial",
+        spdx_ids: &["LGPL-3.0-only"],
+    },
+    RuntimeComponent {
+        name: "KDE Frameworks 6 — Kirigami",
+        url: "https://invent.kde.org/frameworks/kirigami",
+        license_display: "LGPL-2.1-or-later",
+        spdx_ids: &["LGPL-2.1-or-later"],
+    },
+    RuntimeComponent {
+        name: "Poppler (pdftotext)",
+        url: "https://poppler.freedesktop.org",
+        license_display: "GPL-2.0-or-later",
+        spdx_ids: &["GPL-2.0-or-later"],
+    },
+    RuntimeComponent {
+        name: "Docker / Podman CLI",
+        url: "https://podman.io",
+        license_display: "Apache-2.0",
+        spdx_ids: &["Apache-2.0"],
+    },
+    RuntimeComponent {
+        name: "Secret Service / KWallet / GNOME Keyring",
+        url: "https://specifications.freedesktop.org/secret-service/",
+        license_display: "GPL-2.0+ / LGPL-2.1+ (D-Bus service)",
+        spdx_ids: &["GPL-2.0-or-later", "LGPL-2.1-or-later"],
+    },
+];
+
+fn runtime_license_body(spdx: &str) -> &'static str {
+    match spdx {
+        "Apache-2.0" => APACHE_2_0_TEXT,
+        "GPL-2.0-or-later" => GPL_2_0_TEXT,
+        "LGPL-2.1-or-later" => LGPL_2_1_TEXT,
+        "LGPL-3.0-only" => LGPL_3_0_TEXT,
+        _ => "",
+    }
+}
+
+fn build_runtime_components_json() -> String {
+    let rows: Vec<_> = RUNTIME_COMPONENTS
+        .iter()
+        .map(|component| {
+            json!({
+                "name": component.name,
+                "licenses": component.license_display,
+                "url": component.url,
+                "spdx": component.spdx_ids,
+            })
+        })
+        .collect();
+    serde_json::to_string(&rows).unwrap_or_else(|_| "[]".to_owned())
+}
+
+fn build_runtime_licenses_text() -> String {
+    const RULE: &str = "================================================================";
+
+    let mut out = String::from(
+        "These are the full license texts for the system and runtime components \
+that Grexa links against or bundles in its Flatpak/AppImage artifacts.\n\n",
+    );
+
+    for spdx in [
+        "LGPL-3.0-only",
+        "LGPL-2.1-or-later",
+        "GPL-2.0-or-later",
+        "Apache-2.0",
+    ] {
+        let body = runtime_license_body(spdx);
+        if body.is_empty() {
+            continue;
+        }
+
+        let applies_to: Vec<&str> = RUNTIME_COMPONENTS
+            .iter()
+            .filter(|component| component.spdx_ids.contains(&spdx))
+            .map(|component| component.name)
+            .collect();
+        if applies_to.is_empty() {
+            continue;
+        }
+
+        out.push_str(RULE);
+        out.push('\n');
+        out.push_str(spdx);
+        out.push('\n');
+        out.push_str("Applies to: ");
+        out.push_str(&applies_to.join(", "));
+        out.push('\n');
+        out.push_str(RULE);
+        out.push_str("\n\n");
+        out.push_str(body);
+        out.push_str("\n\n");
+    }
+
+    out
+}
 
 #[derive(Debug, Eq, PartialEq)]
 struct ThirdPartyCredit {
@@ -418,6 +544,18 @@ impl ffi::SettingsController {
     fn third_party_credits_json(&self) -> QString {
         QString::from(third_party_credit_entries_json(THIRD_PARTY_LICENSES_TEXT))
     }
+
+    fn runtime_components_json(&self) -> QString {
+        QString::from(build_runtime_components_json())
+    }
+
+    fn runtime_licenses_text(&self) -> QString {
+        QString::from(build_runtime_licenses_text())
+    }
+
+    fn runtime_license_text(&self, spdx_id: &QString) -> QString {
+        QString::from(runtime_license_body(&spdx_id.to_string()))
+    }
 }
 
 #[cfg(test)]
@@ -484,6 +622,62 @@ mod tests {
         let json = third_party_credit_entries_json(THIRD_PARTY_LICENSES_TEXT);
         let rows: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
         assert!(rows.as_array().is_some_and(|rows| rows.len() > 200));
+    }
+
+    #[test]
+    fn runtime_license_texts_are_bundled() {
+        assert!(APACHE_2_0_TEXT.contains("Apache License"));
+        assert!(APACHE_2_0_TEXT.contains("2.0"));
+        assert!(GPL_2_0_TEXT.contains("GNU GENERAL PUBLIC LICENSE"));
+        assert!(GPL_2_0_TEXT.contains("Version 2"));
+        assert!(LGPL_2_1_TEXT.contains("GNU LESSER GENERAL PUBLIC LICENSE"));
+        assert!(LGPL_2_1_TEXT.contains("2.1"));
+        assert!(LGPL_3_0_TEXT.contains("GNU LESSER GENERAL PUBLIC LICENSE"));
+        assert!(LGPL_3_0_TEXT.contains("Version 3"));
+    }
+
+    #[test]
+    fn every_runtime_component_spdx_resolves() {
+        for component in RUNTIME_COMPONENTS {
+            for spdx in component.spdx_ids {
+                assert!(
+                    !runtime_license_body(spdx).is_empty(),
+                    "{} references unresolved spdx id {spdx}",
+                    component.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn runtime_components_json_is_qml_ready() {
+        let json = build_runtime_components_json();
+        let rows: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        let rows = rows.as_array().expect("array");
+        assert_eq!(rows.len(), RUNTIME_COMPONENTS.len());
+        for row in rows {
+            assert!(row.get("name").and_then(|v| v.as_str()).is_some());
+            assert!(row.get("licenses").and_then(|v| v.as_str()).is_some());
+            assert!(row.get("url").and_then(|v| v.as_str()).is_some());
+            let spdx = row
+                .get("spdx")
+                .and_then(|v| v.as_array())
+                .expect("spdx array");
+            assert!(!spdx.is_empty());
+        }
+    }
+
+    #[test]
+    fn runtime_licenses_text_has_all_sections() {
+        let text = build_runtime_licenses_text();
+        assert!(text.contains("LGPL-3.0-only"));
+        assert!(text.contains("LGPL-2.1-or-later"));
+        assert!(text.contains("GPL-2.0-or-later"));
+        assert!(text.contains("Apache-2.0"));
+        assert!(text.contains("Applies to:"));
+        assert!(text.contains("Apache License"));
+        assert!(text.contains("GNU GENERAL PUBLIC LICENSE"));
+        assert!(text.contains("GNU LESSER GENERAL PUBLIC LICENSE"));
     }
 
     /// Regression pin for the silent-reload bug. The old `reload()`

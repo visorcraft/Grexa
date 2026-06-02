@@ -73,6 +73,26 @@ clarification:
   authors have publicly assented to this use. Re-evaluate when ring
   changes upstream.
 
+### Runtime / system components
+
+Beyond the Rust crate tree, Grexa relies on system runtimes that are
+provided by downstream packagers rather than vendored into the source
+distribution:
+
+| Component | License |
+| --------- | ------- |
+| Qt 6 (Core, Qml, Gui, Quick) | LGPL-3.0 |
+| KDE Frameworks 6 — Kirigami | LGPL-2.1+ |
+| Poppler (`pdftotext`) | GPL-2.0+ |
+| Docker / Podman CLI | Apache-2.0 |
+| Secret Service backends (KWallet / GNOME Keyring) | various |
+
+The full license texts for these components are bundled under the
+top-level [`LICENSES/`](../LICENSES/) directory and surfaced in-app.
+The `about.toml` accepted-license set and the `deny.toml` allow list
+are kept in sync, so both the crate tree and these system components
+clear the same compatibility bar.
+
 ## When adding a new dependency
 
 1. Check the crate's license on crates.io.

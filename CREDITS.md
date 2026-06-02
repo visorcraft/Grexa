@@ -16,8 +16,12 @@ deliberate divergence. Grex is also GPL-3.0-licensed.
 ## Runtime dependencies
 
 Grexa links against the following system runtimes at execution time.
-None are bundled into the GPL source distribution; downstream
-packagers (Flatpak, AppImage, distro repos) handle redistribution.
+The runtime binaries themselves are still provided by downstream
+packagers (Flatpak, AppImage, distro repos), who handle their
+redistribution. The full license texts for these components are now
+bundled under the top-level [`LICENSES/`](LICENSES/) directory and are
+viewable in-app — per-component via Credits ("View license") and
+collectively under the Licenses dialog's "Runtime components" tab.
 
 | Component | License | Project |
 | --------- | ------- | ------- |

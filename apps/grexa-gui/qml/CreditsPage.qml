@@ -19,33 +19,7 @@ Kirigami.Page {
     readonly property int nameColumnWidth: Math.max(210, Math.min(300, page.width * 0.25))
     readonly property int versionColumnWidth: 124
     readonly property int linkColumnWidth: 44
-    readonly property var runtimeComponents: [
-        {
-            name: "Qt 6 (Core, Qml, Gui, Quick)",
-            licenses: "LGPL-3.0 / GPL-3.0 / commercial",
-            url: "https://www.qt.io"
-        },
-        {
-            name: "KDE Frameworks 6 - Kirigami",
-            licenses: "LGPL-2.1+",
-            url: "https://invent.kde.org/frameworks/kirigami"
-        },
-        {
-            name: "Poppler (pdftotext)",
-            licenses: "GPL-2.0+",
-            url: "https://poppler.freedesktop.org"
-        },
-        {
-            name: "Docker / Podman CLI",
-            licenses: "Apache-2.0 / various",
-            url: "https://podman.io"
-        },
-        {
-            name: "Secret Service / KWallet / GNOME Keyring",
-            licenses: "various",
-            url: "https://www.freedesktop.org/wiki/Specifications/secret-storage-spec/"
-        }
-    ]
+    property var runtimeComponents: []
     readonly property var filteredCrates: {
         const needle = page.filterText.trim().toLowerCase()
         if (needle.length === 0)
@@ -94,11 +68,27 @@ Kirigami.Page {
         } catch (e) {
             page.crates = []
         }
+        try {
+            page.runtimeComponents = JSON.parse(app.settingsController.runtimeComponentsJson())
+        } catch (e) {
+            page.runtimeComponents = []
+        }
     }
 
     function openUrl(url) {
         if (url && String(url).length > 0)
             Qt.openUrlExternally(url)
+    }
+
+    function openComponentLicense(comp) {
+        const ids = comp.spdx || []
+        const sections = []
+        for (let i = 0; i < ids.length; ++i) {
+            const id = ids[i]
+            sections.push("===== " + id + " =====\n\n"
+                + app.settingsController.runtimeLicenseText(id))
+        }
+        licenseDialog.openDocument(comp.name, comp.licenses, sections.join("\n\n\n"))
     }
 
     ColumnLayout {
@@ -222,6 +212,16 @@ Kirigami.Page {
                                 font.family: app.tokens.monoFamily
                                 opacity: 0.86
                                 elide: Text.ElideRight
+                            }
+
+                            AppFlatButton {
+                                Layout.preferredWidth: 34
+                                Layout.preferredHeight: 28
+                                icon.name: "document-preview-symbolic"
+                                display: Controls.AbstractButton.IconOnly
+                                onClicked: page.openComponentLicense(modelData)
+                                Controls.ToolTip.text: qsTr("View license text")
+                                Controls.ToolTip.visible: hovered
                             }
 
                             AppFlatButton {
@@ -410,4 +410,6 @@ Kirigami.Page {
             }
         }
     }
+
+    GplLicenseDialog { id: licenseDialog }
 }

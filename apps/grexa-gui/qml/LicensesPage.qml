@@ -47,6 +47,7 @@ Kirigami.Page {
     property string thirdPartyText: ""
     property string creditsText: ""
     property string gplText: ""
+    property string runtimeText: ""
     property bool wrapText: false
 
     readonly property string currentTitle: page.documentTitle(page.activeDocument)
@@ -64,6 +65,7 @@ Kirigami.Page {
         page.thirdPartyText = page.decodeEntities(app.settingsController.thirdPartyLicensesText())
         page.creditsText = page.decodeEntities(app.settingsController.creditsText())
         page.gplText = app.settingsController.gplLicenseText()
+        page.runtimeText = app.settingsController.runtimeLicensesText()
     }
 
     function decodeEntities(text) {
@@ -80,6 +82,7 @@ Kirigami.Page {
         switch (index) {
         case 1: return qsTr("Third-party licenses")
         case 2: return qsTr("Acknowledgments")
+        case 3: return qsTr("Runtime components")
         default: return qsTr("Grexa License")
         }
     }
@@ -90,6 +93,8 @@ Kirigami.Page {
             return qsTr("The cargo-about-generated bundle with every direct and transitive Rust crate, grouped by license text.")
         case 2:
             return qsTr("Narrative attribution for Grexa, Grex, runtime components, and direct dependencies.")
+        case 3:
+            return qsTr("Full license texts for the Qt, KDE Frameworks, Poppler, container, and secret-service runtimes Grexa builds on.")
         default:
             return qsTr("The complete GPL-3.0-only license text bundled into the application.")
         }
@@ -99,6 +104,7 @@ Kirigami.Page {
         switch (index) {
         case 1: return page.thirdPartyText
         case 2: return page.creditsText
+        case 3: return page.runtimeText
         default: return page.gplText
         }
     }
@@ -233,6 +239,10 @@ Kirigami.Page {
                     }
                     Controls.TabButton {
                         text: qsTr("Acknowledgments")
+                        width: implicitWidth + app.tokens.spaceL
+                    }
+                    Controls.TabButton {
+                        text: qsTr("Runtime components")
                         width: implicitWidth + app.tokens.spaceL
                     }
                 }
