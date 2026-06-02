@@ -122,6 +122,16 @@ flatpak-bundle: flatpak
         com.visorcraft.Grexa master
     @echo "wrote target/release/grexa.flatpak"
 
+# Build the Arch / CachyOS package from the local source tree via
+# makepkg, writing packaging/arch/grexa-<ver>-1-x86_64.pkg.tar.zst.
+# The PKGBUILD builds release with --locked, so bump the version and
+# refresh Cargo.lock first (see "Releasing / reinstalling" in AGENTS.md).
+# This does NOT install — pacman needs root, so run the install by hand:
+#   sudo pacman -U packaging/arch/grexa-*-x86_64.pkg.tar.zst
+arch-package:
+    cd packaging/arch && makepkg -f
+    @echo "wrote packaging/arch/grexa-*-x86_64.pkg.tar.zst"
+
 # Convenience target — everything CI does. Useful before pushing.
 ci: fmt-check lint test
     @echo "ci preflight passed"

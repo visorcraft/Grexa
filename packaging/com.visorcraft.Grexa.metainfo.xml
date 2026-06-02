@@ -75,6 +75,20 @@
   </supports>
 
   <releases>
+    <release version="1.4.0" date="2026-06-02">
+      <description>
+        <p>Third-party licensing transparency.</p>
+        <ul>
+          <li>The full license texts for the system and runtime
+              components Grexa builds on (Qt, KDE Frameworks/Kirigami,
+              Poppler, the Docker/Podman CLIs, and the Secret Service
+              backends) are now bundled and viewable in-app.</li>
+          <li>Credits gains a per-component "View license" action, and
+              the Licenses view gains a searchable "Runtime components"
+              tab alongside the existing Rust-crate bundle.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.3.0" date="2026-05-29">
       <description>
         <p>Application identity update.</p>

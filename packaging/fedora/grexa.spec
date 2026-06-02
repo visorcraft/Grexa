@@ -1,5 +1,5 @@
 Name:           grexa
-Version:        1.3.0
+Version:        1.4.0
 Release:        1%{?dist}
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 
@@ -89,6 +89,13 @@ command -v appstream-util >/dev/null && \
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Tue Jun 02 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.4.0-1
+- Bundle the full license texts for the system/runtime components (Qt,
+  KDE Frameworks/Kirigami, Poppler, the Docker/Podman CLIs, and the
+  Secret Service backends) and surface them in-app: a per-component
+  "View license" action in Credits and a searchable "Runtime
+  components" tab in the Licenses view.
+
 * Fri May 29 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.3.0-1
 - Rename the application ID to com.visorcraft.Grexa and set the
   organization domain to visorcraft.com. Breaking identity change:
