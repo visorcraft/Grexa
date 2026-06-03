@@ -75,6 +75,17 @@
   </supports>
 
   <releases>
+    <release version="1.4.1" date="2026-06-02">
+      <description>
+        <p>Packaging fix release.</p>
+        <ul>
+          <li>Refresh the pinned linuxdeploy hash so the AppImage release
+              artifact builds again. Carries the 1.4.0 changes: the full
+              license texts for the bundled runtime components are now
+              viewable in-app via Credits and the Licenses view.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.4.0" date="2026-06-02">
       <description>
         <p>Third-party licensing transparency.</p>

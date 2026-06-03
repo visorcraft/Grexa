@@ -1,3 +1,12 @@
+grexa (1.4.1-1) unstable; urgency=medium
+
+  * Refresh the pinned linuxdeploy `continuous` hash so the AppImage
+    release artifact builds again (1.4.0 did not publish). No functional
+    change from 1.4.0 — still ships the bundled runtime-component license
+    texts viewable in Credits and the Licenses view.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Tue, 02 Jun 2026 00:00:00 +0000
+
 grexa (1.4.0-1) unstable; urgency=medium
 
   * Bundle the full license texts for the system/runtime components
