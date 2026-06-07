@@ -13,7 +13,7 @@
 //! `SettingsStore::ai_search_enabled` and short-circuits when false.
 //! The QML toggle is the source of truth; turning the panel off
 //! genuinely silences the controller. The audit
-//! (`docs/security.md`) explicitly required this — secret storage
+//! (`docs/SECURITY.md`) explicitly required this — secret storage
 //! alone is not enough.
 //!
 //! **Per-endpoint key scoping.** `set_api_key` stores the key with

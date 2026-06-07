@@ -207,7 +207,7 @@ changes, update relevant docs, and make sure `just ci` passes.
 - [docs/architecture.md](docs/architecture.md) — workspace architecture
 - [docs/gui-design.md](docs/gui-design.md) — Qt / cxx-qt bridge design
 - [docs/translations.md](docs/translations.md) — localization workflow
-- [docs/security.md](docs/security.md) — threat model and disclosure policy
+- [docs/SECURITY.md](docs/SECURITY.md) — threat model and disclosure policy
 - [docs/feature-parity.md](docs/feature-parity.md) — Grex / Grexa parity matrix
 
 ## License

@@ -128,7 +128,7 @@ crashes on malformed input.
 - **API keys stored in the system keyring** (`org.freedesktop.secrets`
   on Linux) keyed by endpoint, so multiple endpoints don't share a key.
 - **Opt-in**: `DefaultSettings.ai_search_enabled` defaults to `false`.
-- **No telemetry**; see [security.md](security.md).
+- **No telemetry**; see [SECURITY.md](SECURITY.md).
 - See [ai-provider-scope.md](ai-provider-scope.md) for the full
   in-scope / out-of-scope matrix.
 
