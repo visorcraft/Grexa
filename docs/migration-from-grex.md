@@ -121,7 +121,7 @@ secret-tool lookup service com.visorcraft.Grexa.ai account \
 If `secret-tool` finds the API key, the import succeeded. If it
 returns nothing and you previously had an API key configured in
 Grex, the keyring backend was unavailable — see
-[security.md](security.md#api-key-handling).
+[SECURITY.md](SECURITY.md#api-key-handling).
 
 ## Bringing translations forward
 

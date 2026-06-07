@@ -212,4 +212,4 @@ updates before merging.
 ## Security
 
 Do not report security issues through public issues or pull requests.
-Follow the disclosure policy in [docs/security.md](docs/security.md).
+Follow the disclosure policy in [docs/SECURITY.md](docs/SECURITY.md).
