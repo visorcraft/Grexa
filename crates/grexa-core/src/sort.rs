@@ -100,9 +100,19 @@ pub fn apply_default_sort(content: &mut [SearchResult], files: &mut [FileSearchR
 }
 
 fn name_cmp(a: &str, b: &str) -> Ordering {
-    a.to_lowercase()
-        .cmp(&b.to_lowercase())
-        .then_with(|| a.cmp(b))
+    let mut a_chars = a.chars().flat_map(|c| c.to_lowercase());
+    let mut b_chars = b.chars().flat_map(|c| c.to_lowercase());
+    loop {
+        match (a_chars.next(), b_chars.next()) {
+            (Some(ac), Some(bc)) => match ac.cmp(&bc) {
+                std::cmp::Ordering::Equal => continue,
+                ord => return ord.then_with(|| a.cmp(b)),
+            },
+            (Some(_), None) => return Ordering::Greater,
+            (None, Some(_)) => return Ordering::Less,
+            (None, None) => return a.cmp(b),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -243,3 +243,92 @@ fn manpage_subcommand_emits_roff() {
         .success()
         .stdout(predicate::str::contains(".TH grexa-cli"));
 }
+
+#[test]
+fn replace_subcommand_rewrites_matching_files() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("a.txt");
+    fs::write(&file, "TODO write\nTODO fix\n").unwrap();
+
+    cmd()
+        .args(["replace", dir.path().to_str().unwrap(), "TODO", "DONE"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("2 replacements"))
+        .stdout(predicate::str::contains("a.txt"));
+
+    let content = fs::read_to_string(&file).unwrap();
+    assert!(content.contains("DONE write"));
+    assert!(content.contains("DONE fix"));
+    assert!(!content.contains("TODO"));
+}
+
+#[test]
+fn replace_dry_run_does_not_modify_files() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("a.txt");
+    fs::write(&file, "TODO write\n").unwrap();
+
+    cmd()
+        .args([
+            "replace",
+            dir.path().to_str().unwrap(),
+            "TODO",
+            "DONE",
+            "--dry-run",
+        ])
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(&file).unwrap();
+    assert!(content.contains("TODO write"));
+}
+
+#[test]
+fn replace_regex_mode_uses_captures() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("data.txt");
+    fs::write(&file, "foo-123\nbar-456\n").unwrap();
+
+    cmd()
+        .args([
+            "replace",
+            dir.path().to_str().unwrap(),
+            r"(\w+)-(\d+)",
+            "$2-$1",
+            "--regex",
+        ])
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(&file).unwrap();
+    assert!(content.contains("123-foo"));
+    assert!(content.contains("456-bar"));
+}
+
+#[test]
+fn replace_case_insensitive_mode() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("a.txt");
+    fs::write(&file, "Hello HELLO hello\n").unwrap();
+
+    cmd()
+        .args(["replace", dir.path().to_str().unwrap(), "hello", "hey"])
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(&file).unwrap();
+    assert_eq!(content, "hey hey hey\n");
+}
+
+#[test]
+fn replace_reports_zero_matches_exit_code() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("a.txt");
+    fs::write(&file, "nothing relevant\n").unwrap();
+
+    cmd()
+        .args(["replace", dir.path().to_str().unwrap(), "TODO", "DONE"])
+        .assert()
+        .code(1);
+}

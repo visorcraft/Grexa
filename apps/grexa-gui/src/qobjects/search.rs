@@ -448,6 +448,11 @@ mod role {
     pub const PREVIEW_AFTER: i32 = 0x0106;
 }
 
+struct WithinContext {
+    trimmed: String,
+    compiled: Option<regex::Regex>,
+}
+
 /// Rust-side state for `SearchController`. Owned by the cxx-qt-generated
 /// C++ class via `super::SearchControllerRust`.
 #[derive(Default)]
@@ -540,9 +545,7 @@ impl SearchControllerRust {
     /// `rowCount` always grows by exactly `kept.len()`.
     pub fn filter_batch_for_view(&self, batch: &[ResultRow]) -> Vec<usize> {
         let mut kept: Vec<usize> = Vec::with_capacity(batch.len());
-        // Files-mode dedup must consider rows we're about to keep
-        // from THIS batch as well as rows already in `self.visible`.
-        // Track seen full_paths across both sources.
+        let ctx = self.build_within_context();
         if self.result_mode == 1 {
             let mut seen: std::collections::HashSet<std::path::PathBuf> =
                 std::collections::HashSet::with_capacity(self.visible.len() + batch.len());
@@ -552,7 +555,7 @@ impl SearchControllerRust {
                 }
             }
             for (i, row) in batch.iter().enumerate() {
-                if !self.row_passes_within(row) {
+                if !self.row_passes_within(row, &ctx) {
                     continue;
                 }
                 if seen.insert(row.full_path.clone()) {
@@ -561,7 +564,7 @@ impl SearchControllerRust {
             }
         } else {
             for (i, row) in batch.iter().enumerate() {
-                if self.row_passes_within(row) {
+                if self.row_passes_within(row, &ctx) {
                     kept.push(i);
                 }
             }
@@ -607,22 +610,31 @@ impl SearchControllerRust {
     /// `rebuild_visible`). Splitting the two keeps the dedup logic
     /// from accidentally consulting a partially-emptied
     /// `self.rows` (the original bug found in code review).
-    fn row_passes_within(&self, row: &ResultRow) -> bool {
-        let within = self.within_filter.to_string();
-        let trimmed = within.trim();
-        if trimmed.is_empty() {
+    fn row_passes_within(&self, row: &ResultRow, ctx: &WithinContext) -> bool {
+        if ctx.trimmed.is_empty() {
             return true;
         }
         let line = format!("{}{}{}", row.preview_before, row.preview_match, row.preview_after);
-        if self.within_regex {
-            match regex::Regex::new(trimmed) {
-                Ok(re) => re.is_match(&line),
-                Err(_) => false,
+        match &ctx.compiled {
+            Some(re) => re.is_match(&line),
+            None => {
+                let needle = ctx.trimmed.to_lowercase();
+                line.to_lowercase().contains(&needle)
             }
-        } else {
-            let needle = trimmed.to_lowercase();
-            line.to_lowercase().contains(&needle)
         }
+    }
+
+    fn build_within_context(&self) -> WithinContext {
+        let within = self.within_filter.to_string();
+        let trimmed = within.trim().to_string();
+        let compiled = if trimmed.is_empty() {
+            None
+        } else if self.within_regex {
+            regex::Regex::new(&trimmed).ok()
+        } else {
+            None
+        };
+        WithinContext { trimmed, compiled }
     }
 
     /// Recompute `visible` from scratch. O(rows.len()). Called when
@@ -637,11 +649,12 @@ impl SearchControllerRust {
     /// works regardless of `self.rows`'s state at entry.
     pub fn rebuild_visible(&mut self) {
         self.visible.clear();
+        let ctx = self.build_within_context();
         let files_mode = self.result_mode == 1;
         let mut seen: std::collections::HashSet<std::path::PathBuf> =
             std::collections::HashSet::new();
         for i in 0..self.rows.len() {
-            if !self.row_passes_within(&self.rows[i]) {
+            if !self.row_passes_within(&self.rows[i], &ctx) {
                 continue;
             }
             if files_mode {
@@ -766,9 +779,11 @@ impl ffi::SearchController {
                     regex,
                     case_sensitive,
                 );
-                let _ = thread.queue(move |pin| {
+                if let Err(err) = thread.queue(move |pin| {
                     finish_container_search(pin, generation, summary);
-                });
+                }) {
+                    tracing::debug!("container search queue failed (window likely closed): {err}");
+                }
             });
             return;
         }
@@ -808,11 +823,13 @@ impl ffi::SearchController {
                         return;
                     }
                     let rows = std::mem::take(events);
-                    let _ = thread.queue(move |pin| {
+                    if let Err(err) = thread.queue(move |pin| {
                         let scanned_i32 = scanned as i32;
                         let matched_i32 = matched as i32;
                         push_rows(pin, generation, rows, scanned_i32, matched_i32);
-                    });
+                    }) {
+                        tracing::debug!("batch queue failed (window closed): {err}");
+                    }
                 };
 
                 let mut sink = |event: ProgressEvent| match event {
@@ -838,9 +855,11 @@ impl ffi::SearchController {
             };
 
             let cancelled = cancel.is_cancelled();
-            let _ = thread.queue(move |pin| {
+            if let Err(err) = thread.queue(move |pin| {
                 finish_search(pin, generation, outcome, cancelled, &path_str);
-            });
+            }) {
+                tracing::debug!("finish_search queue failed: {err}");
+            }
         });
     }
 
@@ -1007,9 +1026,11 @@ impl ffi::SearchController {
         let thread = self.qt_thread();
         std::thread::spawn(move || {
             let json = build_containers_json();
-            let _ = thread.queue(move |mut pin| {
+            if let Err(err) = thread.queue(move |mut pin| {
                 pin.as_mut().set_containers_json(QString::from(&json));
-            });
+            }) {
+                tracing::debug!("containers queue failed: {err}");
+            }
         });
     }
 
@@ -1055,9 +1076,11 @@ impl ffi::SearchController {
                 replacement: replacement_str,
             };
             let outcome = grexa_core::replace_with(&opts, &cancel, None);
-            let _ = thread.queue(move |pin| {
+            if let Err(err) = thread.queue(move |pin| {
                 finish_replace(pin, outcome);
-            });
+            }) {
+                tracing::debug!("finish_replace queue failed: {err}");
+            }
         });
     }
 
@@ -1983,7 +2006,9 @@ fn finish_search(
 
             let path = PathBuf::from(path_str);
             with_workspace(|w| {
-                let _ = w.recent_paths.add(path);
+                if let Err(err) = w.recent_paths.add(path) {
+                    tracing::warn!("failed to record recent path: {err}");
+                }
             });
             let history_added = if cancelled {
                 false

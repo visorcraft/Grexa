@@ -191,6 +191,12 @@ pub fn search_with(
     let binary_extensions = extension_set(BINARY_EXTENSIONS);
     let searchable_binary_extensions = extension_set(SEARCHABLE_BINARY_EXTENSIONS);
 
+    let normalized_needle = if regex.is_none() {
+        Some(normalize_for_text_search(&options.search_term, options))
+    } else {
+        None
+    };
+
     let mut walker = WalkBuilder::new(&options.path);
     walker
         .hidden(!options.include_hidden)
@@ -283,7 +289,14 @@ pub fn search_with(
         }
 
         files_scanned += 1;
-        let scan = search_file(entry.path(), &options.path, options, regex.as_ref(), cancel)?;
+        let scan = search_file(
+            entry.path(),
+            &options.path,
+            options,
+            regex.as_ref(),
+            cancel,
+            normalized_needle.as_deref(),
+        )?;
         if let Some(encoding) = scan.encoding {
             file_encodings.insert(entry.path().to_path_buf(), encoding);
         }
@@ -355,19 +368,18 @@ pub fn aggregate_file_results(
     results: &[SearchResult],
     encodings: &HashMap<PathBuf, DetectedEncoding>,
 ) -> Vec<FileSearchResult> {
-    let mut grouped: BTreeMap<PathBuf, Vec<SearchResult>> = BTreeMap::new();
-    for result in results {
-        grouped
-            .entry(result.full_path.clone())
-            .or_default()
-            .push(result.clone());
+    let mut grouped: BTreeMap<PathBuf, Vec<usize>> = BTreeMap::new();
+    for (i, result) in results.iter().enumerate() {
+        grouped.entry(result.full_path.clone()).or_default().push(i);
     }
 
     grouped
         .into_iter()
-        .map(|(full_path, mut matches)| {
-            matches.sort_by_key(|result| (result.line_number, result.column_number));
-            let first = matches.first().cloned();
+        .map(|(full_path, indices)| {
+            let mut file_matches: Vec<SearchResult> =
+                indices.iter().map(|&i| results[i].clone()).collect();
+            file_matches.sort_by_key(|result| (result.line_number, result.column_number));
+            let first = file_matches.first();
             let metadata = fs::metadata(&full_path).ok();
             let date_modified_unix = metadata
                 .as_ref()
@@ -375,15 +387,14 @@ pub fn aggregate_file_results(
                 .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
                 .map(|duration| duration.as_secs());
 
-            let match_count = matches.iter().map(|result| result.match_count).sum();
-            let first_match_line_number = first.as_ref().map_or(0, |result| result.line_number);
+            let match_count = file_matches.iter().map(|result| result.match_count).sum();
+            let first_match_line_number = first.map_or(0, |result| result.line_number);
             let file_name = full_path
                 .file_name()
                 .map(|name| name.to_string_lossy().to_string())
                 .unwrap_or_default();
             let extension = normalized_extension(&full_path).unwrap_or_default();
             let relative_path = first
-                .as_ref()
                 .map(|result| result.relative_path.clone())
                 .unwrap_or_else(|| full_path.clone());
 
@@ -391,7 +402,8 @@ pub fn aggregate_file_results(
                 .get(&full_path)
                 .cloned()
                 .unwrap_or(DetectedEncoding::Utf8)
-                .label();
+                .label()
+                .into_owned();
 
             FileSearchResult {
                 file_name,
@@ -399,18 +411,15 @@ pub fn aggregate_file_results(
                 match_count,
                 first_match_line_number,
                 match_preview_before: first
-                    .as_ref()
                     .map(|result| result.match_preview_before.clone())
                     .unwrap_or_default(),
                 match_preview_match: first
-                    .as_ref()
                     .map(|result| result.match_preview_match.clone())
                     .unwrap_or_default(),
                 match_preview_after: first
-                    .as_ref()
                     .map(|result| result.match_preview_after.clone())
                     .unwrap_or_default(),
-                preview_matches: matches,
+                preview_matches: file_matches,
                 full_path,
                 relative_path,
                 extension,
@@ -427,8 +436,8 @@ fn classify_skip(
     options: &SearchOptions,
     filename_filter: &FileNameFilter,
     exclude_filter: &ExcludeDirFilter,
-    binary_extensions: &HashSet<String>,
-    searchable_binary_extensions: &HashSet<String>,
+    binary_extensions: &HashSet<&'static str>,
+    searchable_binary_extensions: &HashSet<&'static str>,
 ) -> Result<Option<SkipReason>, SearchError> {
     let path = entry.path();
 
@@ -470,7 +479,7 @@ fn classify_skip(
 
     let ext = normalized_extension(path);
     let is_binary = ext
-        .as_ref()
+        .as_deref()
         .is_some_and(|ext| binary_extensions.contains(ext));
 
     if is_binary && !options.include_binary {
@@ -480,7 +489,7 @@ fn classify_skip(
     if is_binary
         && options.include_binary
         && !ext
-            .as_ref()
+            .as_deref()
             .is_some_and(|ext| searchable_binary_extensions.contains(ext))
     {
         return Ok(Some(SkipReason::BinaryFile));
@@ -500,6 +509,7 @@ fn search_file(
     options: &SearchOptions,
     regex: Option<&PatternEngine>,
     cancel: &CancelToken,
+    normalized_needle: Option<&str>,
 ) -> Result<FileScan, SearchError> {
     // Searchable-document path: handed off to extractors that decode OOXML,
     // ODF, ZIP, PDF, and RTF into plain text before line scanning. The
@@ -529,7 +539,8 @@ fn search_file(
                 });
             }
         };
-        let results = scan_text_buffer(path, root, options, regex, cancel, &extracted);
+        let results =
+            scan_text_buffer(path, root, options, regex, cancel, normalized_needle, &extracted);
         return Ok(FileScan {
             results,
             encoding: Some(DetectedEncoding::Utf8),
@@ -537,7 +548,7 @@ fn search_file(
     }
 
     let (text, encoding) = read_text(path)?;
-    let results = scan_text_buffer(path, root, options, regex, cancel, &text);
+    let results = scan_text_buffer(path, root, options, regex, cancel, normalized_needle, &text);
     Ok(FileScan {
         results,
         encoding: Some(encoding),
@@ -552,19 +563,18 @@ fn scan_text_buffer(
     options: &SearchOptions,
     regex: Option<&PatternEngine>,
     cancel: &CancelToken,
+    normalized_needle: Option<&str>,
     text: &str,
 ) -> Vec<SearchResult> {
     let mut results = Vec::new();
     for (idx, line) in text.lines().enumerate() {
-        // Cancellation check every 64 lines keeps the latency low for both
-        // tiny and huge files without paying for an atomic load per line.
         if idx % 64 == 0 && cancel.is_cancelled() {
             return results;
         }
 
         let line_number = idx + 1;
         let compare_line = truncate_bytes(line, MAX_COMPARE_LINE_BYTES);
-        let matches = find_line_matches(&compare_line, options, regex);
+        let matches = find_line_matches(&compare_line, options, regex, normalized_needle);
         if matches.is_empty() {
             continue;
         }
@@ -594,20 +604,24 @@ fn find_line_matches(
     line: &str,
     options: &SearchOptions,
     regex: Option<&PatternEngine>,
+    normalized_needle: Option<&str>,
 ) -> Vec<(usize, usize)> {
     if let Some(engine) = regex {
         return engine.find_iter(line);
     }
 
-    let original = normalize_for_text_search(line, options);
-    let needle = normalize_for_text_search(&options.search_term, options);
+    let needle = match normalized_needle {
+        Some(n) => n,
+        None => return Vec::new(),
+    };
     if needle.is_empty() {
         return Vec::new();
     }
 
+    let original = normalize_for_text_search(line, options);
     let mut matches = Vec::new();
     let mut offset = 0;
-    while let Some(index) = original[offset..].find(&needle) {
+    while let Some(index) = original[offset..].find(needle) {
         let start = offset + index;
         let end = start + needle.len();
         matches.push((start, end));
@@ -660,7 +674,8 @@ fn culture_aware_lowercase(value: &str, options: &SearchOptions) -> String {
                 .as_deref()
                 .and_then(|tag| icu_locale_core::LanguageIdentifier::try_from_str(tag).ok())
                 .unwrap_or_else(|| {
-                    icu_locale_core::LanguageIdentifier::try_from_str("en").unwrap()
+                    icu_locale_core::LanguageIdentifier::try_from_str("en")
+                        .expect("\"en\" is a valid BCP-47 tag")
                 });
             mapper
                 .lowercase_to_string(value, &locale)
@@ -679,11 +694,13 @@ fn preview_segments(line: &str, start: usize, end: usize) -> (String, String, St
 }
 
 fn truncate_chars(input: &str, max_chars: usize) -> String {
-    if input.chars().count() <= max_chars {
+    if input.len() <= max_chars {
         return input.to_string();
     }
-
-    input.chars().take(max_chars).collect()
+    match input.char_indices().nth(max_chars) {
+        Some((byte_idx, _)) => input[..byte_idx].to_string(),
+        None => input.to_string(),
+    }
 }
 
 fn truncate_bytes(input: &str, max_bytes: usize) -> String {
@@ -731,28 +748,25 @@ fn size_matches(
 }
 
 fn is_system_path(path: &Path, root: &Path) -> bool {
-    // Only auto-exclude system directory names that appear *below* the
-    // user-chosen root. Examining the absolute path (including the root and
-    // its ancestors) would silently skip every file when the root itself is
-    // named like a system dir (e.g. searching `~/project/bin`), reporting a
-    // false "no matches". `ExcludeDirFilter::matches` already scopes to the
-    // root the same way.
     let relative = path.strip_prefix(root).unwrap_or(path);
-    let components: Vec<String> = relative
+    if relative
         .components()
-        .filter_map(|component| component.as_os_str().to_str().map(str::to_string))
-        .collect();
-
-    if components
-        .iter()
-        .any(|component| SYSTEM_DIRS.contains(&component.as_str()))
+        .filter_map(|c| c.as_os_str().to_str())
+        .any(|s| SYSTEM_DIRS.contains(&s))
     {
         return true;
     }
 
-    components
-        .windows(2)
-        .any(|window| window[0] == "storage" && window[1] == "framework")
+    let mut components = relative.components().filter_map(|c| c.as_os_str().to_str());
+    while let Some(first) = components.next() {
+        if first == "storage"
+            && let Some(second) = components.next()
+            && second == "framework"
+        {
+            return true;
+        }
+    }
+    false
 }
 
 fn normalized_extension(path: &Path) -> Option<String> {
@@ -762,8 +776,8 @@ fn normalized_extension(path: &Path) -> Option<String> {
         .filter(|ext| !ext.is_empty())
 }
 
-fn extension_set(values: &[&str]) -> HashSet<String> {
-    values.iter().map(|value| value.to_string()).collect()
+fn extension_set(values: &[&'static str]) -> HashSet<&'static str> {
+    values.iter().copied().collect()
 }
 
 struct FileNameFilter {

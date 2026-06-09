@@ -446,9 +446,11 @@ fn run_search(args: SearchArgs) -> anyhow::Result<i32> {
 
     let cancel = CancelToken::new();
     let handler_token = cancel.clone();
-    let _ = ctrlc::set_handler(move || {
+    if let Err(err) = ctrlc::set_handler(move || {
         handler_token.cancel();
-    });
+    }) {
+        tracing::warn!("Ctrl+C handler not installed: {err}");
+    }
 
     let summary = search_with(&options, &cancel, None)?;
     if summary.cancelled {
@@ -544,9 +546,11 @@ fn run_replace(
     };
     let cancel = CancelToken::new();
     let handler_token = cancel.clone();
-    let _ = ctrlc::set_handler(move || {
+    if let Err(err) = ctrlc::set_handler(move || {
         handler_token.cancel();
-    });
+    }) {
+        tracing::warn!("Ctrl+C handler not installed: {err}");
+    }
 
     let summary = replace_with(&options, &cancel, None)?;
     if summary.cancelled {

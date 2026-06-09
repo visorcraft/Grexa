@@ -354,7 +354,7 @@ Kirigami.ApplicationWindow {
                     spacing: 1
                     visible: !drawer.isCollapsed
                     Controls.Label {
-                        text: "Grexa"
+                        text: qsTr("Grexa")
                         font.pixelSize: tokens.textSubheading + 1
                         font.weight: tokens.weightBold
                         font.family: tokens.sansFamily

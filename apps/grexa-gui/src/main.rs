@@ -305,10 +305,13 @@ fn request_dbus_activate() {
             "com.visorcraft.Grexa.Activate",
         ])
         .status();
-    if status.is_err() || !status.unwrap().success() {
-        let _ = std::process::Command::new("wmctrl")
-            .args(["-a", "Grexa"])
-            .status();
+    match status {
+        Ok(s) if s.success() => {}
+        _ => {
+            let _ = std::process::Command::new("wmctrl")
+                .args(["-a", "Grexa"])
+                .status();
+        }
     }
 }
 

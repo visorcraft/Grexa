@@ -120,10 +120,12 @@ fn unix_now() -> u64 {
 
 fn write_journal(entry: &ReplaceJournalEntry) {
     let path = journal_path();
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
+    if let Some(parent) = path.parent()
+        && let Err(err) = fs::create_dir_all(parent)
+    {
+        tracing::warn!("cannot create journal directory: {err}");
     }
-    if let Ok(bytes) = serde_json::to_vec_pretty(entry)
+    if let Ok(bytes) = serde_json::to_vec(entry)
         && fs::write(&path, bytes).is_ok()
     {
         // The journal records absolute paths of files being rewritten;
@@ -368,9 +370,6 @@ fn apply_substitution(
         }
         (text.replace(needle, &options.replacement), count)
     } else {
-        // Case-insensitive plain text: build a literal-match regex with the
-        // case-insensitive flag so capture-group syntax in the replacement is
-        // treated as literal characters.
         let escaped = regex::escape(needle);
         match RegexBuilder::new(&escaped).case_insensitive(true).build() {
             Ok(re) => {

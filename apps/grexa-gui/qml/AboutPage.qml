@@ -150,7 +150,7 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         spacing: app.tokens.spaceXS
                         Controls.Label {
-                            text: "Grexa"
+                            text: qsTr("Grexa")
                             font.pixelSize: app.tokens.textDisplay
                             font.weight: app.tokens.weightBold
                             font.family: app.tokens.sansFamily

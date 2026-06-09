@@ -684,15 +684,16 @@ fn load_json_or_default<T>(path: &Path) -> Result<T, JsonStoreError>
 where
     T: DeserializeOwned + Default,
 {
-    if !path.exists() {
-        return Ok(T::default());
+    match fs::read(path) {
+        Ok(bytes) => {
+            if bytes.iter().all(|b| b.is_ascii_whitespace()) {
+                return Ok(T::default());
+            }
+            Ok(serde_json::from_slice(&bytes)?)
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(T::default()),
+        Err(err) => Err(err.into()),
     }
-
-    let bytes = fs::read(path)?;
-    if bytes.iter().all(|b| b.is_ascii_whitespace()) {
-        return Ok(T::default());
-    }
-    Ok(serde_json::from_slice(&bytes)?)
 }
 
 fn save_json<T>(path: &Path, value: &T) -> Result<(), JsonStoreError>
@@ -703,8 +704,12 @@ where
         fs::create_dir_all(parent)?;
     }
 
-    let json = serde_json::to_vec_pretty(value)?;
-    fs::write(path, json)?;
+    let json = serde_json::to_vec(value)?;
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let mut tmp = tempfile::NamedTempFile::new_in(parent)?;
+    std::io::Write::write_all(&mut tmp, &json)?;
+    tmp.persist(path)
+        .map_err(|err| JsonStoreError::Io(std::io::Error::other(err.to_string())))?;
     Ok(())
 }
 

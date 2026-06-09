@@ -47,15 +47,15 @@ pub enum DetectedEncoding {
 }
 
 impl DetectedEncoding {
-    pub fn label(&self) -> String {
+    pub fn label(&self) -> std::borrow::Cow<'static, str> {
         match self {
-            DetectedEncoding::Utf8 => "UTF-8".to_string(),
-            DetectedEncoding::Utf8Bom => "UTF-8 BOM".to_string(),
-            DetectedEncoding::Utf16Le => "UTF-16 LE".to_string(),
-            DetectedEncoding::Utf16Be => "UTF-16 BE".to_string(),
-            DetectedEncoding::Utf32Le => "UTF-32 LE".to_string(),
-            DetectedEncoding::Utf32Be => "UTF-32 BE".to_string(),
-            DetectedEncoding::Heuristic(name) => name.clone(),
+            DetectedEncoding::Utf8 => std::borrow::Cow::Borrowed("UTF-8"),
+            DetectedEncoding::Utf8Bom => std::borrow::Cow::Borrowed("UTF-8 BOM"),
+            DetectedEncoding::Utf16Le => std::borrow::Cow::Borrowed("UTF-16 LE"),
+            DetectedEncoding::Utf16Be => std::borrow::Cow::Borrowed("UTF-16 BE"),
+            DetectedEncoding::Utf32Le => std::borrow::Cow::Borrowed("UTF-32 LE"),
+            DetectedEncoding::Utf32Be => std::borrow::Cow::Borrowed("UTF-32 BE"),
+            DetectedEncoding::Heuristic(name) => std::borrow::Cow::Owned(name.clone()),
         }
     }
 
