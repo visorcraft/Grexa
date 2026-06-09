@@ -154,50 +154,48 @@ impl PatternEngine {
         matches: &[(usize, usize)],
         replacement: &str,
     ) -> String {
+        let mut result = String::with_capacity(haystack.len());
+        let mut prev_end = 0;
+        for &(start, end) in matches {
+            result.push_str(&haystack[prev_end..start]);
+            if !self.expand_capture_at(haystack, start, end, replacement, &mut result) {
+                result.push_str(&haystack[start..end]);
+            }
+            prev_end = end;
+        }
+        result.push_str(&haystack[prev_end..]);
+        result
+    }
+
+    /// Expand `replacement` for the match at `(start, end)` into `out`,
+    /// returning `false` (writing nothing) when the pattern no longer matches
+    /// that exact span. Re-queries on the full haystack so lookaround/anchored
+    /// context stays visible; expanding the raw template on a failed re-match
+    /// would emit literal `$1`.
+    fn expand_capture_at(
+        &self,
+        haystack: &str,
+        start: usize,
+        end: usize,
+        replacement: &str,
+        out: &mut String,
+    ) -> bool {
+        let spans_match = |m_start: usize, m_end: usize| m_start == start && m_end == end;
         match self {
-            PatternEngine::Fast(re) => {
-                let mut result = String::with_capacity(haystack.len());
-                let mut prev_end = 0;
-                for &(start, end) in matches {
-                    result.push_str(&haystack[prev_end..start]);
-                    // Re-query on the full haystack so lookaround/anchored
-                    // context stays visible; expanding the raw template on a
-                    // failed re-match would emit literal `$1`.
-                    match re.captures_at(haystack, start) {
-                        Some(caps)
-                            if caps
-                                .get(0)
-                                .is_some_and(|m| m.start() == start && m.end() == end) =>
-                        {
-                            caps.expand(replacement, &mut result);
-                        }
-                        _ => result.push_str(&haystack[start..end]),
-                    }
-                    prev_end = end;
+            PatternEngine::Fast(re) => match re.captures_at(haystack, start) {
+                Some(caps) if caps.get(0).is_some_and(|m| spans_match(m.start(), m.end())) => {
+                    caps.expand(replacement, out);
+                    true
                 }
-                result.push_str(&haystack[prev_end..]);
-                result
-            }
-            PatternEngine::Extended(re) => {
-                let mut result = String::with_capacity(haystack.len());
-                let mut prev_end = 0;
-                for &(start, end) in matches {
-                    result.push_str(&haystack[prev_end..start]);
-                    match re.captures_from_pos(haystack, start) {
-                        Ok(Some(caps))
-                            if caps
-                                .get(0)
-                                .is_some_and(|m| m.start() == start && m.end() == end) =>
-                        {
-                            caps.expand(replacement, &mut result);
-                        }
-                        _ => result.push_str(&haystack[start..end]),
-                    }
-                    prev_end = end;
+                _ => false,
+            },
+            PatternEngine::Extended(re) => match re.captures_from_pos(haystack, start) {
+                Ok(Some(caps)) if caps.get(0).is_some_and(|m| spans_match(m.start(), m.end())) => {
+                    caps.expand(replacement, out);
+                    true
                 }
-                result.push_str(&haystack[prev_end..]);
-                result
-            }
+                _ => false,
+            },
         }
     }
 }

@@ -67,11 +67,7 @@ const BATCH_SIZE: usize = 64;
 #[derive(Debug, Clone, Default)]
 struct TabSnapshot {
     rows: Vec<ResultRow>,
-    last_path: String,
-    last_term: String,
-    last_regex: bool,
-    last_case_sensitive: bool,
-    last_whole_word: bool,
+    last_search_options: Option<SearchOptions>,
     status_text: String,
     match_count: i32,
     files_matched: i32,
@@ -459,6 +455,42 @@ enum WithinContext {
     InvalidRegex,
 }
 
+/// Compiled within-filter context plus the inputs it was built from.
+/// `ensure_within_cache` recompiles only when the inputs change, so
+/// per-batch row pushes and visible-rebuilds reuse one compiled regex
+/// instead of recompiling per call. Keyed on the inputs (rather than
+/// hooked into the qproperty setters) so direct field writes —
+/// tab-snapshot restore, tests — can never leave a stale context.
+struct WithinCache {
+    filter: QString,
+    regex: bool,
+    ctx: WithinContext,
+}
+
+impl Default for WithinCache {
+    fn default() -> Self {
+        Self {
+            filter: QString::default(),
+            regex: false,
+            ctx: WithinContext::PassAll,
+        }
+    }
+}
+
+fn compute_within_context(within: &str, use_regex: bool) -> WithinContext {
+    let trimmed = within.trim();
+    if trimmed.is_empty() {
+        WithinContext::PassAll
+    } else if use_regex {
+        match regex::Regex::new(trimmed) {
+            Ok(re) => WithinContext::Regex(re),
+            Err(_) => WithinContext::InvalidRegex,
+        }
+    } else {
+        WithinContext::Literal(trimmed.to_lowercase())
+    }
+}
+
 /// Rust-side state for `SearchController`. Owned by the cxx-qt-generated
 /// C++ class via `super::SearchControllerRust`.
 #[derive(Default)]
@@ -486,13 +518,12 @@ pub struct SearchControllerRust {
     /// projects through this — `row_count` returns `visible.len()`,
     /// `row_data(i)` reads `rows[visible[i]]`.
     visible: Vec<usize>,
-    /// The last successful search's path + term + flags. Replace and
-    /// "refresh view" both replay against these.
-    last_path: String,
-    last_term: String,
-    last_regex: bool,
-    last_case_sensitive: bool,
-    last_whole_word: bool,
+    /// The exact `SearchOptions` the last search ran with. Replace and
+    /// history recording replay against this snapshot — never against
+    /// the current settings — so a settings change between searching
+    /// and replacing can't widen the replace beyond what was previewed.
+    last_search_options: Option<SearchOptions>,
+    within_cache: WithinCache,
     /// Per-tab result-row snapshots keyed by the QML-side monotonic
     /// tab id. Switching to a different tab calls
     /// `save_tab_snapshot(prev)` then `restore_tab_snapshot(next)`
@@ -550,10 +581,10 @@ impl SearchControllerRust {
     /// `rowCount` always grows by exactly `kept.len()`.
     pub fn filter_batch_for_view(&mut self, batch: &[ResultRow]) -> Vec<usize> {
         let mut kept: Vec<usize> = Vec::with_capacity(batch.len());
-        let ctx = self.build_within_context();
+        self.ensure_within_cache();
         if self.result_mode == 1 {
             for (i, row) in batch.iter().enumerate() {
-                if !self.row_passes_within(row, &ctx) {
+                if !self.row_passes_within(row, &self.within_cache.ctx) {
                     continue;
                 }
                 if self.seen_paths.insert(row.full_path.clone()) {
@@ -562,7 +593,7 @@ impl SearchControllerRust {
             }
         } else {
             for (i, row) in batch.iter().enumerate() {
-                if self.row_passes_within(row, &ctx) {
+                if self.row_passes_within(row, &self.within_cache.ctx) {
                     kept.push(i);
                 }
             }
@@ -625,19 +656,29 @@ impl SearchControllerRust {
         }
     }
 
-    fn build_within_context(&self) -> WithinContext {
-        let within = self.within_filter.to_string();
-        let trimmed = within.trim();
-        if trimmed.is_empty() {
-            WithinContext::PassAll
-        } else if self.within_regex {
-            match regex::Regex::new(trimmed) {
-                Ok(re) => WithinContext::Regex(re),
-                Err(_) => WithinContext::InvalidRegex,
-            }
-        } else {
-            WithinContext::Literal(trimmed.to_lowercase())
+    fn ensure_within_cache(&mut self) {
+        if self.within_cache.filter == self.within_filter
+            && self.within_cache.regex == self.within_regex
+        {
+            return;
         }
+        self.within_cache = WithinCache {
+            filter: self.within_filter.clone(),
+            regex: self.within_regex,
+            ctx: compute_within_context(&self.within_filter.to_string(), self.within_regex),
+        };
+    }
+
+    /// The options `start_replace` replays. `None` until a search has
+    /// run (or after `clear_results`), which keeps replace gated on a
+    /// previewed search. Qt-free so tests can pin that replace uses
+    /// the stored options rather than re-reading settings.
+    fn replay_search_options(&self) -> Option<SearchOptions> {
+        let options = self.last_search_options.clone()?;
+        if options.path.as_os_str().is_empty() || options.search_term.is_empty() {
+            return None;
+        }
+        Some(options)
     }
 
     /// Recompute `visible` from scratch. O(rows.len()). Called when
@@ -651,10 +692,10 @@ impl SearchControllerRust {
     pub fn rebuild_visible(&mut self) {
         self.visible.clear();
         self.seen_paths.clear();
-        let ctx = self.build_within_context();
+        self.ensure_within_cache();
         let files_mode = self.result_mode == 1;
         for i in 0..self.rows.len() {
-            if !self.row_passes_within(&self.rows[i], &ctx) {
+            if !self.row_passes_within(&self.rows[i], &self.within_cache.ctx) {
                 continue;
             }
             if files_mode {
@@ -684,11 +725,7 @@ impl SearchControllerRust {
         self.rows.clear();
         self.visible.clear();
         self.seen_paths.clear();
-        self.last_path.clear();
-        self.last_term.clear();
-        self.last_regex = false;
-        self.last_case_sensitive = false;
-        self.last_whole_word = false;
+        self.last_search_options = None;
     }
 
     #[cfg(test)]
@@ -737,17 +774,26 @@ impl ffi::SearchController {
         let path_str = expand_tilde(&path.to_string());
         let term_str = term.to_string();
         let cancel = CancelToken::new();
+        // Forward the persisted Settings into the SearchOptions so
+        // toggles like `Respect .gitignore`, `Include hidden`, the
+        // default match-files glob, etc. actually shape this search.
+        // The fast/slow boolean flags from the SearchBar override
+        // settings for *this* invocation only.
+        let settings = with_workspace(|w| w.settings.load().unwrap_or_default());
+        let options = search_options_from_settings(
+            &path_str,
+            &term_str,
+            regex,
+            case_sensitive,
+            whole_word,
+            &settings,
+        );
         {
             let mut s = self.as_mut().rust_mut();
             s.cancel_token = Some(cancel.clone());
-            // Remember the search shape so `start_replace` can replay
-            // it against the same scope without the QML having to
-            // re-supply every field.
-            s.last_path = path_str.clone();
-            s.last_term = term_str.clone();
-            s.last_regex = regex;
-            s.last_case_sensitive = case_sensitive;
-            s.last_whole_word = whole_word;
+            // Remember the search shape so `start_replace` and history
+            // recording replay the exact options this search ran with.
+            s.last_search_options = Some(options.clone());
         }
 
         self.as_mut().set_match_count(0);
@@ -771,22 +817,19 @@ impl ffi::SearchController {
                 self.as_mut().search_completed(false);
                 return;
             }
-            let settings = with_workspace(|w| w.settings.load().unwrap_or_default());
+            // Reuse the builder output so the container path can't
+            // drift from the local-search settings forwarding.
             let container_opts = grexa_containers::ContainerSearchOptions {
                 container_path: path_str.clone(),
                 pattern: term_str.clone(),
-                case_sensitive,
-                regex,
-                whole_word,
+                case_sensitive: options.case_sensitive,
+                regex: options.regex,
+                whole_word: options.whole_word,
                 max_results: None,
-                diacritic_sensitive: settings.diacritic_sensitive,
-                unicode_normalization_mode: settings.unicode_normalization_mode,
-                string_comparison_mode: settings.string_comparison_mode,
-                culture: if settings.culture.is_empty() {
-                    None
-                } else {
-                    Some(settings.culture.clone())
-                },
+                diacritic_sensitive: options.diacritic_sensitive,
+                unicode_normalization_mode: options.unicode_normalization_mode,
+                string_comparison_mode: options.string_comparison_mode,
+                culture: options.culture.clone(),
             };
             let thread = self.qt_thread();
             std::thread::spawn(move || {
@@ -799,33 +842,6 @@ impl ffi::SearchController {
             });
             return;
         }
-
-        // Forward the persisted Settings into the SearchOptions so
-        // toggles like `Respect .gitignore`, `Include hidden`, the
-        // default match-files glob, etc. actually shape this search.
-        // The fast/slow boolean flags from the SearchBar override
-        // settings for *this* invocation only.
-        let mut options = SearchOptions::new(PathBuf::from(&path_str), &term_str);
-        options.regex = regex;
-        options.case_sensitive = case_sensitive;
-        let settings = with_workspace(|w| w.settings.load().unwrap_or_default());
-        options.respect_gitignore = settings.respect_gitignore;
-        options.include_hidden = settings.include_hidden_items;
-        options.include_binary = settings.include_binary_files;
-        options.include_system = settings.include_system_files;
-        options.include_subfolders = settings.include_subfolders;
-        options.include_symlinks = settings.include_symbolic_links;
-        options.match_file_names = settings.default_match_files.clone();
-        options.exclude_dirs = settings.default_exclude_dirs.clone();
-        options.whole_word = whole_word;
-        options.diacritic_sensitive = settings.diacritic_sensitive;
-        options.unicode_normalization_mode = settings.unicode_normalization_mode;
-        options.string_comparison_mode = settings.string_comparison_mode;
-        options.culture = if settings.culture.is_empty() {
-            None
-        } else {
-            Some(settings.culture.clone())
-        };
 
         let thread = self.qt_thread();
 
@@ -1058,42 +1074,18 @@ impl ffi::SearchController {
             self.as_mut().replace_completed(false);
             return;
         }
-        let path = self.as_ref().rust().last_path.clone();
-        let term = self.as_ref().rust().last_term.clone();
-        if path.is_empty() || term.is_empty() {
+        // Replay the exact options the last search ran with — NOT the
+        // current settings — so a settings change between searching
+        // and clicking Replace can't make replace touch files the
+        // user never previewed.
+        let Some(options) = self.as_ref().rust().replay_search_options() else {
             self.as_mut()
                 .set_status_text(QString::from("Run a search first, then replace."));
             self.as_mut().replace_completed(false);
             return;
-        }
+        };
         let replacement_str = replacement.to_string();
         self.as_mut().set_replacing(true);
-
-        // Build the same SearchOptions the last search used.
-        let regex = self.as_ref().rust().last_regex;
-        let case_sensitive = self.as_ref().rust().last_case_sensitive;
-        let whole_word = self.as_ref().rust().last_whole_word;
-        let mut options = grexa_core::SearchOptions::new(PathBuf::from(&path), &term);
-        options.regex = regex;
-        options.case_sensitive = case_sensitive;
-        options.whole_word = whole_word;
-        let settings = with_workspace(|w| w.settings.load().unwrap_or_default());
-        options.respect_gitignore = settings.respect_gitignore;
-        options.include_hidden = settings.include_hidden_items;
-        options.include_binary = settings.include_binary_files;
-        options.include_system = settings.include_system_files;
-        options.include_subfolders = settings.include_subfolders;
-        options.include_symlinks = settings.include_symbolic_links;
-        options.match_file_names = settings.default_match_files.clone();
-        options.exclude_dirs = settings.default_exclude_dirs.clone();
-        options.diacritic_sensitive = settings.diacritic_sensitive;
-        options.unicode_normalization_mode = settings.unicode_normalization_mode;
-        options.string_comparison_mode = settings.string_comparison_mode;
-        options.culture = if settings.culture.is_empty() {
-            None
-        } else {
-            Some(settings.culture.clone())
-        };
 
         let cancel = CancelToken::new();
         let thread = self.qt_thread();
@@ -1192,11 +1184,7 @@ impl ffi::SearchController {
     fn save_tab_snapshot(mut self: Pin<&mut Self>, tab_id: i32) {
         let snapshot = TabSnapshot {
             rows: std::mem::take(&mut self.as_mut().rust_mut().rows),
-            last_path: std::mem::take(&mut self.as_mut().rust_mut().last_path),
-            last_term: std::mem::take(&mut self.as_mut().rust_mut().last_term),
-            last_regex: self.as_ref().rust().last_regex,
-            last_case_sensitive: self.as_ref().rust().last_case_sensitive,
-            last_whole_word: self.as_ref().rust().last_whole_word,
+            last_search_options: self.as_mut().rust_mut().last_search_options.take(),
             status_text: self.as_ref().rust().status_text.to_string(),
             match_count: self.as_ref().rust().match_count,
             files_matched: self.as_ref().rust().files_matched,
@@ -1225,13 +1213,10 @@ impl ffi::SearchController {
         // is dropped explicitly on tab close via `drop_tab_snapshot`.
         let snap_opt = self.as_ref().rust().tab_snapshots.get(&tab_id).cloned();
 
-        let (
+        let snap = snap_opt.unwrap_or_default();
+        let TabSnapshot {
             rows,
-            last_path,
-            last_term,
-            last_regex,
-            last_case_sensitive,
-            last_whole_word,
+            last_search_options,
             status_text,
             match_count,
             files_matched,
@@ -1245,50 +1230,7 @@ impl ffi::SearchController {
             busy,
             replacing,
             last_replace_summary,
-        ) = match snap_opt {
-            Some(snap) => (
-                snap.rows,
-                snap.last_path,
-                snap.last_term,
-                snap.last_regex,
-                snap.last_case_sensitive,
-                snap.last_whole_word,
-                QString::from(&snap.status_text),
-                snap.match_count,
-                snap.files_matched,
-                snap.files_scanned,
-                snap.has_searched,
-                snap.result_mode,
-                QString::from(&snap.within_filter),
-                snap.within_regex,
-                snap.target_kind,
-                QString::from(&snap.selected_container_id),
-                snap.busy,
-                snap.replacing,
-                QString::from(&snap.last_replace_summary),
-            ),
-            None => (
-                Vec::new(),
-                String::new(),
-                String::new(),
-                false,
-                false,
-                false,
-                QString::default(),
-                0,
-                0,
-                0,
-                false,
-                0,
-                QString::default(),
-                false,
-                0,
-                QString::default(),
-                false,
-                false,
-                QString::default(),
-            ),
-        };
+        } = snap;
 
         // Set projection-driving qproperties through the generated
         // setters before rebuilding `visible`. Writing these backing
@@ -1296,21 +1238,18 @@ impl ffi::SearchController {
         // setters below silent no-ops, leaving QML bound controls
         // stale after a tab switch.
         self.as_mut().set_result_mode(result_mode);
-        self.as_mut().set_within_filter(within_filter);
+        self.as_mut()
+            .set_within_filter(QString::from(&within_filter));
         self.as_mut().set_within_regex(within_regex);
         self.as_mut().set_target_kind(target_kind);
         self.as_mut()
-            .set_selected_container_id(selected_container_id);
+            .set_selected_container_id(QString::from(&selected_container_id));
 
         unsafe { self.as_mut().begin_reset_model() };
         {
             let mut s = self.as_mut().rust_mut();
             s.rows = rows;
-            s.last_path = last_path;
-            s.last_term = last_term;
-            s.last_regex = last_regex;
-            s.last_case_sensitive = last_case_sensitive;
-            s.last_whole_word = last_whole_word;
+            s.last_search_options = last_search_options;
             // Re-project: the visible vec is derived from rows +
             // result_mode + within_filter on every restore, never
             // persisted to the snapshot. This keeps the projection
@@ -1320,14 +1259,15 @@ impl ffi::SearchController {
         }
         unsafe { self.as_mut().end_reset_model() };
 
-        self.as_mut().set_status_text(status_text);
+        self.as_mut().set_status_text(QString::from(&status_text));
         self.as_mut().set_match_count(match_count);
         self.as_mut().set_files_matched(files_matched);
         self.as_mut().set_files_scanned(files_scanned);
         self.as_mut().set_has_searched(has_searched);
         self.as_mut().set_busy(busy);
         self.as_mut().set_replacing(replacing);
-        self.as_mut().set_last_replace_summary(last_replace_summary);
+        self.as_mut()
+            .set_last_replace_summary(QString::from(&last_replace_summary));
     }
 
     fn drop_tab_snapshot(mut self: Pin<&mut Self>, tab_id: i32) {
@@ -2005,13 +1945,13 @@ fn build_containers_json() -> String {
     .unwrap_or_else(|_| "{\"runtimes\":[],\"containers\":[]}".into())
 }
 
-/// Build the `SearchOptions` recorded into search history when a
-/// search finishes. Qt-free so tests can pin that the replayed shape
-/// (including `whole_word`, which feeds `RecentSearch::key()`)
-/// matches what was actually searched.
-fn history_search_options(
+/// The single settings → `SearchOptions` forwarding seam, shared by
+/// the local search, the container dispatch, and (via the stored
+/// `last_search_options`) replace and history recording — so the
+/// pipelines can't drift apart. Qt-free so tests can pin the shape.
+fn search_options_from_settings(
     path_str: &str,
-    term: String,
+    term: &str,
     regex: bool,
     case_sensitive: bool,
     whole_word: bool,
@@ -2029,7 +1969,21 @@ fn history_search_options(
     options.include_symlinks = settings.include_symbolic_links;
     options.match_file_names = settings.default_match_files.clone();
     options.exclude_dirs = settings.default_exclude_dirs.clone();
+    options.diacritic_sensitive = settings.diacritic_sensitive;
+    options.unicode_normalization_mode = settings.unicode_normalization_mode;
+    options.string_comparison_mode = settings.string_comparison_mode;
+    options.culture = culture_option(settings);
     options
+}
+
+/// Settings store an empty string for "no culture"; `SearchOptions`
+/// wants `None`.
+fn culture_option(settings: &grexa_core::DefaultSettings) -> Option<String> {
+    if settings.culture.is_empty() {
+        None
+    } else {
+        Some(settings.culture.clone())
+    }
 }
 
 fn finish_search(
@@ -2065,24 +2019,12 @@ fn finish_search(
                     tracing::warn!("failed to record recent path: {err}");
                 }
             });
-            let history_added = if cancelled {
-                false
-            } else {
-                let term = pin.as_ref().rust().last_term.clone();
-                let regex = pin.as_ref().rust().last_regex;
-                let case_sensitive = pin.as_ref().rust().last_case_sensitive;
-                let whole_word = pin.as_ref().rust().last_whole_word;
-                let files_search = pin.as_ref().rust().result_mode == 1;
-                with_workspace(|w| {
-                    let settings = w.settings.load().unwrap_or_default();
-                    let options = history_search_options(
-                        path_str,
-                        term,
-                        regex,
-                        case_sensitive,
-                        whole_word,
-                        &settings,
-                    );
+            let files_search = pin.as_ref().rust().result_mode == 1;
+            // Record the options the search actually ran with — not a
+            // rebuild from current settings, which may have changed
+            // while the search was in flight.
+            let history_added = match (cancelled, pin.as_ref().rust().last_search_options.clone()) {
+                (false, Some(options)) => with_workspace(|w| {
                     w.history
                         .add(grexa_core::RecentSearch::from_options(
                             &options,
@@ -2090,7 +2032,8 @@ fn finish_search(
                             summary.matches,
                         ))
                         .is_ok()
-                })
+                }),
+                _ => false,
             };
             let recent_count =
                 with_workspace(|w| w.recent_paths.load().unwrap_or_default().len() as i32);
@@ -2272,10 +2215,7 @@ mod tests {
             files_matched: 1,
             files_scanned: 2,
             has_searched: true,
-            last_path: "/tmp/project".into(),
-            last_term: "TODO".into(),
-            last_regex: true,
-            last_case_sensitive: true,
+            last_search_options: Some(SearchOptions::new(PathBuf::from("/tmp/project"), "TODO")),
             ..Default::default()
         };
         state.append_batch(vec![ResultRow {
@@ -2296,10 +2236,8 @@ mod tests {
         assert_eq!(state.files_scanned, 0);
         assert!(!state.has_searched);
         assert!(state.status_text.is_empty());
-        assert!(state.last_path.is_empty());
-        assert!(state.last_term.is_empty());
-        assert!(!state.last_regex);
-        assert!(!state.last_case_sensitive);
+        assert!(state.last_search_options.is_none());
+        assert!(state.replay_search_options().is_none());
     }
 
     fn row(path: &str, preview: &str) -> ResultRow {
@@ -2362,17 +2300,94 @@ mod tests {
     #[test]
     fn history_options_record_whole_word() {
         let settings = grexa_core::DefaultSettings::default();
-        let options = history_search_options(
-            "/tmp/project",
-            "TODO".to_string(),
-            false,
-            true,
-            true,
-            &settings,
-        );
+        let options =
+            search_options_from_settings("/tmp/project", "TODO", false, true, true, &settings);
         let recent = grexa_core::RecentSearch::from_options(&options, false, 3);
         assert!(recent.whole_word);
         assert!(recent.search_case_sensitive);
+    }
+
+    #[test]
+    fn search_options_builder_forwards_settings_and_culture() {
+        let mut settings = grexa_core::DefaultSettings {
+            respect_gitignore: true,
+            include_hidden_items: true,
+            default_exclude_dirs: "target,node_modules".into(),
+            diacritic_sensitive: false,
+            culture: String::new(),
+            ..Default::default()
+        };
+
+        let options = search_options_from_settings("/p", "TODO", true, true, true, &settings);
+        assert!(options.regex && options.case_sensitive && options.whole_word);
+        assert!(options.respect_gitignore && options.include_hidden);
+        assert_eq!(options.exclude_dirs, "target,node_modules");
+        assert!(!options.diacritic_sensitive);
+        assert_eq!(options.culture, None);
+
+        settings.culture = "de-DE".into();
+        let options = search_options_from_settings("/p", "TODO", false, false, false, &settings);
+        assert_eq!(options.culture.as_deref(), Some("de-DE"));
+    }
+
+    #[test]
+    fn replace_replays_stored_options_after_settings_change() {
+        let mut settings = grexa_core::DefaultSettings {
+            respect_gitignore: true,
+            default_exclude_dirs: "target".into(),
+            ..Default::default()
+        };
+        let searched = search_options_from_settings("/proj", "TODO", false, true, false, &settings);
+        let state = SearchControllerRust {
+            last_search_options: Some(searched.clone()),
+            ..Default::default()
+        };
+
+        // Settings change after the search; replace must not see it.
+        settings.respect_gitignore = false;
+        settings.default_exclude_dirs.clear();
+
+        let replayed = state.replay_search_options().expect("a search ran");
+        assert_eq!(replayed, searched);
+        assert!(replayed.respect_gitignore);
+        assert_eq!(replayed.exclude_dirs, "target");
+    }
+
+    #[test]
+    fn replay_search_options_requires_a_prior_search() {
+        let state = SearchControllerRust::default();
+        assert!(state.replay_search_options().is_none());
+
+        let blank_term = SearchControllerRust {
+            last_search_options: Some(SearchOptions::new(PathBuf::from("/p"), "")),
+            ..Default::default()
+        };
+        assert!(blank_term.replay_search_options().is_none());
+    }
+
+    #[test]
+    fn within_cache_rekeys_when_filter_fields_change() {
+        let mut state = SearchControllerRust {
+            within_filter: QString::from("alpha"),
+            ..Default::default()
+        };
+        state.append_batch(vec![row("/a", "alpha"), row("/b", "beta")]);
+        assert_eq!(state.row_count(), 1);
+        // Cache key now (alpha, false); identical inputs reuse it.
+        assert!(matches!(state.within_cache.ctx, WithinContext::Literal(_)));
+        state.append_batch(vec![row("/c", "alpha")]);
+        assert_eq!(state.row_count(), 2);
+
+        // Direct field write (what the qproperty setter does) must
+        // invalidate on the next batch/rebuild.
+        state.within_filter = QString::from("beta");
+        state.rebuild_visible();
+        assert_eq!(state.row_count(), 1);
+        state.within_regex = true;
+        state.within_filter = QString::from("bet?a");
+        state.rebuild_visible();
+        assert!(matches!(state.within_cache.ctx, WithinContext::Regex(_)));
+        assert_eq!(state.row_count(), 1);
     }
 
     #[test]

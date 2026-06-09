@@ -757,25 +757,38 @@ pub(crate) fn normalize_with_mapping(
     options: &SearchOptions,
     ctx: &NormalizationContext,
 ) -> (String, Vec<usize>) {
-    use icu_properties::props::GeneralCategory;
-
     let mut normalized = String::with_capacity(original.len());
     let mut mapping = Vec::with_capacity(original.len().saturating_add(1));
 
+    // This runs per line in the default (case-insensitive) configuration, so
+    // single-char segments — the overwhelmingly common case — borrow a stack
+    // buffer instead of allocating; the scratch String is reused for the rare
+    // segments that carry combining marks.
+    let mut scratch = String::new();
+    let mut char_buf = [0u8; 4];
+
     let mut char_iter = original.char_indices().peekable();
     while let Some((byte_off, ch)) = char_iter.next() {
-        let mut segment = ch.to_string();
-        while let Some(&(_, next_ch)) = char_iter.peek() {
-            let gc = ctx.gc_map.get(next_ch);
-            if gc == GeneralCategory::NonspacingMark || gc == GeneralCategory::SpacingMark {
-                segment.push(next_ch);
-                char_iter.next();
-            } else {
-                break;
+        let has_marks = char_iter
+            .peek()
+            .is_some_and(|&(_, next_ch)| is_combining_mark(ctx, next_ch));
+        let segment: &str = if has_marks {
+            scratch.clear();
+            scratch.push(ch);
+            while let Some(&(_, next_ch)) = char_iter.peek() {
+                if is_combining_mark(ctx, next_ch) {
+                    scratch.push(next_ch);
+                    char_iter.next();
+                } else {
+                    break;
+                }
             }
-        }
+            &scratch
+        } else {
+            ch.encode_utf8(&mut char_buf)
+        };
 
-        let norm_segment = normalize_for_text_search(&segment, options, ctx);
+        let norm_segment = normalize_for_text_search(segment, options, ctx);
 
         for _ in 0..norm_segment.len() {
             mapping.push(byte_off);
@@ -785,6 +798,12 @@ pub(crate) fn normalize_with_mapping(
 
     mapping.push(original.len());
     (normalized, mapping)
+}
+
+fn is_combining_mark(ctx: &NormalizationContext, ch: char) -> bool {
+    use icu_properties::props::GeneralCategory;
+    let gc = ctx.gc_map.get(ch);
+    gc == GeneralCategory::NonspacingMark || gc == GeneralCategory::SpacingMark
 }
 
 pub(crate) struct NormalizationContext {
@@ -832,35 +851,40 @@ pub(crate) fn normalize_for_text_search(
     options: &SearchOptions,
     ctx: &NormalizationContext,
 ) -> String {
-    let mut value = match options.unicode_normalization_mode {
-        UnicodeNormalizationMode::None => input.to_string(),
-        UnicodeNormalizationMode::FormC => input.nfc().collect(),
-        UnicodeNormalizationMode::FormD => input.nfd().collect(),
-        UnicodeNormalizationMode::FormKC => input.nfkc().collect(),
-        UnicodeNormalizationMode::FormKD => input.nfkd().collect(),
+    use std::borrow::Cow;
+
+    // Borrow through the untouched stages so the common per-segment call
+    // (mode = None, diacritics kept, case folded) allocates only once.
+    let value: Cow<'_, str> = match options.unicode_normalization_mode {
+        UnicodeNormalizationMode::None => Cow::Borrowed(input),
+        UnicodeNormalizationMode::FormC => Cow::Owned(input.nfc().collect()),
+        UnicodeNormalizationMode::FormD => Cow::Owned(input.nfd().collect()),
+        UnicodeNormalizationMode::FormKC => Cow::Owned(input.nfkc().collect()),
+        UnicodeNormalizationMode::FormKD => Cow::Owned(input.nfkd().collect()),
     };
 
-    if ctx.strip_diacritics {
+    let value: Cow<'_, str> = if ctx.strip_diacritics {
         use icu_properties::props::GeneralCategory;
-        value = value
-            .nfd()
-            .filter(|ch| ctx.gc_map.get(*ch) != GeneralCategory::NonspacingMark)
-            .collect();
-    }
+        Cow::Owned(
+            value
+                .nfd()
+                .filter(|ch| ctx.gc_map.get(*ch) != GeneralCategory::NonspacingMark)
+                .collect(),
+        )
+    } else {
+        value
+    };
 
     if !options.case_sensitive {
-        value = culture_aware_lowercase(&value, ctx);
+        culture_aware_lowercase(&value, ctx)
+    } else {
+        value.into_owned()
     }
-
-    value
 }
 
 pub(crate) fn culture_aware_lowercase(value: &str, ctx: &NormalizationContext) -> String {
     match (&ctx.case_mapper, &ctx.locale) {
-        (Some(mapper), Some(locale)) => mapper
-            .lowercase_to_string(value, locale)
-            .into_owned()
-            .to_string(),
+        (Some(mapper), Some(locale)) => mapper.lowercase_to_string(value, locale).into_owned(),
         _ => value.to_lowercase(),
     }
 }

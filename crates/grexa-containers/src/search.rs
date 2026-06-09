@@ -423,7 +423,12 @@ pub fn container_context_preview<R: RuntimeOperations>(
 /// container search; missing or empty cache directories are not an error.
 pub fn prune_mirrors(max_age_secs: u64) -> std::io::Result<()> {
     let paths = AppPaths::from_env();
-    let root = paths.cache_dir.join("container-mirrors");
+    prune_mirrors_under(&paths.cache_dir.join("container-mirrors"), max_age_secs)
+}
+
+/// `prune_mirrors` against an explicit mirrors root, so tests can target a
+/// tempdir instead of the user's real cache.
+fn prune_mirrors_under(root: &Path, max_age_secs: u64) -> std::io::Result<()> {
     if !root.exists() {
         return Ok(());
     }
@@ -432,7 +437,7 @@ pub fn prune_mirrors(max_age_secs: u64) -> std::io::Result<()> {
         .map(|d| d.as_secs().saturating_sub(max_age_secs))
         .unwrap_or_default();
 
-    for runtime_entry in std::fs::read_dir(&root)? {
+    for runtime_entry in std::fs::read_dir(root)? {
         let runtime_entry = runtime_entry?;
         for container_entry in std::fs::read_dir(runtime_entry.path())? {
             let container_entry = container_entry?;
@@ -788,21 +793,49 @@ mod tests {
     #[test]
     fn prune_invalid_stamp_dirs_are_cleaned() {
         let dir = tempfile::tempdir().unwrap();
-        let root = dir
-            .path()
-            .join("container-mirrors")
-            .join("docker")
-            .join("cid");
-        let invalid = root.join("not-a-number");
+        let root = dir.path().join("container-mirrors");
+        let container = root.join("docker").join("cid");
+
+        let invalid = container.join("not-a-number");
         std::fs::create_dir_all(&invalid).unwrap();
         std::fs::write(invalid.join("f.txt"), "x").unwrap();
 
-        let _ = std::fs::create_dir_all(dir.path().join("container-mirrors"));
-        for entry in std::fs::read_dir(&root).unwrap() {
-            let e = entry.unwrap();
-            let stamp: u64 = e.file_name().to_string_lossy().parse().unwrap_or(0);
-            assert_eq!(stamp, 0);
-            assert!(stamp == 0);
-        }
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let stale = container.join((now - 7200).to_string());
+        std::fs::create_dir_all(&stale).unwrap();
+
+        prune_mirrors_under(&root, 3600).unwrap();
+
+        assert!(!invalid.exists(), "invalid-stamp dir must be removed");
+        assert!(!stale.exists(), "expired-stamp dir must be removed");
+    }
+
+    #[test]
+    fn prune_keeps_fresh_stamp_dirs() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("container-mirrors");
+        let container = root.join("podman").join("cid");
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let fresh = container.join(now.to_string());
+        std::fs::create_dir_all(&fresh).unwrap();
+        std::fs::write(fresh.join("f.txt"), "x").unwrap();
+
+        prune_mirrors_under(&root, 3600).unwrap();
+
+        assert!(fresh.exists(), "fresh-stamp dir must survive");
+        assert!(fresh.join("f.txt").exists());
+    }
+
+    #[test]
+    fn prune_missing_root_is_ok() {
+        let dir = tempfile::tempdir().unwrap();
+        prune_mirrors_under(&dir.path().join("does-not-exist"), 3600).unwrap();
     }
 }

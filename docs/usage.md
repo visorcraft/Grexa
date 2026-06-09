@@ -69,12 +69,13 @@ grexa-cli replace <path> <term> <replacement> [flags]
 ```
 
 Replaces every match of `<term>` with `<replacement>` across all
-matching files. Supports the same filter flags as search (`--regex`,
-`--case-sensitive`, `--gitignore`, `--include-hidden`,
-`--include-binary`, `--include-system`, `--no-subfolders`,
-`--include-symlinks`, `--match-files`, `--exclude-dirs`). Add
-`--dry-run` to preview which files and matches would be affected
-without writing anything.
+matching files. Supports every search-behavior flag with identical
+semantics (matching, filtering, size limits, Unicode comparison,
+indexing, `--max-results`) — see the
+[flag reference](reference.md#flags) — so the file set it rewrites is
+exactly the set the equivalent search previews. Add `--dry-run` to
+preview which files and matches would be affected without writing
+anything.
 
 In the GUI: Replace button → review the term + replacement + filter
 snapshot → Replace All → auto-flip to Files mode. If the process was

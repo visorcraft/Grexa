@@ -1267,7 +1267,7 @@ Kirigami.Page {
 
     // -----------------------------------------------------------------
     // Replace dialog — confirmation + irreversible warning. Reads the
-    // controller's `last_path` + `last_term` indirectly via the
+    // controller's stored last-search options indirectly via the
     // currently-displayed result count.
     // -----------------------------------------------------------------
     Controls.Dialog {

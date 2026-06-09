@@ -5,7 +5,7 @@ use std::io;
 use std::io::IsTerminal;
 use std::path::PathBuf;
 
-use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 use grexa_core::{
     AppPaths, CancelToken, OutputFormat, RegexEngine, ReplaceOptions, SearchOptions, SearchResult,
@@ -28,6 +28,12 @@ struct Cli {
 
     #[command(flatten)]
     search: Option<SearchArgs>,
+
+    // Lives on `Cli` rather than inside `SearchArgs`: clap's `Option<T>`
+    // flatten loses its presence group when `T` nests another flatten, so the
+    // shared flags sit beside the positional group instead of inside it.
+    #[command(flatten)]
+    shared: SharedSearchArgs,
 }
 
 #[derive(Debug, Subcommand)]
@@ -56,70 +62,8 @@ enum Command {
         /// capture references are expanded.
         replacement: String,
 
-        /// Treat search term as a regex pattern.
-        #[arg(short = 'E', long = "regex")]
-        regex: bool,
-
-        /// Case-sensitive search.
-        #[arg(short = 'i', long = "case-sensitive")]
-        case_sensitive: bool,
-
-        /// Respect .gitignore and related ignore files.
-        #[arg(short = 'g', long = "gitignore")]
-        gitignore: bool,
-
-        /// Include hidden files and directories.
-        #[arg(short = 'H', long = "include-hidden", visible_alias = "hidden")]
-        include_hidden: bool,
-
-        /// Include searchable binary/document files.
-        #[arg(short = 'b', long = "include-binary")]
-        include_binary: bool,
-
-        /// Include system/dependency directories.
-        #[arg(short = 's', long = "include-system", visible_alias = "no-ignore")]
-        include_system: bool,
-
-        /// Do not recurse into subdirectories.
-        #[arg(short = 'd', long = "no-subfolders")]
-        no_subfolders: bool,
-
-        /// Follow symbolic links.
-        #[arg(short = 'L', long = "include-symlinks")]
-        include_symlinks: bool,
-
-        /// Match whole words only (surrounded by non-word characters).
-        #[arg(short = 'w', long = "whole-word")]
-        whole_word: bool,
-
-        /// Force a specific regex engine. `auto` (default) picks the fast
-        /// engine and falls back to the extended engine when needed.
-        #[arg(long = "regex-engine", default_value = "auto")]
-        regex_engine: CliRegexEngine,
-
-        /// Strip diacritics before comparison (e.g. `café` matches `cafe`).
-        #[arg(long = "ignore-diacritics")]
-        ignore_diacritics: bool,
-
-        /// Unicode normalization to apply before comparison.
-        #[arg(long = "normalization", default_value = "none")]
-        normalization: CliNormalizationMode,
-
-        /// String comparison mode for plain-text search.
-        #[arg(long = "comparison", default_value = "ordinal")]
-        comparison: CliComparisonMode,
-
-        /// Culture override (BCP-47 / ICU locale tag) for comparison mode.
-        #[arg(long = "culture")]
-        culture: Option<String>,
-
-        /// File name pattern, e.g. '*.rs;*.toml|-target*'.
-        #[arg(short = 'm', long = "match-files")]
-        match_files: Option<String>,
-
-        /// Directories to exclude, comma/semicolon names.
-        #[arg(short = 'x', long = "exclude-dirs")]
-        exclude_dirs: Option<String>,
+        #[command(flatten)]
+        search: SharedSearchArgs,
 
         /// Preview changes without modifying files.
         #[arg(long = "dry-run")]
@@ -127,14 +71,10 @@ enum Command {
     },
 }
 
-#[derive(Debug, Parser, Clone)]
-struct SearchArgs {
-    /// Directory path to search.
-    path: PathBuf,
-
-    /// Search term or regex pattern.
-    term: String,
-
+/// Search-behavior flags shared verbatim between the default search command
+/// and the `replace` subcommand.
+#[derive(Debug, Args, Clone)]
+struct SharedSearchArgs {
     /// Treat search term as a regex pattern.
     #[arg(short = 'E', long = "regex")]
     regex: bool,
@@ -199,22 +139,6 @@ struct SearchArgs {
     #[arg(long = "size-type", default_value = "less")]
     size_type: CliSizeLimitType,
 
-    /// Output format.
-    #[arg(short = 'f', long = "format", default_value = "text")]
-    format: CliOutputFormat,
-
-    /// Only print total match count.
-    #[arg(short = 'c', long = "count")]
-    count: bool,
-
-    /// Only print file names with matches.
-    #[arg(short = 'l', long = "files-only")]
-    files_only: bool,
-
-    /// Suppress output; exit code indicates match.
-    #[arg(short = 'q', long = "quiet")]
-    quiet: bool,
-
     /// String comparison mode for plain-text search.
     #[arg(long = "comparison", default_value = "ordinal")]
     comparison: CliComparisonMode,
@@ -242,6 +166,37 @@ struct SearchArgs {
     #[arg(long = "no-index")]
     no_index: bool,
 
+    /// Maximum number of matching lines to return. When unset, all matches
+    /// are returned. Useful for large codebases where a common term produces
+    /// hundreds of thousands of results.
+    #[arg(long = "max-results")]
+    max_results: Option<usize>,
+}
+
+#[derive(Debug, Parser, Clone)]
+struct SearchArgs {
+    /// Directory path to search.
+    path: PathBuf,
+
+    /// Search term or regex pattern.
+    term: String,
+
+    /// Output format.
+    #[arg(short = 'f', long = "format", default_value = "text")]
+    format: CliOutputFormat,
+
+    /// Only print total match count.
+    #[arg(short = 'c', long = "count")]
+    count: bool,
+
+    /// Only print file names with matches.
+    #[arg(short = 'l', long = "files-only")]
+    files_only: bool,
+
+    /// Suppress output; exit code indicates match.
+    #[arg(short = 'q', long = "quiet")]
+    quiet: bool,
+
     /// Run the search inside a container instead of on the local
     /// filesystem. Requires `--container` to identify the target; the
     /// positional `path` argument is then interpreted as a container
@@ -253,12 +208,6 @@ struct SearchArgs {
     /// Container runtime to use when `--container` is set.
     #[arg(long = "runtime", default_value = "auto", requires = "container")]
     runtime: CliRuntimeKind,
-
-    /// Maximum number of matching lines to return. When unset, all matches
-    /// are returned. Useful for large codebases where a common term produces
-    /// hundreds of thousands of results.
-    #[arg(long = "max-results")]
-    max_results: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -398,59 +347,26 @@ fn dispatch(cli: Cli) -> anyhow::Result<i32> {
             path,
             term,
             replacement,
-            regex,
-            case_sensitive,
-            gitignore,
-            include_hidden,
-            include_binary,
-            include_system,
-            no_subfolders,
-            include_symlinks,
-            whole_word,
-            regex_engine,
-            ignore_diacritics,
-            normalization,
-            comparison,
-            culture,
-            match_files,
-            exclude_dirs,
+            search,
             dry_run,
-        }) => run_replace(
-            path,
-            term,
-            replacement,
-            regex,
-            case_sensitive,
-            gitignore,
-            include_hidden,
-            include_binary,
-            include_system,
-            no_subfolders,
-            include_symlinks,
-            whole_word,
-            regex_engine,
-            ignore_diacritics,
-            normalization,
-            comparison,
-            culture,
-            match_files,
-            exclude_dirs,
-            dry_run,
-        ),
+        }) => run_replace(path, term, replacement, &search, dry_run),
         None => {
             let search = cli.search.ok_or_else(|| {
                 anyhow::anyhow!("missing required <path> <term> arguments; run `grexa-cli --help`")
             })?;
-            run_search(search)
+            run_search(search, &cli.shared)
         }
     }
 }
 
-fn run_search(args: SearchArgs) -> anyhow::Result<i32> {
-    if args.container.is_some() {
-        return run_container_search(args);
-    }
-    let mut options = SearchOptions::new(&args.path, &args.term);
+/// Translate the shared CLI flags into engine [`SearchOptions`], including
+/// the term validation both search and replace must perform.
+fn build_search_options(
+    path: &std::path::Path,
+    term: &str,
+    args: &SharedSearchArgs,
+) -> anyhow::Result<SearchOptions> {
+    let mut options = SearchOptions::new(path, term);
     if options.search_term.is_empty() {
         anyhow::bail!("search term must not be empty");
     }
@@ -467,8 +383,8 @@ fn run_search(args: SearchArgs) -> anyhow::Result<i32> {
     options.include_subfolders = !args.no_subfolders;
     options.include_symlinks = args.include_symlinks;
     options.whole_word = args.whole_word;
-    options.match_file_names = args.match_files.unwrap_or_default();
-    options.exclude_dirs = args.exclude_dirs.unwrap_or_default();
+    options.match_file_names = args.match_files.clone().unwrap_or_default();
+    options.exclude_dirs = args.exclude_dirs.clone().unwrap_or_default();
     options.size_limit_kb = args
         .size_limit
         .map(|value| convert_to_kb(value, args.size_unit));
@@ -487,6 +403,14 @@ fn run_search(args: SearchArgs) -> anyhow::Result<i32> {
         options.use_file_index = false;
     }
     options.max_results = args.max_results;
+    Ok(options)
+}
+
+fn run_search(args: SearchArgs, shared: &SharedSearchArgs) -> anyhow::Result<i32> {
+    if args.container.is_some() {
+        return run_container_search(args, shared);
+    }
+    let options = build_search_options(&args.path, &args.term, shared)?;
 
     let cancel = CancelToken::new();
     let handler_token = cancel.clone();
@@ -533,52 +457,14 @@ fn run_search(args: SearchArgs) -> anyhow::Result<i32> {
     Ok(if summary.results.is_empty() { 1 } else { 0 })
 }
 
-#[allow(clippy::too_many_arguments)]
 fn run_replace(
     path: PathBuf,
     term: String,
     replacement: String,
-    regex: bool,
-    case_sensitive: bool,
-    gitignore: bool,
-    include_hidden: bool,
-    include_binary: bool,
-    include_system: bool,
-    no_subfolders: bool,
-    include_symlinks: bool,
-    whole_word: bool,
-    regex_engine: CliRegexEngine,
-    ignore_diacritics: bool,
-    normalization: CliNormalizationMode,
-    comparison: CliComparisonMode,
-    culture: Option<String>,
-    match_files: Option<String>,
-    exclude_dirs: Option<String>,
+    args: &SharedSearchArgs,
     dry_run: bool,
 ) -> anyhow::Result<i32> {
-    let mut search = SearchOptions::new(&path, &term);
-    if search.search_term.is_empty() {
-        anyhow::bail!("search term must not be empty");
-    }
-    if search.search_term.len() > 4096 {
-        anyhow::bail!("search term exceeds maximum length of 4096 characters");
-    }
-    search.regex = regex;
-    search.case_sensitive = case_sensitive;
-    search.whole_word = whole_word;
-    search.regex_engine = regex_engine.into();
-    search.respect_gitignore = gitignore;
-    search.include_hidden = include_hidden;
-    search.include_binary = include_binary;
-    search.include_system = include_system;
-    search.include_subfolders = !no_subfolders;
-    search.include_symlinks = include_symlinks;
-    search.match_file_names = match_files.unwrap_or_default();
-    search.exclude_dirs = exclude_dirs.unwrap_or_default();
-    search.diacritic_sensitive = !ignore_diacritics;
-    search.unicode_normalization_mode = normalization.into();
-    search.string_comparison_mode = comparison.into();
-    search.culture = culture;
+    let search = build_search_options(&path, &term, args)?;
 
     if dry_run {
         let cancel = CancelToken::new();
@@ -660,7 +546,7 @@ fn select_container<'a>(
         .find(|c| c.id == requested || c.name == requested || c.id.starts_with(requested))
 }
 
-fn run_container_search(args: SearchArgs) -> anyhow::Result<i32> {
+fn run_container_search(args: SearchArgs, shared: &SharedSearchArgs) -> anyhow::Result<i32> {
     use grexa_containers::{
         ContainerRuntime, ContainerRuntimeKind, ContainerSearchOptions, LiveProbe,
         RuntimeOperations, SystemCommandRunner, detect_runtimes, search_container,
@@ -702,14 +588,14 @@ fn run_container_search(args: SearchArgs) -> anyhow::Result<i32> {
     let opts = ContainerSearchOptions {
         container_path: args.path.to_string_lossy().to_string(),
         pattern: args.term.clone(),
-        case_sensitive: args.case_sensitive,
-        regex: args.regex,
-        whole_word: args.whole_word,
-        max_results: args.max_results,
-        diacritic_sensitive: !args.ignore_diacritics,
-        unicode_normalization_mode: args.normalization.into(),
-        string_comparison_mode: args.comparison.into(),
-        culture: args.culture.clone(),
+        case_sensitive: shared.case_sensitive,
+        regex: shared.regex,
+        whole_word: shared.whole_word,
+        max_results: shared.max_results,
+        diacritic_sensitive: !shared.ignore_diacritics,
+        unicode_normalization_mode: shared.normalization.into(),
+        string_comparison_mode: shared.comparison.into(),
+        culture: shared.culture.clone(),
     };
     let summary = search_container(&cli, container, &opts)?;
     let _ = grexa_containers::prune_mirrors(3600);

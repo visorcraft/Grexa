@@ -209,18 +209,7 @@ pub fn replace_with(
     files.sort();
     files.dedup();
 
-    let regex_engine = if options.search.regex {
-        Some(
-            PatternEngine::build_with_engine(
-                &options.search.search_term,
-                !options.search.case_sensitive,
-                options.search.regex_engine,
-            )
-            .map_err(|err| ReplaceError::InvalidRegex(err.to_string()))?,
-        )
-    } else {
-        None
-    };
+    let substitution = SubstitutionContext::build(options)?;
 
     for path in files {
         if cancel.is_cancelled() {
@@ -228,7 +217,7 @@ pub fn replace_with(
             break;
         }
 
-        match rewrite_one_pre_read(&path, options, regex_engine.as_ref()) {
+        match rewrite_one_pre_read(&path, options, &substitution) {
             Ok(FileResult::Unchanged) => summary.files_unchanged += 1,
             Ok(FileResult::Replaced { matches, encoding }) => {
                 summary.files_modified += 1;
@@ -270,10 +259,66 @@ enum FileResult {
     },
 }
 
+/// Per-run state for [`apply_substitution`], built once in [`replace_with`]
+/// so the normalization context, normalized needle, and case-insensitive
+/// literal regex are not recomputed for every candidate file.
+struct SubstitutionContext {
+    regex_engine: Option<PatternEngine>,
+    /// Present when diacritic stripping or Unicode normalization applies.
+    normalized: Option<(NormalizationContext, String)>,
+    /// Present for the case-insensitive literal path (no normalization).
+    ci_literal: Option<regex::Regex>,
+}
+
+impl SubstitutionContext {
+    fn build(options: &ReplaceOptions) -> Result<Self, ReplaceError> {
+        let search = &options.search;
+        let mut context = Self {
+            regex_engine: None,
+            normalized: None,
+            ci_literal: None,
+        };
+
+        if search.regex {
+            context.regex_engine = Some(
+                PatternEngine::build_with_engine(
+                    &search.search_term,
+                    !search.case_sensitive,
+                    search.regex_engine,
+                )
+                .map_err(|err| ReplaceError::InvalidRegex(err.to_string()))?,
+            );
+            return Ok(context);
+        }
+
+        let needle = &search.search_term;
+        if needle.is_empty() {
+            return Ok(context);
+        }
+
+        let needs_normalization = !search.diacritic_sensitive
+            || search.unicode_normalization_mode != UnicodeNormalizationMode::None;
+        if needs_normalization {
+            let norm_ctx = NormalizationContext::build(search);
+            let normalized_needle = normalize_for_text_search(needle, search, &norm_ctx);
+            context.normalized = Some((norm_ctx, normalized_needle));
+        } else if !search.case_sensitive {
+            let escaped = regex::escape(needle);
+            match RegexBuilder::new(&escaped).case_insensitive(true).build() {
+                Ok(re) => context.ci_literal = Some(re),
+                Err(err) => {
+                    tracing::warn!(%err, pattern = escaped, "regex build failed for literal replace");
+                }
+            }
+        }
+        Ok(context)
+    }
+}
+
 fn rewrite_one_pre_read(
     path: &Path,
     options: &ReplaceOptions,
-    regex_engine: Option<&PatternEngine>,
+    substitution: &SubstitutionContext,
 ) -> Result<FileResult, io::Error> {
     ensure_within_root(path, &options.search.path)?;
 
@@ -285,7 +330,7 @@ fn rewrite_one_pre_read(
     }
 
     let (text, encoding, original_metadata) = read_regular_text(path)?;
-    let (new_text, matches) = apply_substitution(&text, options, regex_engine);
+    let (new_text, matches) = apply_substitution(&text, options, substitution);
     if matches == 0 || new_text == text {
         return Ok(FileResult::Unchanged);
     }
@@ -366,9 +411,9 @@ fn open_regular_file(path: &Path) -> io::Result<fs::File> {
 fn apply_substitution(
     text: &str,
     options: &ReplaceOptions,
-    regex_engine: Option<&PatternEngine>,
+    substitution: &SubstitutionContext,
 ) -> (String, usize) {
-    if let Some(engine) = regex_engine {
+    if let Some(engine) = substitution.regex_engine.as_ref() {
         if !options.search.whole_word {
             let count = engine.find_iter(text).len();
             let replaced = engine.replace_all(text, options.replacement.as_str());
@@ -392,11 +437,14 @@ fn apply_substitution(
         return (text.to_string(), 0);
     }
 
-    let needs_normalization = !options.search.diacritic_sensitive
-        || options.search.unicode_normalization_mode != UnicodeNormalizationMode::None;
-
-    if needs_normalization {
-        return apply_normalized_substitution(text, needle, &options.search, &options.replacement);
+    if let Some((norm_ctx, normalized_needle)) = substitution.normalized.as_ref() {
+        return apply_normalized_substitution(
+            text,
+            normalized_needle,
+            norm_ctx,
+            &options.search,
+            &options.replacement,
+        );
     }
 
     if options.search.case_sensitive {
@@ -404,50 +452,40 @@ fn apply_substitution(
         if matches.is_empty() {
             return (text.to_string(), 0);
         }
-        let count = matches.len();
-        let mut result = String::with_capacity(text.len());
-        let mut prev_end = 0;
-        for (start, end) in &matches {
-            result.push_str(&text[prev_end..*start]);
-            result.push_str(&options.replacement);
-            prev_end = *end;
-        }
-        result.push_str(&text[prev_end..]);
-        (result, count)
+        (splice_replacements(text, &matches, &options.replacement), matches.len())
     } else {
-        let escaped = regex::escape(needle);
-        match RegexBuilder::new(&escaped).case_insensitive(true).build() {
-            Ok(re) => {
-                // Filter through `is_whole_word_match` instead of `\b` so the
-                // whole-word semantics stay identical to search and the other
-                // replace paths for needles with non-word edge characters.
-                let matches: Vec<(usize, usize)> = re
-                    .find_iter(text)
-                    .map(|m| (m.start(), m.end()))
-                    .filter(|&(start, end)| {
-                        !options.search.whole_word || is_whole_word_match(text, start, end)
-                    })
-                    .collect();
-                let count = matches.len();
-                if count == 0 {
-                    return (text.to_string(), 0);
-                }
-                let mut result = String::with_capacity(text.len());
-                let mut prev_end = 0;
-                for (start, end) in &matches {
-                    result.push_str(&text[prev_end..*start]);
-                    result.push_str(&options.replacement);
-                    prev_end = *end;
-                }
-                result.push_str(&text[prev_end..]);
-                (result, count)
-            }
-            Err(err) => {
-                tracing::warn!(%err, pattern = escaped, "regex build failed for literal replace");
-                (text.to_string(), 0)
-            }
+        let Some(re) = substitution.ci_literal.as_ref() else {
+            return (text.to_string(), 0);
+        };
+        // Filter through `is_whole_word_match` instead of `\b` so the
+        // whole-word semantics stay identical to search and the other
+        // replace paths for needles with non-word edge characters.
+        let matches: Vec<(usize, usize)> = re
+            .find_iter(text)
+            .map(|m| (m.start(), m.end()))
+            .filter(|&(start, end)| {
+                !options.search.whole_word || is_whole_word_match(text, start, end)
+            })
+            .collect();
+        if matches.is_empty() {
+            return (text.to_string(), 0);
         }
+        (splice_replacements(text, &matches, &options.replacement), matches.len())
     }
+}
+
+/// Rebuild `text` with `replacement` spliced over every `(start, end)` byte
+/// span. Spans must be sorted, non-overlapping, and lie on char boundaries.
+fn splice_replacements(text: &str, matches: &[(usize, usize)], replacement: &str) -> String {
+    let mut result = String::with_capacity(text.len());
+    let mut prev_end = 0;
+    for &(start, end) in matches {
+        result.push_str(&text[prev_end..start]);
+        result.push_str(replacement);
+        prev_end = end;
+    }
+    result.push_str(&text[prev_end..]);
+    result
 }
 
 fn collect_literal_matches(text: &str, needle: &str, whole_word: bool) -> Vec<(usize, usize)> {
@@ -466,21 +504,20 @@ fn collect_literal_matches(text: &str, needle: &str, whole_word: bool) -> Vec<(u
 
 fn apply_normalized_substitution(
     text: &str,
-    needle: &str,
+    normalized_needle: &str,
+    norm_ctx: &NormalizationContext,
     options: &SearchOptions,
     replacement: &str,
 ) -> (String, usize) {
-    let norm_ctx = NormalizationContext::build(options);
-    let normalized_needle = normalize_for_text_search(needle, options, &norm_ctx);
     if normalized_needle.is_empty() {
         return (text.to_string(), 0);
     }
 
-    let (normalized, mapping) = normalize_with_mapping(text, options, &norm_ctx);
+    let (normalized, mapping) = normalize_with_mapping(text, options, norm_ctx);
 
     let mut norm_matches = Vec::new();
     let mut offset = 0;
-    while let Some(index) = normalized[offset..].find(&normalized_needle) {
+    while let Some(index) = normalized[offset..].find(normalized_needle) {
         let norm_start = offset + index;
         let norm_end = norm_start + normalized_needle.len();
         let (orig_start, orig_end) = map_normalized_span(&mapping, norm_start, norm_end);
@@ -494,16 +531,7 @@ fn apply_normalized_substitution(
         return (text.to_string(), 0);
     }
 
-    let count = norm_matches.len();
-    let mut result = String::with_capacity(text.len());
-    let mut prev_end = 0;
-    for (start, end) in norm_matches {
-        result.push_str(&text[prev_end..start]);
-        result.push_str(replacement);
-        prev_end = end;
-    }
-    result.push_str(&text[prev_end..]);
-    (result, count)
+    (splice_replacements(text, &norm_matches, replacement), norm_matches.len())
 }
 
 fn encode_for_writeback(text: &str, encoding: &DetectedEncoding) -> Result<Vec<u8>, io::Error> {

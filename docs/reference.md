@@ -72,18 +72,16 @@ not matched, and a `warn`-level log is emitted for the affected file.
 
 #### Replace flags
 
+`replace` accepts every search-behavior flag from the table above (`-E`,
+`--regex-engine`, `-i`, `-g`, `-H`, `-b`, `-s`, `-d`, `-L`, `-w`, `-m`, `-x`,
+`--size-limit`, `--size-unit`, `--size-type`, `--comparison`,
+`--normalization`, `--ignore-diacritics`, `--culture`, `--use-index`,
+`--no-index`, `--max-results`) with identical semantics, so the file set it
+rewrites is exactly the set the equivalent search previews. Replace-only
+flags:
+
 | Flag | Default | Effect |
 | ---- | ------- | ------ |
-| `-E`, `--regex` | off | Treat `term` as a regex. |
-| `-i`, `--case-sensitive` | off | Case-sensitive comparison. |
-| `-g`, `--gitignore` | off | Respect `.gitignore` / `.ignore` / global git excludes. |
-| `-H`, `--include-hidden` | off | Include dotfiles and dot-directories. |
-| `-b`, `--include-binary` | off | Include searchable binary/document formats. |
-| `-s`, `--include-system` | off | Include `.git`, `node_modules`, etc. |
-| `-d`, `--no-subfolders` | off | Do not recurse. |
-| `-L`, `--include-symlinks` | off | Follow symbolic links. |
-| `-m`, `--match-files <glob>` | empty | Pipe/semicolon-separated globs. |
-| `-x`, `--exclude-dirs <names-or-regex>` | empty | Directory excludes. |
 | `--dry-run` | off | Preview changes without writing files. |
 
 ## Settings schema (`$XDG_CONFIG_HOME/grexa/settings.json`)
