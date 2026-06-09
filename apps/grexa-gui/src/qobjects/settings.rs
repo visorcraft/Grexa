@@ -54,6 +54,7 @@ pub mod ffi {
         #[qproperty(bool, accessibility_reduced_motion)]
         #[qproperty(bool, accessibility_high_contrast)]
         #[qproperty(QString, last_save_status)]
+        #[qproperty(QString, commit_sha)]
         type SettingsController = super::SettingsControllerRust;
 
         /// Reload settings from `settings.json`.
@@ -220,7 +221,6 @@ struct ThirdPartyCredit {
     url: String,
 }
 
-#[derive(Default)]
 pub struct SettingsControllerRust {
     regex: bool,
     case_sensitive: bool,
@@ -248,6 +248,41 @@ pub struct SettingsControllerRust {
     accessibility_reduced_motion: bool,
     accessibility_high_contrast: bool,
     last_save_status: QString,
+    commit_sha: QString,
+}
+
+impl Default for SettingsControllerRust {
+    fn default() -> Self {
+        Self {
+            regex: false,
+            case_sensitive: false,
+            respect_gitignore: false,
+            include_hidden: false,
+            include_binary: false,
+            include_system_files: false,
+            include_symbolic_links: false,
+            include_subfolders: false,
+            files_search_mode: false,
+            enable_container_search: false,
+            ai_search_enabled: false,
+            ai_endpoint: QString::default(),
+            ai_model: QString::default(),
+            default_match_files: QString::default(),
+            default_exclude_dirs: QString::default(),
+            theme: 0,
+            context_lines_before: 0,
+            context_lines_after: 0,
+            editor_preset: 0,
+            editor_custom_command: QString::default(),
+            replace_confirm: false,
+            replace_show_journal_on_startup: false,
+            privacy_redact_paths: false,
+            accessibility_reduced_motion: false,
+            accessibility_high_contrast: false,
+            last_save_status: QString::default(),
+            commit_sha: QString::from(option_env!("VERGEN_GIT_SHA").unwrap_or("unknown")),
+        }
+    }
 }
 
 impl SettingsControllerRust {

@@ -106,19 +106,17 @@ Kirigami.ApplicationWindow {
     // override and Qt severs the binding loop, leaving every
     // surface stuck on its initial value (the exact symptom the
     // user hits: "Light saved but reopen doesn't apply").
-    // Snapshot of the host palette captured *before* our QML
-    // overrides cascade. `Kirigami.Theme.inherit: false` would zero
-    // every color (Theme has no values without inheritance), so we
-    // read from Qt's application palette instead — that holds the
-    // platform/KDE colors regardless of our window-level overrides.
+    //
+    // SystemPalette auto-updates when KDE's kded5/kded6 pushes a
+    // palette change (e.g. user switches Breeze Light ↔ Dark in
+    // System Settings). `enabled: themeIdx === 0` makes the binding
+    // cheap: only the System theme pays for the re-evaluation.
+    SystemPalette { id: sysPalette }
     QtObject {
         id: hostTheme
-        readonly property color background: Qt.application.palette
-            ? Qt.application.palette.window : "#1A1A1A"
-        readonly property color textColor: Qt.application.palette
-            ? Qt.application.palette.windowText : "#F5F5F5"
-        readonly property color highlight: Qt.application.palette
-            ? Qt.application.palette.highlight : "#2D7FF9"
+        readonly property color background: sysPalette.window
+        readonly property color textColor: sysPalette.windowText
+        readonly property color highlight: sysPalette.highlight
     }
 
     title: qsTr("Grexa")

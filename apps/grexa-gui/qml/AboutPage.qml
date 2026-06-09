@@ -208,17 +208,25 @@ Kirigami.ScrollablePage {
                                 Controls.Label {
                                     id: platformLabel
                                     anchors.centerIn: parent
-                                    // Qt has no QML-exposed runtime
-                                    // version string that's safe to
-                                    // print here (`Qt.application.version`
-                                    // returns OUR app version). The
-                                    // major version is part of the
-                                    // build contract.
                                     text: qsTr("Linux · Qt 6")
                                     font.pixelSize: app.tokens.textCaption + 1
                                     font.family: app.tokens.monoFamily
                                     opacity: 0.85
                                 }
+                            }
+                            Controls.Label {
+                                visible: {
+                                    const sha = app.settingsController.commitSha
+                                    return sha !== "unknown" && sha.length > 0
+                                }
+                                text: {
+                                    const sha = app.settingsController.commitSha
+                                    return sha.length >= 8 ? sha.substring(0, 8) : sha
+                                }
+                                font.pixelSize: app.tokens.textCaption
+                                font.family: app.tokens.monoFamily
+                                opacity: 0.45
+                                Layout.leftMargin: app.tokens.spaceXS
                             }
                         }
                     }

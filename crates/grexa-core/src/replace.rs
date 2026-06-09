@@ -210,8 +210,12 @@ pub fn replace_with(
 
     let regex_engine = if options.search.regex {
         Some(
-            PatternEngine::build(&options.search.search_term, !options.search.case_sensitive)
-                .map_err(|err| ReplaceError::InvalidRegex(err.to_string()))?,
+            PatternEngine::build_with_engine(
+                &options.search.search_term,
+                !options.search.case_sensitive,
+                options.search.regex_engine,
+            )
+            .map_err(|err| ReplaceError::InvalidRegex(err.to_string()))?,
         )
     } else {
         None

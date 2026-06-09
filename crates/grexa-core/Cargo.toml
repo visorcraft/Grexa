@@ -13,6 +13,7 @@ fancy-regex.workspace = true
 globset.workspace = true
 icu_casemap.workspace = true
 icu_locale_core.workspace = true
+icu_properties.workspace = true
 ignore.workspace = true
 quick-xml.workspace = true
 regex.workspace = true

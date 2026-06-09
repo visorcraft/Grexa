@@ -8,8 +8,9 @@ use std::path::PathBuf;
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 use grexa_core::{
-    AppPaths, CancelToken, OutputFormat, SearchOptions, SearchResult, SizeLimitType, SizeUnit,
-    StringComparisonMode, UnicodeNormalizationMode, search_with,
+    AppPaths, CancelToken, OutputFormat, RegexEngine, ReplaceOptions, SearchOptions, SearchResult,
+    SizeLimitType, SizeUnit, StringComparisonMode, UnicodeNormalizationMode, replace_with,
+    search_with,
 };
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
@@ -40,6 +41,65 @@ enum Command {
     /// Print the man page in roff format. Pipe through `gzip -c > grexa-cli.1.gz`
     /// or save as `grexa-cli.1` for installation under `/usr/share/man/man1`.
     Manpage,
+    /// Replace matches in files. Runs a search first, then rewrites every
+    /// matched file with the replacement string applied. Supports the same
+    /// search flags as the default search command. Supports `--dry-run` to
+    /// preview changes without writing to disk.
+    Replace {
+        /// Directory path to search.
+        path: PathBuf,
+
+        /// Search term or regex pattern.
+        term: String,
+
+        /// Replacement string. For regex mode, `$1` / `$name` / `${name}`
+        /// capture references are expanded.
+        replacement: String,
+
+        /// Treat search term as a regex pattern.
+        #[arg(short = 'E', long = "regex")]
+        regex: bool,
+
+        /// Case-sensitive search.
+        #[arg(short = 'i', long = "case-sensitive")]
+        case_sensitive: bool,
+
+        /// Respect .gitignore and related ignore files.
+        #[arg(short = 'g', long = "gitignore")]
+        gitignore: bool,
+
+        /// Include hidden files and directories.
+        #[arg(short = 'H', long = "include-hidden", visible_alias = "hidden")]
+        include_hidden: bool,
+
+        /// Include searchable binary/document files.
+        #[arg(short = 'b', long = "include-binary")]
+        include_binary: bool,
+
+        /// Include system/dependency directories.
+        #[arg(short = 's', long = "include-system", visible_alias = "no-ignore")]
+        include_system: bool,
+
+        /// Do not recurse into subdirectories.
+        #[arg(short = 'd', long = "no-subfolders")]
+        no_subfolders: bool,
+
+        /// Follow symbolic links.
+        #[arg(short = 'L', long = "include-symlinks")]
+        include_symlinks: bool,
+
+        /// File name pattern, e.g. '*.rs;*.toml|-target*'.
+        #[arg(short = 'm', long = "match-files")]
+        match_files: Option<String>,
+
+        /// Directories to exclude, comma/semicolon names.
+        #[arg(short = 'x', long = "exclude-dirs")]
+        exclude_dirs: Option<String>,
+
+        /// Preview changes without modifying files.
+        #[arg(long = "dry-run")]
+        dry_run: bool,
+    },
 }
 
 #[derive(Debug, Parser, Clone)]
@@ -53,6 +113,12 @@ struct SearchArgs {
     /// Treat search term as a regex pattern.
     #[arg(short = 'E', long = "regex")]
     regex: bool,
+
+    /// Force a specific regex engine. `auto` (default) picks the fast
+    /// engine and falls back to the extended engine when needed; `fast`
+    /// and `extended` pin one engine and error if the pattern is unsupported.
+    #[arg(long = "regex-engine", default_value = "auto")]
+    regex_engine: CliRegexEngine,
 
     /// Case-sensitive search.
     #[arg(short = 'i', long = "case-sensitive")]
@@ -158,6 +224,19 @@ struct SearchArgs {
     /// Container runtime to use when `--container` is set.
     #[arg(long = "runtime", default_value = "auto", requires = "container")]
     runtime: CliRuntimeKind,
+
+    /// Maximum number of matching lines to return. When unset, all matches
+    /// are returned. Useful for large codebases where a common term produces
+    /// hundreds of thousands of results.
+    #[arg(long = "max-results")]
+    max_results: Option<usize>,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum CliRegexEngine {
+    Auto,
+    Fast,
+    Extended,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -286,6 +365,37 @@ fn dispatch(cli: Cli) -> anyhow::Result<i32> {
             man.render(&mut io::stdout())?;
             Ok(0)
         }
+        Some(Command::Replace {
+            path,
+            term,
+            replacement,
+            regex,
+            case_sensitive,
+            gitignore,
+            include_hidden,
+            include_binary,
+            include_system,
+            no_subfolders,
+            include_symlinks,
+            match_files,
+            exclude_dirs,
+            dry_run,
+        }) => run_replace(
+            path,
+            term,
+            replacement,
+            regex,
+            case_sensitive,
+            gitignore,
+            include_hidden,
+            include_binary,
+            include_system,
+            no_subfolders,
+            include_symlinks,
+            match_files,
+            exclude_dirs,
+            dry_run,
+        ),
         None => {
             let search = cli.search.ok_or_else(|| {
                 anyhow::anyhow!("missing required <path> <term> arguments; run `grexa-cli --help`")
@@ -301,6 +411,11 @@ fn run_search(args: SearchArgs) -> anyhow::Result<i32> {
     }
     let mut options = SearchOptions::new(&args.path, &args.term);
     options.regex = args.regex;
+    options.regex_engine = match args.regex_engine {
+        CliRegexEngine::Auto => RegexEngine::Auto,
+        CliRegexEngine::Fast => RegexEngine::Fast,
+        CliRegexEngine::Extended => RegexEngine::Extended,
+    };
     options.case_sensitive = args.case_sensitive;
     options.respect_gitignore = args.gitignore;
     options.include_hidden = args.include_hidden;
@@ -327,6 +442,7 @@ fn run_search(args: SearchArgs) -> anyhow::Result<i32> {
     if args.no_index {
         options.use_file_index = false;
     }
+    options.max_results = args.max_results;
 
     let cancel = CancelToken::new();
     let handler_token = cancel.clone();
@@ -369,6 +485,96 @@ fn run_search(args: SearchArgs) -> anyhow::Result<i32> {
     }
 
     Ok(if summary.results.is_empty() { 1 } else { 0 })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_replace(
+    path: PathBuf,
+    term: String,
+    replacement: String,
+    regex: bool,
+    case_sensitive: bool,
+    gitignore: bool,
+    include_hidden: bool,
+    include_binary: bool,
+    include_system: bool,
+    no_subfolders: bool,
+    include_symlinks: bool,
+    match_files: Option<String>,
+    exclude_dirs: Option<String>,
+    dry_run: bool,
+) -> anyhow::Result<i32> {
+    let mut search = SearchOptions::new(&path, &term);
+    search.regex = regex;
+    search.case_sensitive = case_sensitive;
+    search.respect_gitignore = gitignore;
+    search.include_hidden = include_hidden;
+    search.include_binary = include_binary;
+    search.include_system = include_system;
+    search.include_subfolders = !no_subfolders;
+    search.include_symlinks = include_symlinks;
+    search.match_file_names = match_files.unwrap_or_default();
+    search.exclude_dirs = exclude_dirs.unwrap_or_default();
+
+    if dry_run {
+        let cancel = CancelToken::new();
+        let summary = search_with(&search, &cancel, None)?;
+        if summary.results.is_empty() {
+            eprintln!("grexa-cli: no matches found");
+            return Ok(1);
+        }
+        eprintln!(
+            "grexa-cli: dry run — {} matches in {} files would be replaced with {:?}",
+            summary.matches, summary.files_matched, replacement
+        );
+        for result in &summary.results {
+            println!(
+                "{}:{}:{}",
+                result.full_path.display(),
+                result.line_number,
+                result.line_content
+            );
+        }
+        return Ok(0);
+    }
+
+    let options = ReplaceOptions {
+        search,
+        replacement,
+    };
+    let cancel = CancelToken::new();
+    let handler_token = cancel.clone();
+    let _ = ctrlc::set_handler(move || {
+        handler_token.cancel();
+    });
+
+    let summary = replace_with(&options, &cancel, None)?;
+    if summary.cancelled {
+        eprintln!("grexa-cli: replace cancelled; partial results follow");
+    }
+
+    eprintln!(
+        "grexa-cli: {} files modified, {} matches replaced, {} files unchanged, {} failures",
+        summary.files_modified,
+        summary.matches_replaced,
+        summary.files_unchanged,
+        summary.failures.len()
+    );
+
+    for report in &summary.reports {
+        println!("{}: {} replacements", report.path.display(), report.matches_replaced);
+    }
+    for failure in &summary.failures {
+        eprintln!("{}: {}", failure.path.display(), failure.error);
+    }
+
+    Ok(if summary.failures.is_empty() && summary.files_modified > 0 {
+        0
+    } else if summary.files_modified == 0 {
+        1
+    } else {
+        2
+    })
 }
 
 /// Resolve a user-supplied `--container` value against the live container

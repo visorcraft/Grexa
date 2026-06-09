@@ -7,6 +7,13 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RegexEngine {
+    Auto,
+    Fast,
+    Extended,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SizeLimitType {
     NoLimit,
     LessThan,
@@ -61,6 +68,7 @@ pub struct SearchOptions {
     pub path: PathBuf,
     pub search_term: String,
     pub regex: bool,
+    pub regex_engine: RegexEngine,
     pub case_sensitive: bool,
     pub respect_gitignore: bool,
     pub include_hidden: bool,
@@ -78,6 +86,7 @@ pub struct SearchOptions {
     pub diacritic_sensitive: bool,
     pub culture: Option<String>,
     pub use_file_index: bool,
+    pub max_results: Option<usize>,
 }
 
 impl SearchOptions {
@@ -86,6 +95,7 @@ impl SearchOptions {
             path: path.into(),
             search_term: search_term.into(),
             regex: false,
+            regex_engine: RegexEngine::Auto,
             case_sensitive: false,
             respect_gitignore: false,
             include_hidden: false,
@@ -103,6 +113,7 @@ impl SearchOptions {
             diacritic_sensitive: true,
             culture: None,
             use_file_index: false,
+            max_results: None,
         }
     }
 }

@@ -90,6 +90,7 @@ ColumnLayout {
             model: ListModel { id: messageModel }
             verticalLayoutDirection: ListView.TopToBottom
             onCountChanged: Qt.callLater(() => positionViewAtEnd())
+            Accessible.role: Accessible.List
 
             // -- Bubble delegate
             delegate: Item {
@@ -219,6 +220,7 @@ ColumnLayout {
                     font.family: app.tokens.sansFamily
                     font.pixelSize: app.tokens.textBody
                     background: null
+                    Accessible.name: qsTr("Chat message")
                     Keys.onReturnPressed: (event) => {
                         if (event.modifiers & Qt.ShiftModifier) {
                             event.accepted = false   // let newline through

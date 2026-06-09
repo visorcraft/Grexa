@@ -15,6 +15,9 @@ Controls.Button {
     property color baseColor: app.tokens.accent
     property color hoverColor: app.tokens.accentHover
 
+    Accessible.role: Accessible.Button
+    Accessible.name: text
+
     leftPadding: app.tokens.spaceL
     rightPadding: app.tokens.spaceL
     topPadding: app.tokens.spaceS

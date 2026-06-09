@@ -6,6 +6,41 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, thiserror::Error)]
+pub enum TrashError {
+    #[error("gio trash failed: {0}")]
+    GioFailed(String),
+    #[error("gio binary not found on $PATH")]
+    GioNotFound,
+    #[error("path does not exist: {0}")]
+    PathNotFound(PathBuf),
+}
+
+/// Move a file or directory to the freedesktop trash via `gio trash`.
+/// Returns an error if `gio` is not installed, the path doesn't exist,
+/// or the trash operation fails.
+pub fn move_to_trash(path: &Path) -> Result<(), TrashError> {
+    if !path.exists() {
+        return Err(TrashError::PathNotFound(path.to_path_buf()));
+    }
+    let status = std::process::Command::new("gio")
+        .arg("trash")
+        .arg(path)
+        .status()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                TrashError::GioNotFound
+            } else {
+                TrashError::GioFailed(e.to_string())
+            }
+        })?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(TrashError::GioFailed(format!("exited with code {:?}", status.code())))
+    }
+}
+
 /// Preset editor identifier. Used by Settings to remember the user's choice
 /// and by [`open_in_editor_command`] to materialize an argv vector.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -292,5 +327,20 @@ mod tests {
 
         let uris = file_manager_show_items_uris(&[Path::new("/tmp/测试.txt")]);
         assert!(uris[0].starts_with("file:///tmp/%E6"));
+    }
+
+    #[test]
+    fn move_to_trash_rejects_nonexistent_path() {
+        let result = move_to_trash(Path::new("/tmp/grexa-test-no-such-file-12345"));
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            TrashError::PathNotFound(p) => {
+                assert!(
+                    p.to_string_lossy()
+                        .contains("grexa-test-no-such-file-12345")
+                );
+            }
+            other => panic!("expected PathNotFound, got {other:?}"),
+        }
     }
 }

@@ -11,7 +11,6 @@ use ignore::{DirEntry, WalkBuilder};
 use regex::Regex;
 use thiserror::Error;
 use unicode_normalization::UnicodeNormalization;
-use unicode_normalization::char::is_combining_mark;
 
 use crate::cancel::CancelToken;
 use crate::documents::extract_text;
@@ -62,6 +61,14 @@ pub enum SkipReason {
 pub type ProgressSink<'a> = &'a mut dyn FnMut(ProgressEvent);
 
 const MATCH_PREVIEW_MAX_CHARS: usize = 400;
+
+/// Maximum byte length of a single line used for pattern matching. Lines
+/// exceeding this cap are truncated to the byte boundary before comparison;
+/// the display preview (`line_content`) is separately capped at
+/// `MATCH_PREVIEW_MAX_CHARS` characters. The value is chosen so a single
+/// multi-megabyte minified line (common in generated JS/CSS) does not hold
+/// the search thread for seconds while the regex engine scans it.
+const MAX_COMPARE_LINE_BYTES: usize = 2 * 1024 * 1024;
 
 static BINARY_EXTENSIONS: &[&str] = &[
     "exe", "dll", "obj", "bin", "zip", "tar", "gz", "7z", "rar", "png", "jpg", "jpeg", "gif",
@@ -161,8 +168,12 @@ pub fn search_with(
 
     let regex = if options.regex {
         Some(
-            PatternEngine::build(&options.search_term, !options.case_sensitive)
-                .map_err(|err| SearchError::InvalidRegex(err.to_string()))?,
+            PatternEngine::build_with_engine(
+                &options.search_term,
+                !options.case_sensitive,
+                options.regex_engine,
+            )
+            .map_err(|err| SearchError::InvalidRegex(err.to_string()))?,
         )
     } else {
         None
@@ -303,6 +314,12 @@ pub fn search_with(
                 }
             }
             results.extend(file_results);
+            if let Some(max) = options.max_results
+                && results.len() >= max
+            {
+                results.truncate(max);
+                break;
+            }
         }
     }
 
@@ -546,7 +563,8 @@ fn scan_text_buffer(
         }
 
         let line_number = idx + 1;
-        let matches = find_line_matches(line, options, regex);
+        let compare_line = truncate_bytes(line, MAX_COMPARE_LINE_BYTES);
+        let matches = find_line_matches(&compare_line, options, regex);
         if matches.is_empty() {
             continue;
         }
@@ -608,7 +626,12 @@ fn normalize_for_text_search(input: &str, options: &SearchOptions) -> String {
     };
 
     if !options.diacritic_sensitive {
-        value = value.nfd().filter(|ch| !is_combining_mark(*ch)).collect();
+        use icu_properties::props::GeneralCategory;
+        let gc_map = icu_properties::CodePointMapData::<GeneralCategory>::new();
+        value = value
+            .nfd()
+            .filter(|ch| gc_map.get(*ch) != GeneralCategory::NonspacingMark)
+            .collect();
     }
 
     if !options.case_sensitive {
@@ -661,6 +684,17 @@ fn truncate_chars(input: &str, max_chars: usize) -> String {
     }
 
     input.chars().take(max_chars).collect()
+}
+
+fn truncate_bytes(input: &str, max_bytes: usize) -> String {
+    if input.len() <= max_bytes {
+        return input.to_string();
+    }
+    let mut boundary = max_bytes;
+    while boundary > 0 && !input.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    input[..boundary].to_string()
 }
 
 fn size_matches(
@@ -970,6 +1004,41 @@ mod tests {
     }
 
     #[test]
+    fn diacritic_strip_preserves_spacing_combining_marks() {
+        use icu_properties::props::GeneralCategory;
+        let gc_map = icu_properties::CodePointMapData::<GeneralCategory>::new();
+        let devanagari_aa: char = '\u{093E}';
+        assert_eq!(
+            gc_map.get(devanagari_aa),
+            GeneralCategory::SpacingMark,
+            "U+093E should be Mc (SpacingMark)"
+        );
+        let mut options = SearchOptions::new("/tmp", "x");
+        options.diacritic_sensitive = false;
+        let result = normalize_for_text_search("क\u{093E}", &options);
+        assert!(
+            result.contains(devanagari_aa),
+            "Mc marks must survive Mn-only diacritic stripping, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn culture_aware_greek_sigma_handling() {
+        use crate::models::StringComparisonMode;
+        let mut options = SearchOptions::new("/tmp", "x");
+        options.case_sensitive = false;
+        options.string_comparison_mode = StringComparisonMode::CurrentCulture;
+        options.culture = Some("el-GR".to_string());
+
+        let lowered = normalize_for_text_search("ΣΟΦΟΣ", &options);
+        assert!(
+            lowered.contains('σ') || lowered.contains('ς'),
+            "Greek sigma should lowercase to σ/ς, got {lowered:?}"
+        );
+        assert!(!lowered.contains('Σ'), "capital sigma must be lowered, got {lowered:?}");
+    }
+
+    #[test]
     fn excludes_system_paths_by_default() {
         let dir = tempdir().unwrap();
         fs::create_dir_all(dir.path().join("node_modules")).unwrap();
@@ -1159,5 +1228,34 @@ mod tests {
         assert_eq!(summary.file_results[0].match_count, 2);
         assert_eq!(summary.file_results[0].first_match_line_number, 1);
         assert_eq!(summary.file_results[0].preview_matches.len(), 2);
+    }
+
+    #[test]
+    fn max_compare_line_bytes_truncates_oversized_line_for_matching() {
+        let dir = tempdir().unwrap();
+        let pad = "x".repeat(MAX_COMPARE_LINE_BYTES + 100);
+        let body = format!("{pad}TODO\n");
+        fs::write(dir.path().join("big.txt"), &body).unwrap();
+
+        let summary = search(&SearchOptions::new(dir.path(), "TODO")).unwrap();
+        assert_eq!(summary.matches, 0, "needle past MAX_COMPARE_LINE_BYTES must not be found");
+    }
+
+    #[test]
+    fn max_compare_line_bytes_allows_match_within_cap() {
+        let dir = tempdir().unwrap();
+        let pad = "x".repeat(MAX_COMPARE_LINE_BYTES / 2);
+        let body = format!("{pad}TODO{pad}\n");
+        fs::write(dir.path().join("ok.txt"), &body).unwrap();
+
+        let summary = search(&SearchOptions::new(dir.path(), "TODO")).unwrap();
+        assert_eq!(summary.matches, 1);
+    }
+
+    #[test]
+    fn truncate_bytes_respects_char_boundaries() {
+        let input = "café";
+        let truncated = truncate_bytes(input, 4);
+        assert_eq!(truncated, "caf", "must not split the é codepoint");
     }
 }

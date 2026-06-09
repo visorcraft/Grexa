@@ -149,7 +149,19 @@ fn main() {
     }
 
     if let Some(engine) = engine.as_mut() {
-        let url = QUrl::from("qrc:/qt/qml/com/visorcraft/Grexa/qml/Main.qml");
+        let url = if cfg!(debug_assertions) {
+            let manifest_dir =
+                std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
+            let fs_path = std::path::PathBuf::from(manifest_dir).join("qml/Main.qml");
+            if fs_path.exists() {
+                tracing::info!("dev mode: loading QML from filesystem at {}", fs_path.display());
+                QUrl::from(&format!("file://{}", fs_path.display()))
+            } else {
+                QUrl::from("qrc:/qt/qml/com/visorcraft/Grexa/qml/Main.qml")
+            }
+        } else {
+            QUrl::from("qrc:/qt/qml/com/visorcraft/Grexa/qml/Main.qml")
+        };
         engine.load(&url);
     }
 
@@ -225,17 +237,12 @@ fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
 /// * `Some(File)` — we hold the lock; keep the file alive for the
 ///   process's lifetime.
 /// * `None` and sets `GREXA_INSTANCE_BUSY=1` — another instance holds
-///   the lock; the caller should exit.
+///   the lock; the caller should attempt DBus activation and exit.
 /// * `None` and no env var — the lockfile couldn't be opened (no
 ///   runtime dir / not writable); continue without single-instance
 ///   guarantees.
 fn acquire_single_instance_lock() -> Option<std::fs::File> {
     use std::os::fd::AsRawFd;
-    // Prefer $XDG_RUNTIME_DIR (a tmpfs that's wiped on logout), fall
-    // back to $XDG_CACHE_HOME/grexa, then $HOME/.cache/grexa. The
-    // app-specific subdirectory keeps the lockfile from littering the
-    // cache root and matches our `~/.config/grexa` / `~/.local/share/
-    // grexa` convention.
     let lock_dir = std::env::var_os("XDG_RUNTIME_DIR")
         .map(|d| {
             let mut p = std::path::PathBuf::from(d);
@@ -265,27 +272,43 @@ fn acquire_single_instance_lock() -> Option<std::fs::File> {
         .create(true)
         .read(true)
         .write(true)
-        // The lockfile is empty by contract — `flock` operates on the
-        // fd, not the contents. Truncate clears anything that ever
-        // landed in there and makes the `create+write` open mode
-        // unambiguous to the `clippy::suspicious_open_options` lint.
         .truncate(true)
         .open(&lock_path)
         .ok()?;
-    // `flock` is the simplest Linux primitive for an advisory
-    // single-instance lock. LOCK_EX | LOCK_NB returns EWOULDBLOCK
-    // (errno 11) when another process holds the lock.
     let fd = file.as_raw_fd();
     let rc = unsafe { libc_flock(fd, LOCK_EX | LOCK_NB) };
     if rc == 0 {
         Some(file)
     } else {
-        // SAFETY: env var manipulation. We're single-threaded at this
-        // point (Qt hasn't booted yet).
+        request_dbus_activate();
         unsafe {
             std::env::set_var("GREXA_INSTANCE_BUSY", "1");
         }
         None
+    }
+}
+
+/// Ask an already-running Grexa instance to present its window via
+/// DBus. Best-effort — if the DBus method call fails, fall back to
+/// `wmctrl` to try raising the window, then the second instance exits
+/// and the user switches manually.
+fn request_dbus_activate() {
+    let status = std::process::Command::new("gdbus")
+        .args([
+            "call",
+            "--session",
+            "--dest",
+            "com.visorcraft.Grexa",
+            "--object-path",
+            "/com/visorcraft/Grexa",
+            "--method",
+            "com.visorcraft.Grexa.Activate",
+        ])
+        .status();
+    if status.is_err() || !status.unwrap().success() {
+        let _ = std::process::Command::new("wmctrl")
+            .args(["-a", "Grexa"])
+            .status();
     }
 }
 

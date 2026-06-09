@@ -26,6 +26,10 @@ Item {
     property bool compact: false
     signal triggered()
 
+    Accessible.role: Accessible.Button
+    Accessible.name: label
+    Accessible.onActivated: root.triggered()
+
     Rectangle {
         anchors.fill: parent
         anchors.leftMargin: app.tokens.spaceS

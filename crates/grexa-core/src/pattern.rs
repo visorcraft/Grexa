@@ -23,6 +23,8 @@
 
 use thiserror::Error;
 
+use crate::models::RegexEngine;
+
 /// Upper bound on backtracking steps for the `fancy-regex` engine. The crate's
 /// default (1,000,000) is high enough that a catastrophic-backtracking pattern
 /// (e.g. `(a+)+$`) can burn tens of milliseconds *per line*, which multiplies
@@ -51,6 +53,23 @@ impl PatternEngine {
     /// Build the cheapest engine that can compile `pattern`. Returns
     /// [`PatternError::Invalid`] only when *both* engines reject the input.
     pub fn build(pattern: &str, case_insensitive: bool) -> Result<Self, PatternError> {
+        Self::build_with_engine(pattern, case_insensitive, RegexEngine::Auto)
+    }
+
+    /// Build a regex engine with an explicit preference.
+    pub fn build_with_engine(
+        pattern: &str,
+        case_insensitive: bool,
+        engine: RegexEngine,
+    ) -> Result<Self, PatternError> {
+        match engine {
+            RegexEngine::Fast => Self::build_fast(pattern, case_insensitive),
+            RegexEngine::Extended => Self::build_extended(pattern, case_insensitive),
+            RegexEngine::Auto => Self::build_auto(pattern, case_insensitive),
+        }
+    }
+
+    fn build_auto(pattern: &str, case_insensitive: bool) -> Result<Self, PatternError> {
         match regex::RegexBuilder::new(pattern)
             .case_insensitive(case_insensitive)
             .build()
@@ -71,6 +90,27 @@ impl PatternEngine {
                 }
             }
         }
+    }
+
+    fn build_fast(pattern: &str, case_insensitive: bool) -> Result<Self, PatternError> {
+        regex::RegexBuilder::new(pattern)
+            .case_insensitive(case_insensitive)
+            .build()
+            .map(PatternEngine::Fast)
+            .map_err(|e| PatternError::Invalid(e.to_string()))
+    }
+
+    fn build_extended(pattern: &str, case_insensitive: bool) -> Result<Self, PatternError> {
+        let amended = if case_insensitive {
+            format!("(?i){pattern}")
+        } else {
+            pattern.to_string()
+        };
+        fancy_regex::RegexBuilder::new(&amended)
+            .backtrack_limit(FANCY_BACKTRACK_LIMIT)
+            .build()
+            .map(PatternEngine::Extended)
+            .map_err(|e| PatternError::Invalid(e.to_string()))
     }
 
     /// `true` when this pattern compiled through `fancy-regex`. The CLI uses

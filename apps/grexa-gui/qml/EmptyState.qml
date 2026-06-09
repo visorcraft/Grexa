@@ -20,6 +20,9 @@ Item {
     property alias chipsModel: chipRepeater.model
     signal chipClicked(int index, var data)
 
+    Accessible.role: Accessible.StaticText
+    Accessible.name: root.title
+
     ColumnLayout {
         anchors.centerIn: parent
         width: Math.min(480, parent.width * 0.7)

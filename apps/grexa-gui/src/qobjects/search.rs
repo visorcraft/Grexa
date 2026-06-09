@@ -243,6 +243,17 @@ pub mod ffi {
         #[qinvokable]
         fn copy_to_clipboard(self: &SearchController, text: &QString);
 
+        /// Move a file or directory to the freedesktop trash via
+        /// `gio trash`. Returns an empty string on success or a
+        /// human-readable error message.
+        #[qinvokable]
+        fn move_to_trash(self: &SearchController, path: &QString) -> QString;
+
+        /// Best-effort attempt to bring the Grexa window to the
+        /// foreground using `wmctrl`.
+        #[qinvokable]
+        fn raise_window(self: &SearchController);
+
         // ---- Container search dispatch --------------------------
 
         /// Refresh the cached container-runtime discovery. Runs the
@@ -978,6 +989,18 @@ impl ffi::SearchController {
             return;
         }
         copy_to_system_clipboard(&s);
+    }
+
+    fn move_to_trash(&self, path: &QString) -> QString {
+        let p = std::path::PathBuf::from(path.to_string());
+        match grexa_core::move_to_trash(&p) {
+            Ok(()) => QString::from(""),
+            Err(err) => QString::from(err.to_string()),
+        }
+    }
+
+    fn raise_window(&self) {
+        raise_grexa_window();
     }
 
     fn refresh_containers(self: Pin<&mut Self>) {
@@ -1837,6 +1860,16 @@ fn notify_desktop(summary: &str, body: &str) {
         .arg(summary)
         .arg(body)
         .spawn();
+}
+
+/// Best-effort attempt to bring the Grexa window to the foreground.
+/// Tries `wmctrl` first (widely available on X11/Wayland), then gives
+/// up silently. Used when a second instance detects the first is
+/// already running and wants to bring it to the user's attention.
+fn raise_grexa_window() {
+    let _ = std::process::Command::new("wmctrl")
+        .args(["-a", "Grexa"])
+        .status();
 }
 
 /// Push `text` to the system clipboard. Uses `wl-copy` (Wayland) when

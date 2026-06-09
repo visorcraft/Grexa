@@ -841,6 +841,8 @@ Kirigami.Page {
                 focus: true
                 keyNavigationEnabled: true
                 keyNavigationWraps: false
+                Accessible.role: Accessible.List
+                Accessible.name: qsTr("Search results")
 
                 // Keyboard navigation on a focused row:
                 //   Space  — open the context preview (matches Grex)
@@ -1301,6 +1303,7 @@ Kirigami.Page {
                 id: replacementField
                 Layout.fillWidth: true
                 placeholderText: qsTr("Replacement text (regex captures: $1, ${name})")
+                Accessible.name: qsTr("Replacement text")
                 // Enter commits Replace All. Empty replacement is valid:
                 // it deletes each match. Esc closes the dialog (Qt default).
                 Keys.onReturnPressed: function(event) {

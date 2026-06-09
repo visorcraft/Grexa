@@ -16,6 +16,8 @@ Rectangle {
     property string title: ""
     property string subtitle: ""
 
+    Accessible.role: Accessible.StaticText
+
     // Consumers opt into stretching by setting `Layout.fillWidth` on
     // the instance — baking it in here caused unexpected stretching
     // when a Card sits inside a Row/Flow.

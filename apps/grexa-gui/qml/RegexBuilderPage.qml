@@ -279,6 +279,7 @@ Kirigami.Page {
                     Layout.fillWidth: true
                     placeholderText: qsTr("e.g.  fn\\s+\\w+_test")
                     font.family: app.tokens.monoFamily
+                    Accessible.name: qsTr("Regex pattern")
                     onTextChanged: page.evaluate()
                 }
                 Controls.ToolButton {
@@ -364,6 +365,7 @@ Kirigami.Page {
                             font.pixelSize: app.tokens.textBody + 1
                             wrapMode: TextEdit.Wrap
                             background: null
+                            Accessible.name: qsTr("Test string")
                             onTextChanged: page.evaluate()
                         }
                     }

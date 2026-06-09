@@ -65,6 +65,16 @@ Controls.ItemDelegate {
             icon.name: "system-file-manager"
             onTriggered: app.searchController.revealInFileManager(root.fullPath)
         }
+        Controls.MenuItem {
+            text: qsTr("Move to Trash")
+            icon.name: "edit-delete-symbolic"
+            onTriggered: {
+                var err = app.searchController.moveToTrash(root.fullPath)
+                if (err.length > 0) {
+                    console.warn("Move to trash failed:", err)
+                }
+            }
+        }
         Controls.MenuSeparator {}
         Controls.MenuItem {
             text: qsTr("Copy full path")

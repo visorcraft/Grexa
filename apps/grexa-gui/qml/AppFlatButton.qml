@@ -15,6 +15,8 @@ import org.kde.kirigami as Kirigami
 Controls.Button {
     id: btn
     flat: true
+    Accessible.role: Accessible.Button
+    Accessible.name: text
     icon.color: app.tokens.textPrimary
     Kirigami.Theme.inherit: true
     Kirigami.Theme.colorSet: Kirigami.Theme.Button

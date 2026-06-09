@@ -260,6 +260,8 @@ pub struct RecentSearch {
     pub match_file_names: String,
     pub exclude_dirs: String,
     pub regex_search: bool,
+    #[serde(default = "default_regex_engine")]
+    pub regex_engine: String,
     pub files_search: bool,
     pub search_case_sensitive: bool,
     pub respect_gitignore: bool,
@@ -278,6 +280,7 @@ impl RecentSearch {
             match_file_names: options.match_file_names.clone(),
             exclude_dirs: options.exclude_dirs.clone(),
             regex_search: options.regex,
+            regex_engine: format!("{:?}", options.regex_engine).to_lowercase(),
             files_search,
             search_case_sensitive: options.case_sensitive,
             respect_gitignore: options.respect_gitignore,
@@ -295,10 +298,11 @@ impl RecentSearch {
     /// from `Boolean.ToString()` in C#.
     pub fn key(&self) -> String {
         format!(
-            "{term}|{path}|{regex}|{files}|{case}|{match_files}|{exclude}",
+            "{term}|{path}|{regex}|{engine}|{files}|{case}|{match_files}|{exclude}",
             term = self.search_term,
             path = self.search_path.to_string_lossy(),
             regex = csharp_bool(self.regex_search),
+            engine = self.regex_engine,
             files = csharp_bool(self.files_search),
             case = csharp_bool(self.search_case_sensitive),
             match_files = self.match_file_names,
@@ -309,6 +313,10 @@ impl RecentSearch {
 
 fn csharp_bool(value: bool) -> &'static str {
     if value { "True" } else { "False" }
+}
+
+fn default_regex_engine() -> String {
+    "auto".to_string()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1117,7 +1125,7 @@ mod tests {
         search.regex_search = true;
         search.files_search = false;
         search.search_case_sensitive = true;
-        assert_eq!(search.key(), "term|/tmp|True|False|True|*.rs|bin");
+        assert_eq!(search.key(), "term|/tmp|True|auto|False|True|*.rs|bin");
     }
 
     #[test]

@@ -184,6 +184,7 @@ Item {
                 font.family: app.tokens.sansFamily
                 background: null
                 Keys.onReturnPressed: root.submitted()
+                Accessible.name: qsTr("Search term")
             }
 
             // Flag chips
@@ -220,6 +221,7 @@ Item {
                 id: primaryAction
                 Layout.preferredHeight: 38
                 Layout.alignment: Qt.AlignVCenter
+                Accessible.name: qsTr("Search")
                 leftPadding: app.tokens.spaceL
                 rightPadding: app.tokens.spaceL
                 enabled: !root.busy && pathField.editText.length > 0 && termField.text.length > 0

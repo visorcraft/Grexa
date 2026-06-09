@@ -9,6 +9,8 @@ import org.kde.kirigami as Kirigami
 
 Controls.CheckBox {
     id: cb
+    Accessible.role: Accessible.CheckBox
+    Accessible.name: text
     Kirigami.Theme.inherit: true
     Kirigami.Theme.colorSet: Kirigami.Theme.View
     Kirigami.Theme.backgroundColor: app.tokens.surface1

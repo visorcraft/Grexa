@@ -19,16 +19,17 @@ pub use baloo::{
 };
 pub use cancel::CancelToken;
 pub use desktop::{
-    EditorPreset, UserPathKind, classify_user_path, file_manager_show_items_uris,
-    open_in_editor_command, reveal_with_xdg_open,
+    EditorPreset, TrashError, UserPathKind, classify_user_path, file_manager_show_items_uris,
+    move_to_trash, open_in_editor_command, reveal_with_xdg_open,
 };
 pub use documents::{ExtractError, extract_text};
 pub use encoding::{
     DetectedEncoding, detect_from_bytes, detect_from_path, heuristic_label, read_text,
 };
 pub use models::{
-    FileSearchResult, OutputFormat, SearchOptions, SearchResult, SearchResultSortField,
-    SearchSummary, SizeLimitType, SizeUnit, StringComparisonMode, UnicodeNormalizationMode,
+    FileSearchResult, OutputFormat, RegexEngine, SearchOptions, SearchResult,
+    SearchResultSortField, SearchSummary, SizeLimitType, SizeUnit, StringComparisonMode,
+    UnicodeNormalizationMode,
 };
 pub use pattern::{PatternEngine, PatternError};
 pub use preview::{ContextLine, ContextPreviewResult, PreviewError, context_preview};

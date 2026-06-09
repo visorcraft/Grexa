@@ -222,6 +222,7 @@ Kirigami.ScrollablePage {
                     Controls.Label { text: qsTr("Theme") }
                     AppComboBox {
                         Layout.fillWidth: true
+                        Accessible.name: qsTr("Theme")
                         model: [
                             qsTr("Follow system"), qsTr("Light"), qsTr("Dark"),
                             qsTr("OLED Black"),
@@ -302,6 +303,7 @@ Kirigami.ScrollablePage {
                     }
                     AppTextField {
                         Layout.fillWidth: true
+                        Accessible.name: qsTr("Match files")
                         placeholderText: "*.rs|*.toml|-target*"
                         text: page.settings.defaultMatchFiles
                         // Text fields commit on editing-finished (focus
@@ -320,6 +322,7 @@ Kirigami.ScrollablePage {
                     }
                     AppTextField {
                         Layout.fillWidth: true
+                        Accessible.name: qsTr("Exclude dirs")
                         placeholderText: "node_modules, target, .venv"
                         text: page.settings.defaultExcludeDirs
                         onTextEdited: page.settings.defaultExcludeDirs = text
@@ -340,12 +343,14 @@ Kirigami.ScrollablePage {
                     Controls.Label { text: qsTr("Lines before") }
                     AppSpinBox {
                         from: 1; to: 20
+                        Accessible.name: qsTr("Lines before")
                         value: page.settings.contextLinesBefore
                         onValueModified: { page.settings.contextLinesBefore = value; page.commit() }
                     }
                     Controls.Label { text: qsTr("Lines after") }
                     AppSpinBox {
                         from: 1; to: 20
+                        Accessible.name: qsTr("Lines after")
                         value: page.settings.contextLinesAfter
                         onValueModified: { page.settings.contextLinesAfter = value; page.commit() }
                     }
@@ -388,6 +393,7 @@ Kirigami.ScrollablePage {
                         Controls.Label { text: qsTr("Endpoint") }
                         AppTextField {
                             Layout.fillWidth: true
+                            Accessible.name: qsTr("Endpoint")
                             placeholderText: "https://api.openai.com/v1"
                             text: page.settings.aiEndpoint
                             onTextEdited: {
@@ -399,6 +405,7 @@ Kirigami.ScrollablePage {
                         Controls.Label { text: qsTr("Model") }
                         AppTextField {
                             Layout.fillWidth: true
+                            Accessible.name: qsTr("Model")
                             placeholderText: "gpt-4o-mini"
                             text: page.settings.aiModel
                             onTextEdited: {
@@ -415,6 +422,7 @@ Kirigami.ScrollablePage {
                                 id: keyField
                                 Layout.fillWidth: true
                                 echoMode: TextInput.Password
+                                Accessible.name: qsTr("API key")
                                 placeholderText: page.ai.hasApiKey ? qsTr("•••••• (stored)") : qsTr("paste a key…")
                             }
                             AppFlatButton {
@@ -478,6 +486,7 @@ Kirigami.ScrollablePage {
                         Controls.Label { text: qsTr("Preset") }
                         AppComboBox {
                             Layout.fillWidth: true
+                            Accessible.name: qsTr("Editor preset")
                             model: [
                                 qsTr("Kate"), qsTr("KWrite"), qsTr("VS Code"),
                                 qsTr("VSCodium"), qsTr("Sublime Text"),
@@ -496,6 +505,7 @@ Kirigami.ScrollablePage {
                     }
                     AppTextField {
                         Layout.fillWidth: true
+                        Accessible.name: qsTr("Custom command")
                         placeholderText: "kate --line {line} {path}"
                         text: page.settings.editorCustomCommand
                         onTextEdited: page.settings.editorCustomCommand = text

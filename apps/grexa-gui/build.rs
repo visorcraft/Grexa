@@ -4,7 +4,20 @@
 use cxx_qt_build::{CxxQtBuilder, QmlModule};
 use qt_build_utils::{QResource, QResourceFile, QResources};
 
+fn emit_vergen() {
+    use vergen_git2::{Emitter, Git2};
+    let git2 = Git2::builder().sha(true).build();
+    if let Err(e) = Emitter::default()
+        .add_instructions(&git2)
+        .and_then(|e| e.emit())
+    {
+        println!("cargo:warning=vergen failed: {e}, using fallback");
+        println!("cargo:rustc-env=VERGEN_GIT_SHA=unknown");
+    }
+}
+
 fn main() {
+    emit_vergen();
     CxxQtBuilder::new_qml_module(
         QmlModule::new("com.visorcraft.Grexa")
             .version(1, 0)
