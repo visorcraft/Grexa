@@ -17,11 +17,11 @@ impl CancelToken {
     }
 
     pub fn cancel(&self) {
-        self.flag.store(true, Ordering::SeqCst);
+        self.flag.store(true, Ordering::Release);
     }
 
     pub fn is_cancelled(&self) -> bool {
-        self.flag.load(Ordering::SeqCst)
+        self.flag.load(Ordering::Acquire)
     }
 }
 

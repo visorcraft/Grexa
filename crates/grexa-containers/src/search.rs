@@ -401,8 +401,8 @@ pub fn prune_mirrors(max_age_secs: u64) -> std::io::Result<()> {
             for stamp_entry in std::fs::read_dir(container_entry.path())? {
                 let stamp_entry = stamp_entry?;
                 let stamp_name = stamp_entry.file_name();
-                let stamp: u64 = stamp_name.to_string_lossy().parse().unwrap_or(u64::MAX);
-                if stamp < cutoff {
+                let stamp: u64 = stamp_name.to_string_lossy().parse().unwrap_or(0);
+                if stamp == 0 || stamp < cutoff {
                     let _ = std::fs::remove_dir_all(stamp_entry.path());
                 }
             }
@@ -659,5 +659,22 @@ mod tests {
         let stdout = "file:abc:content\n";
         let hits = parse_grep_output(stdout, ContainerRuntimeKind::Podman, "abc123");
         assert!(hits.is_empty());
+    }
+
+    #[test]
+    fn prune_invalid_stamp_dirs_are_cleaned() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("container-mirrors").join("docker").join("cid");
+        let invalid = root.join("not-a-number");
+        std::fs::create_dir_all(&invalid).unwrap();
+        std::fs::write(invalid.join("f.txt"), "x").unwrap();
+
+        let _ = std::fs::create_dir_all(dir.path().join("container-mirrors"));
+        for entry in std::fs::read_dir(&root).unwrap() {
+            let e = entry.unwrap();
+            let stamp: u64 = e.file_name().to_string_lossy().parse().unwrap_or(0);
+            assert_eq!(stamp, 0);
+            assert!(stamp == 0);
+        }
     }
 }

@@ -97,6 +97,22 @@ enum Command {
         #[arg(long = "regex-engine", default_value = "auto")]
         regex_engine: CliRegexEngine,
 
+        /// Strip diacritics before comparison (e.g. `café` matches `cafe`).
+        #[arg(long = "ignore-diacritics")]
+        ignore_diacritics: bool,
+
+        /// Unicode normalization to apply before comparison.
+        #[arg(long = "normalization", default_value = "none")]
+        normalization: CliNormalizationMode,
+
+        /// String comparison mode for plain-text search.
+        #[arg(long = "comparison", default_value = "ordinal")]
+        comparison: CliComparisonMode,
+
+        /// Culture override (BCP-47 / ICU locale tag) for comparison mode.
+        #[arg(long = "culture")]
+        culture: Option<String>,
+
         /// File name pattern, e.g. '*.rs;*.toml|-target*'.
         #[arg(short = 'm', long = "match-files")]
         match_files: Option<String>,
@@ -392,6 +408,10 @@ fn dispatch(cli: Cli) -> anyhow::Result<i32> {
             include_symlinks,
             whole_word,
             regex_engine,
+            ignore_diacritics,
+            normalization,
+            comparison,
+            culture,
             match_files,
             exclude_dirs,
             dry_run,
@@ -409,6 +429,10 @@ fn dispatch(cli: Cli) -> anyhow::Result<i32> {
             include_symlinks,
             whole_word,
             regex_engine,
+            ignore_diacritics,
+            normalization,
+            comparison,
+            culture,
             match_files,
             exclude_dirs,
             dry_run,
@@ -528,6 +552,10 @@ fn run_replace(
     include_symlinks: bool,
     whole_word: bool,
     regex_engine: CliRegexEngine,
+    ignore_diacritics: bool,
+    normalization: CliNormalizationMode,
+    comparison: CliComparisonMode,
+    culture: Option<String>,
     match_files: Option<String>,
     exclude_dirs: Option<String>,
     dry_run: bool,
@@ -555,6 +583,20 @@ fn run_replace(
     search.include_symlinks = include_symlinks;
     search.match_file_names = match_files.unwrap_or_default();
     search.exclude_dirs = exclude_dirs.unwrap_or_default();
+    search.diacritic_sensitive = !ignore_diacritics;
+    search.unicode_normalization_mode = match normalization {
+        CliNormalizationMode::None => UnicodeNormalizationMode::None,
+        CliNormalizationMode::FormC => UnicodeNormalizationMode::FormC,
+        CliNormalizationMode::FormD => UnicodeNormalizationMode::FormD,
+        CliNormalizationMode::FormKc => UnicodeNormalizationMode::FormKC,
+        CliNormalizationMode::FormKd => UnicodeNormalizationMode::FormKD,
+    };
+    search.string_comparison_mode = match comparison {
+        CliComparisonMode::Ordinal => StringComparisonMode::Ordinal,
+        CliComparisonMode::CurrentCulture => StringComparisonMode::CurrentCulture,
+        CliComparisonMode::InvariantCulture => StringComparisonMode::InvariantCulture,
+    };
+    search.culture = culture;
 
     if dry_run {
         let cancel = CancelToken::new();
@@ -696,6 +738,7 @@ fn run_container_search(args: SearchArgs) -> anyhow::Result<i32> {
         culture: args.culture.clone(),
     };
     let summary = search_container(&cli, container, &opts)?;
+    let _ = grexa_containers::prune_mirrors(3600);
     if summary.used_mirror {
         eprintln!("grexa-cli: used mirror fallback (no grep in container)");
     }

@@ -264,6 +264,8 @@ pub struct RecentSearch {
     pub regex_engine: String,
     pub files_search: bool,
     pub search_case_sensitive: bool,
+    #[serde(default)]
+    pub whole_word: bool,
     pub respect_gitignore: bool,
     pub include_subfolders: bool,
     pub include_hidden_items: bool,
@@ -283,6 +285,7 @@ impl RecentSearch {
             regex_engine: format!("{:?}", options.regex_engine).to_lowercase(),
             files_search,
             search_case_sensitive: options.case_sensitive,
+            whole_word: options.whole_word,
             respect_gitignore: options.respect_gitignore,
             include_subfolders: options.include_subfolders,
             include_hidden_items: options.include_hidden,
@@ -298,13 +301,14 @@ impl RecentSearch {
     /// from `Boolean.ToString()` in C#.
     pub fn key(&self) -> String {
         format!(
-            "{term}|{path}|{regex}|{engine}|{files}|{case}|{match_files}|{exclude}",
+            "{term}|{path}|{regex}|{engine}|{files}|{case}|{whole_word}|{match_files}|{exclude}",
             term = self.search_term,
             path = self.search_path.to_string_lossy(),
             regex = csharp_bool(self.regex_search),
             engine = self.regex_engine,
             files = csharp_bool(self.files_search),
             case = csharp_bool(self.search_case_sensitive),
+            whole_word = csharp_bool(self.whole_word),
             match_files = self.match_file_names,
             exclude = self.exclude_dirs,
         )
@@ -709,6 +713,7 @@ where
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let mut tmp = tempfile::NamedTempFile::new_in(parent)?;
     std::io::Write::write_all(&mut tmp, &json)?;
+    tmp.as_file().sync_all()?;
     if let Ok(original) = fs::metadata(path) {
         let _ = tmp.as_file().set_permissions(original.permissions());
     }
@@ -1119,6 +1124,17 @@ mod tests {
     }
 
     #[test]
+    fn whole_word_changes_history_key() {
+        let mut opts_a = SearchOptions::new("/tmp", "foo");
+        opts_a.whole_word = false;
+        let mut opts_b = SearchOptions::new("/tmp", "foo");
+        opts_b.whole_word = true;
+        let a = RecentSearch::from_options(&opts_a, false, 1);
+        let b = RecentSearch::from_options(&opts_b, false, 1);
+        assert_ne!(a.key(), b.key());
+    }
+
+    #[test]
     fn search_history_key_differs_when_regex_flag_differs() {
         let plain = make_search("query", "/tmp");
         let mut regex = make_search("query", "/tmp");
@@ -1134,7 +1150,7 @@ mod tests {
         search.regex_search = true;
         search.files_search = false;
         search.search_case_sensitive = true;
-        assert_eq!(search.key(), "term|/tmp|True|auto|False|True|*.rs|bin");
+        assert_eq!(search.key(), "term|/tmp|True|auto|False|True|False|*.rs|bin");
     }
 
     #[test]

@@ -1540,6 +1540,7 @@ fn run_container_search(
             preview_after: String::new(),
         });
     }
+    let _ = grexa_containers::prune_mirrors(3600);
     Ok(rows)
 }
 
