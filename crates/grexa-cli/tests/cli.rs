@@ -333,6 +333,30 @@ fn replace_reports_zero_matches_exit_code() {
         .code(1);
 }
 
+#[cfg(unix)]
+#[test]
+fn replace_all_failures_exits_two() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = tempdir().unwrap();
+    let locked = dir.path().join("locked");
+    fs::create_dir(&locked).unwrap();
+    let file = locked.join("a.txt");
+    fs::write(&file, "TODO write\n").unwrap();
+    // Read-only directory: the match is found, but the atomic rewrite cannot
+    // create its temp file, so the only matching file fails.
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o555)).unwrap();
+
+    cmd()
+        .args(["replace", dir.path().to_str().unwrap(), "TODO", "DONE"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("1 failures"));
+
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(fs::read_to_string(&file).unwrap(), "TODO write\n");
+}
+
 #[test]
 fn replace_skips_binary_files() {
     let dir = tempdir().unwrap();

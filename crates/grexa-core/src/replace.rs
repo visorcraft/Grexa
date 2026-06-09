@@ -4,22 +4,21 @@
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
 use regex::RegexBuilder;
 use thiserror::Error;
-use unicode_normalization::UnicodeNormalization;
 
 use crate::cancel::CancelToken;
 use crate::encoding::{DetectedEncoding, decode_text};
 use crate::models::{SearchOptions, UnicodeNormalizationMode};
 use crate::pattern::PatternEngine;
 use crate::search::{
-    NormalizationContext, ProgressSink, SearchError, culture_aware_lowercase,
-    is_whole_word_match, normalize_with_mapping, search_with,
+    NormalizationContext, ProgressSink, SEARCHABLE_BINARY_EXTENSIONS, SearchError,
+    is_whole_word_match, map_normalized_span, normalize_for_text_search, normalize_with_mapping,
+    search_with,
 };
 use crate::storage::AppPaths;
 
@@ -95,24 +94,20 @@ fn journal_path() -> PathBuf {
     paths.state_dir.join("replace-journal.json")
 }
 
-static JOURNAL_OVERRIDE: OnceLock<std::sync::Mutex<Option<PathBuf>>> = OnceLock::new();
+thread_local! {
+    static JOURNAL_OVERRIDE: std::cell::RefCell<Option<PathBuf>> =
+        const { std::cell::RefCell::new(None) };
+}
 
 fn journal_override() -> Option<PathBuf> {
-    JOURNAL_OVERRIDE
-        .get_or_init(|| std::sync::Mutex::new(None))
-        .lock()
-        .ok()
-        .and_then(|guard| guard.clone())
+    JOURNAL_OVERRIDE.with(|cell| cell.borrow().clone())
 }
 
 /// Test-only helper to redirect the journal file. Production code does not
-/// call this; the global lives in a `OnceLock` so it survives across the
-/// process.
+/// call this; the override is thread-local so parallel tests cannot clobber
+/// each other's journal paths.
 pub fn set_journal_path_override(path: Option<PathBuf>) {
-    let cell = JOURNAL_OVERRIDE.get_or_init(|| std::sync::Mutex::new(None));
-    if let Ok(mut guard) = cell.lock() {
-        *guard = path;
-    }
+    JOURNAL_OVERRIDE.with(|cell| *cell.borrow_mut() = path);
 }
 
 fn unix_now() -> u64 {
@@ -300,10 +295,6 @@ fn rewrite_one_pre_read(
     Ok(FileResult::Replaced { matches, encoding })
 }
 
-const SEARCHABLE_BINARY_EXTENSIONS: &[&str] = &[
-    "docx", "xlsx", "pptx", "odt", "ods", "odp", "zip", "pdf", "rtf",
-];
-
 fn is_searchable_binary(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
@@ -425,30 +416,34 @@ fn apply_substitution(
         (result, count)
     } else {
         let escaped = regex::escape(needle);
-        let pattern = if options.search.whole_word {
-            format!(r"\b{escaped}\b")
-        } else {
-            escaped
-        };
-        match RegexBuilder::new(&pattern).case_insensitive(true).build() {
+        match RegexBuilder::new(&escaped).case_insensitive(true).build() {
             Ok(re) => {
-                let matches: Vec<_> = re.find_iter(text).collect();
+                // Filter through `is_whole_word_match` instead of `\b` so the
+                // whole-word semantics stay identical to search and the other
+                // replace paths for needles with non-word edge characters.
+                let matches: Vec<(usize, usize)> = re
+                    .find_iter(text)
+                    .map(|m| (m.start(), m.end()))
+                    .filter(|&(start, end)| {
+                        !options.search.whole_word || is_whole_word_match(text, start, end)
+                    })
+                    .collect();
                 let count = matches.len();
                 if count == 0 {
                     return (text.to_string(), 0);
                 }
                 let mut result = String::with_capacity(text.len());
                 let mut prev_end = 0;
-                for m in &matches {
-                    result.push_str(&text[prev_end..m.start()]);
+                for (start, end) in &matches {
+                    result.push_str(&text[prev_end..*start]);
                     result.push_str(&options.replacement);
-                    prev_end = m.end();
+                    prev_end = *end;
                 }
                 result.push_str(&text[prev_end..]);
                 (result, count)
             }
             Err(err) => {
-                tracing::warn!(%err, pattern, "regex build failed for literal replace");
+                tracing::warn!(%err, pattern = escaped, "regex build failed for literal replace");
                 (text.to_string(), 0)
             }
         }
@@ -476,26 +471,10 @@ fn apply_normalized_substitution(
     replacement: &str,
 ) -> (String, usize) {
     let norm_ctx = NormalizationContext::build(options);
-    let normalized_needle = {
-        let mut n = match options.unicode_normalization_mode {
-            UnicodeNormalizationMode::None => needle.to_string(),
-            UnicodeNormalizationMode::FormC => needle.nfc().collect(),
-            UnicodeNormalizationMode::FormD => needle.nfd().collect(),
-            UnicodeNormalizationMode::FormKC => needle.nfkc().collect(),
-            UnicodeNormalizationMode::FormKD => needle.nfkd().collect(),
-        };
-        if norm_ctx.strip_diacritics {
-            use icu_properties::props::GeneralCategory;
-            n = n
-                .nfd()
-                .filter(|c| norm_ctx.gc_map.get(*c) != GeneralCategory::NonspacingMark)
-                .collect();
-        }
-        if !options.case_sensitive {
-            n = culture_aware_lowercase(&n, &norm_ctx);
-        }
-        n
-    };
+    let normalized_needle = normalize_for_text_search(needle, options, &norm_ctx);
+    if normalized_needle.is_empty() {
+        return (text.to_string(), 0);
+    }
 
     let (normalized, mapping) = normalize_with_mapping(text, options, &norm_ctx);
 
@@ -504,8 +483,7 @@ fn apply_normalized_substitution(
     while let Some(index) = normalized[offset..].find(&normalized_needle) {
         let norm_start = offset + index;
         let norm_end = norm_start + normalized_needle.len();
-        let orig_start = mapping[norm_start];
-        let orig_end = mapping.get(norm_end).copied().unwrap_or(text.len());
+        let (orig_start, orig_end) = map_normalized_span(&mapping, norm_start, norm_end);
         if !options.whole_word || is_whole_word_match(text, orig_start, orig_end) {
             norm_matches.push((orig_start, orig_end));
         }
@@ -539,12 +517,10 @@ fn encode_for_writeback(text: &str, encoding: &DetectedEncoding) -> Result<Vec<u
         }
         DetectedEncoding::Utf16Le => Ok(encode_utf16(text, &[0xFF, 0xFE], true)),
         DetectedEncoding::Utf16Be => Ok(encode_utf16(text, &[0xFE, 0xFF], false)),
-        DetectedEncoding::Utf32Le | DetectedEncoding::Utf32Be => {
-            Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "UTF-32 round-trip is not supported; file skipped to prevent data loss",
-            ))
-        }
+        DetectedEncoding::Utf32Le | DetectedEncoding::Utf32Be => Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "UTF-32 round-trip is not supported; file skipped to prevent data loss",
+        )),
         // Heuristic encodings (windows-1252, Shift_JIS, etc.): re-encode
         // through encoding_rs so the file stays in its detected charset.
         // Characters that can't be represented in the target encoding are
@@ -1000,6 +976,46 @@ mod tests {
 
         let rewritten = fs::read_to_string(&target).unwrap();
         assert_eq!(rewritten, "REPL REPL REPL\n");
+    }
+
+    #[test]
+    fn normalized_replace_consumes_full_grapheme() {
+        // Lowercased 'İ' is "i\u{0307}", so the normalized needle "i" ends
+        // mid-segment. The replacement must consume the whole 'İ' grapheme
+        // rather than being inserted in front of it.
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("a.txt");
+        fs::write(&target, "İstanbul\n").unwrap();
+
+        let mut options = opts(dir.path(), "I", "X");
+        options.search.unicode_normalization_mode = UnicodeNormalizationMode::FormD;
+
+        let summary = replace_with(&options, &CancelToken::new(), None).unwrap();
+        assert_eq!(summary.matches_replaced, 1);
+        let rewritten = fs::read_to_string(&target).unwrap();
+        assert!(!rewritten.contains('İ'), "matched grapheme must be removed, got {rewritten:?}");
+        assert_eq!(rewritten, "Xstanbul\n");
+    }
+
+    #[test]
+    fn case_insensitive_whole_word_replace_handles_nonword_edge_chars() {
+        // "e.g." has non-word edge characters; `\b`-based matching never
+        // fires after the trailing dot, while search's whole-word rule does.
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("a.txt");
+        fs::write(&target, "see e.g. now\n").unwrap();
+
+        let mut search = SearchOptions::new(dir.path(), "e.g.");
+        search.whole_word = true;
+        let options = ReplaceOptions {
+            search,
+            replacement: "for example".to_string(),
+        };
+
+        let summary = replace_with(&options, &CancelToken::new(), None).unwrap();
+        assert_eq!(summary.matches_replaced, 1);
+        let rewritten = fs::read_to_string(&target).unwrap();
+        assert_eq!(rewritten, "see for example now\n");
     }
 
     #[test]

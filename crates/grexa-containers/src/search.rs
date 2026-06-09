@@ -61,6 +61,8 @@ pub struct ContainerSearchOptions {
     pub pattern: String,
     pub case_sensitive: bool,
     pub regex: bool,
+    pub whole_word: bool,
+    pub max_results: Option<usize>,
     pub diacritic_sensitive: bool,
     pub unicode_normalization_mode: grexa_core::UnicodeNormalizationMode,
     pub string_comparison_mode: grexa_core::StringComparisonMode,
@@ -74,11 +76,20 @@ impl ContainerSearchOptions {
             pattern: pattern.into(),
             case_sensitive: false,
             regex: false,
+            whole_word: false,
+            max_results: None,
             diacritic_sensitive: true,
             unicode_normalization_mode: grexa_core::UnicodeNormalizationMode::None,
             string_comparison_mode: grexa_core::StringComparisonMode::Ordinal,
             culture: None,
         }
+    }
+
+    fn needs_normalization(&self) -> bool {
+        !self.diacritic_sensitive
+            || self.unicode_normalization_mode != grexa_core::UnicodeNormalizationMode::None
+            || self.string_comparison_mode != grexa_core::StringComparisonMode::Ordinal
+            || self.culture.is_some()
     }
 }
 
@@ -93,11 +104,19 @@ pub fn search_container<R: RuntimeOperations>(
     let started = std::time::Instant::now();
     let has_grep = runtime.has_grep(&container.id).unwrap_or(false);
 
-    let (hits, used_mirror) = if has_grep {
+    let (mut hits, used_mirror) = if has_grep && !options.needs_normalization() {
         (direct_grep(runtime, container, options)?, false)
     } else {
+        if has_grep {
+            tracing::debug!(
+                "normalization-affecting options set; using mirror search instead of container grep"
+            );
+        }
         (mirror_search(runtime, container, options)?, true)
     };
+    if let Some(max) = options.max_results {
+        hits.truncate(max);
+    }
 
     Ok(ContainerSearchSummary {
         hits,
@@ -121,12 +140,21 @@ fn direct_grep<R: RuntimeOperations>(
     if !options.case_sensitive {
         argv.push("-i");
     }
+    if options.whole_word {
+        argv.push("-w");
+    }
     argv.push("--");
     argv.push(&options.pattern);
     argv.push(&options.container_path);
 
     let start = std::time::Instant::now();
-    let result = runtime.exec_capture(&container.id, &argv)?;
+    let mut result = runtime.exec_capture(&container.id, &argv)?;
+    if result.status == 2 && grep_rejected_option(&result.stderr) {
+        // BusyBox grep has no -Z; retry with colon-delimited output, which
+        // the parser handles via its colon-splitting fallback.
+        argv[1] = "-rnH";
+        result = runtime.exec_capture(&container.id, &argv)?;
+    }
     tracing::debug!(
         elapsed_ms = start.elapsed().as_millis(),
         timeout_secs = CONTAINER_SEARCH_TIMEOUT_SECS,
@@ -151,6 +179,13 @@ fn direct_grep<R: RuntimeOperations>(
             case_sensitive: options.case_sensitive,
         }),
     ))
+}
+
+fn grep_rejected_option(stderr: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(stderr).to_ascii_lowercase();
+    text.contains("unrecognized option")
+        || text.contains("invalid option")
+        || text.contains("usage:")
 }
 
 /// What `parse_grep_output_with_pattern` needs to re-scan each line
@@ -247,7 +282,8 @@ pub fn parse_grep_output_with_pattern(
                     container_id: container_id.to_string(),
                     container_path: path.to_string(),
                     line_number,
-                    column_number: content.get(..mat.start())
+                    column_number: content
+                        .get(..mat.start())
                         .map(|prefix| prefix.chars().count() + 1)
                         .unwrap_or(mat.start() + 1),
                     line_content: content.to_string(),
@@ -295,6 +331,8 @@ fn mirror_search<R: RuntimeOperations>(
     let mut search_opts = SearchOptions::new(&local, &options.pattern);
     search_opts.regex = options.regex;
     search_opts.case_sensitive = options.case_sensitive;
+    search_opts.whole_word = options.whole_word;
+    search_opts.max_results = options.max_results;
     search_opts.diacritic_sensitive = options.diacritic_sensitive;
     search_opts.unicode_normalization_mode = options.unicode_normalization_mode;
     search_opts.string_comparison_mode = options.string_comparison_mode;
@@ -572,6 +610,92 @@ mod tests {
     }
 
     #[test]
+    fn direct_grep_retries_without_z_for_busybox_grep() {
+        let runner = MockCommandRunner::default();
+        runner.push(CommandResult::success("/usr/bin/grep\n"));
+        runner.push(CommandResult {
+            status: 2,
+            stdout: Vec::new(),
+            stderr: b"grep: unrecognized option: Z\nBusyBox v1.36.1 multi-call binary.\nUsage: grep ...\n".to_vec(),
+        });
+        runner.push(CommandResult::success("/etc/hostname:1:my-host\n"));
+        let runtime = cli_runtime(runner.clone());
+
+        let summary = search_container(
+            &runtime,
+            &fake_container(),
+            &ContainerSearchOptions::new("/etc", "host"),
+        )
+        .unwrap();
+        assert!(!summary.used_mirror);
+        assert_eq!(summary.hits.len(), 1);
+        assert_eq!(summary.hits[0].container_path, "/etc/hostname");
+
+        let inv = runner.invocations();
+        assert!(inv[1].args.iter().any(|a| a == &OsString::from("-rnHZ")));
+        assert!(inv[2].args.iter().any(|a| a == &OsString::from("-rnH")));
+        assert!(!inv[2].args.iter().any(|a| a == &OsString::from("-rnHZ")));
+    }
+
+    #[test]
+    fn direct_grep_whole_word_passes_w_flag() {
+        let runner = MockCommandRunner::default();
+        runner.push(CommandResult::success("/usr/bin/grep\n"));
+        runner.push(CommandResult::success("/etc/hostname:1:my-host\n"));
+        let runtime = cli_runtime(runner.clone());
+
+        let mut opts = ContainerSearchOptions::new("/etc", "host");
+        opts.whole_word = true;
+        let summary = search_container(&runtime, &fake_container(), &opts).unwrap();
+        assert!(!summary.used_mirror);
+
+        let grep_args = &runner.invocations()[1].args;
+        assert!(grep_args.iter().any(|a| a == &OsString::from("-w")));
+    }
+
+    #[test]
+    fn search_container_truncates_to_max_results() {
+        let runner = MockCommandRunner::default();
+        runner.push(CommandResult::success("/usr/bin/grep\n"));
+        runner.push(CommandResult::success(
+            "/etc/hostname:1:my-host\n/etc/hosts:5:another host\n/etc/issue:2:host again\n",
+        ));
+        let runtime = cli_runtime(runner);
+
+        let mut opts = ContainerSearchOptions::new("/etc", "host");
+        opts.max_results = Some(2);
+        let summary = search_container(&runtime, &fake_container(), &opts).unwrap();
+        assert_eq!(summary.hits.len(), 2);
+    }
+
+    #[test]
+    fn normalization_options_force_mirror_even_with_grep() {
+        let runner = MockCommandRunner::default();
+        // has_grep probe says grep exists; normalization options must still
+        // route to the mirror path.
+        runner.push(CommandResult::success("/usr/bin/grep\n"));
+        // archive_path cp.
+        runner.push(CommandResult::success(""));
+        let runtime = cli_runtime(runner.clone());
+
+        let mut opts = ContainerSearchOptions::new("/data", "TODO");
+        opts.diacritic_sensitive = false;
+        let _ = search_container(&runtime, &fake_container(), &opts);
+
+        let inv = runner.invocations();
+        assert!(
+            inv.iter()
+                .any(|i| i.args.iter().any(|a| a == &OsString::from("cp"))),
+            "mirror path must call `podman cp`"
+        );
+        assert!(
+            !inv.iter()
+                .any(|i| i.args.iter().any(|a| a == &OsString::from("-rnHZ"))),
+            "grep must never be exec'd when normalization options are set"
+        );
+    }
+
+    #[test]
     fn mirror_search_when_no_grep() {
         let dir = tempfile::tempdir().unwrap();
         let runner = MockCommandRunner::default();
@@ -664,7 +788,11 @@ mod tests {
     #[test]
     fn prune_invalid_stamp_dirs_are_cleaned() {
         let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("container-mirrors").join("docker").join("cid");
+        let root = dir
+            .path()
+            .join("container-mirrors")
+            .join("docker")
+            .join("cid");
         let invalid = root.join("not-a-number");
         std::fs::create_dir_all(&invalid).unwrap();
         std::fs::write(invalid.join("f.txt"), "x").unwrap();

@@ -28,6 +28,8 @@ Item {
     signal submitted()
     signal browse()
 
+    function focusTermField() { termField.forceActiveFocus() }
+
     implicitHeight: 56
 
     // -- Soft elevation stack (drop-shadow fake) -----------------

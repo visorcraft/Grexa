@@ -84,6 +84,7 @@ Kirigami.ScrollablePage {
                     regex: e.regex_search || false,
                     filesMode: e.files_search || false,
                     caseSensitive: e.search_case_sensitive || false,
+                    wholeWord: e.whole_word || false,
                     timestamp: e.timestamp_unix || 0,
                     raw: JSON.stringify(e)
                 })
@@ -248,6 +249,7 @@ Kirigami.ScrollablePage {
                                 const term = model.term
                                 const regex = model.regex
                                 const caseSensitive = model.caseSensitive
+                                const wholeWord = model.wholeWord
                                 const filesMode = model.filesMode
                                 // Switch to Search and populate the
                                 // form so the user can choose to
@@ -260,6 +262,7 @@ Kirigami.ScrollablePage {
                                         p.searchBar.termText = term
                                         p.searchBar.regexEnabled = regex
                                         p.searchBar.caseSensitive = caseSensitive
+                                        p.searchBar.wholeWordEnabled = wholeWord
                                         p.controller.resultMode = filesMode ? 1 : 0
                                         if (p.controller.busy) p.controller.cancel()
                                         p.controller.clearResults()

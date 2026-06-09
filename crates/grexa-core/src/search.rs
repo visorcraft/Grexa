@@ -76,7 +76,7 @@ static BINARY_EXTENSIONS: &[&str] = &[
     "docx", "xls", "xlsx", "ppt", "pptx", "pdb", "cache", "lock", "pack", "idx", "rtf",
 ];
 
-static SEARCHABLE_BINARY_EXTENSIONS: &[&str] = &[
+pub(crate) static SEARCHABLE_BINARY_EXTENSIONS: &[&str] = &[
     "docx", "xlsx", "pptx", "odt", "ods", "odp", "zip", "pdf", "rtf",
 ];
 
@@ -370,16 +370,17 @@ pub fn aggregate_file_results(
     results: &[SearchResult],
     encodings: &HashMap<PathBuf, DetectedEncoding>,
 ) -> Vec<FileSearchResult> {
-    let mut grouped: BTreeMap<PathBuf, Vec<usize>> = BTreeMap::new();
-    for (i, result) in results.iter().enumerate() {
-        grouped.entry(result.full_path.clone()).or_default().push(i);
+    let mut grouped: BTreeMap<PathBuf, Vec<SearchResult>> = BTreeMap::new();
+    for result in results {
+        grouped
+            .entry(result.full_path.clone())
+            .or_default()
+            .push(result.clone());
     }
 
     grouped
         .into_iter()
-        .map(|(full_path, indices)| {
-            let mut file_matches: Vec<SearchResult> =
-                indices.iter().map(|&i| results[i].clone()).collect();
+        .map(|(full_path, mut file_matches)| {
             file_matches.sort_by_key(|result| (result.line_number, result.column_number));
             let first = file_matches.first();
             let metadata = fs::metadata(&full_path).ok();
@@ -593,6 +594,7 @@ struct ScanContext<'a> {
 
 fn scan_text_buffer(ctx: &ScanContext, text: &str) -> Vec<SearchResult> {
     let mut results = Vec::new();
+    let mut truncation_warned = false;
     for (idx, line) in text.lines().enumerate() {
         if idx % 64 == 0 && ctx.cancel.is_cancelled() {
             return results;
@@ -600,8 +602,17 @@ fn scan_text_buffer(ctx: &ScanContext, text: &str) -> Vec<SearchResult> {
 
         let line_number = idx + 1;
         let compare_line = truncate_bytes(line, MAX_COMPARE_LINE_BYTES);
+        if compare_line.len() < line.len() && !truncation_warned {
+            truncation_warned = true;
+            tracing::warn!(
+                path = %ctx.path.display(),
+                line_number,
+                cap_bytes = MAX_COMPARE_LINE_BYTES,
+                "line exceeds compare cap; truncated for matching"
+            );
+        }
         let matches = find_line_matches(
-            &compare_line,
+            compare_line,
             ctx.options,
             ctx.regex,
             ctx.normalized_needle,
@@ -686,15 +697,37 @@ fn find_line_matches(
     while let Some(index) = normalized[offset..].find(needle) {
         let norm_start = offset + index;
         let norm_end = norm_start + needle.len();
-        let orig_start = mapping[norm_start];
-        let orig_end = mapping.get(norm_end).copied().unwrap_or(line.len());
-        matches.push((orig_start, orig_end));
+        matches.push(map_normalized_span(&mapping, norm_start, norm_end));
         offset = norm_end;
     }
     if options.whole_word {
         matches.retain(|&(start, end)| is_whole_word_match(line, start, end));
     }
     matches
+}
+
+/// Map a normalized-string byte span back to original-string byte offsets.
+/// Every normalized byte of a segment maps to the segment's *start* offset,
+/// so a span ending mid-segment must be rounded up to the end of the segment
+/// containing `norm_end - 1` — otherwise the span collapses to zero width
+/// (e.g. needle "i" against "İstanbul" whose lowered form is "i\u{0307}…").
+/// The trailing `original.len()` sentinel in `mapping` guarantees the forward
+/// scan terminates.
+pub(crate) fn map_normalized_span(
+    mapping: &[usize],
+    norm_start: usize,
+    norm_end: usize,
+) -> (usize, usize) {
+    let orig_start = mapping[norm_start];
+    if norm_end <= norm_start {
+        return (orig_start, orig_start);
+    }
+    let last_segment_start = mapping[norm_end - 1];
+    let mut idx = norm_end;
+    while mapping[idx] == last_segment_start {
+        idx += 1;
+    }
+    (orig_start, mapping[idx])
 }
 
 fn is_word_char(ch: char) -> bool {
@@ -742,7 +775,7 @@ pub(crate) fn normalize_with_mapping(
             }
         }
 
-        let norm_segment = normalize_segment(&segment, options, ctx);
+        let norm_segment = normalize_for_text_search(&segment, options, ctx);
 
         for _ in 0..norm_segment.len() {
             mapping.push(byte_off);
@@ -752,29 +785,6 @@ pub(crate) fn normalize_with_mapping(
 
     mapping.push(original.len());
     (normalized, mapping)
-}
-
-fn normalize_segment(segment: &str, options: &SearchOptions, ctx: &NormalizationContext) -> String {
-    let mut value = match options.unicode_normalization_mode {
-        UnicodeNormalizationMode::None => segment.to_string(),
-        UnicodeNormalizationMode::FormC => segment.nfc().collect(),
-        UnicodeNormalizationMode::FormD => segment.nfd().collect(),
-        UnicodeNormalizationMode::FormKC => segment.nfkc().collect(),
-        UnicodeNormalizationMode::FormKD => segment.nfkd().collect(),
-    };
-
-    if ctx.strip_diacritics {
-        use icu_properties::props::GeneralCategory;
-        value = value
-            .nfd()
-            .filter(|c| ctx.gc_map.get(*c) != GeneralCategory::NonspacingMark)
-            .collect();
-    }
-
-    if !options.case_sensitive {
-        value = culture_aware_lowercase(&value, ctx);
-    }
-    value
 }
 
 pub(crate) struct NormalizationContext {
@@ -817,7 +827,7 @@ impl NormalizationContext {
     }
 }
 
-fn normalize_for_text_search(
+pub(crate) fn normalize_for_text_search(
     input: &str,
     options: &SearchOptions,
     ctx: &NormalizationContext,
@@ -873,15 +883,15 @@ fn truncate_chars(input: &str, max_chars: usize) -> String {
     }
 }
 
-fn truncate_bytes(input: &str, max_bytes: usize) -> String {
+fn truncate_bytes(input: &str, max_bytes: usize) -> &str {
     if input.len() <= max_bytes {
-        return input.to_string();
+        return input;
     }
     let mut boundary = max_bytes;
     while boundary > 0 && !input.is_char_boundary(boundary) {
         boundary -= 1;
     }
-    input[..boundary].to_string()
+    &input[..boundary]
 }
 
 fn size_matches(
@@ -919,22 +929,12 @@ fn size_matches(
 
 fn is_system_path(path: &Path, root: &Path) -> bool {
     let relative = path.strip_prefix(root).unwrap_or(path);
-    if relative
-        .components()
-        .filter_map(|c| c.as_os_str().to_str())
-        .any(|s| SYSTEM_DIRS.contains(&s))
-    {
-        return true;
-    }
-
-    let mut components = relative.components().filter_map(|c| c.as_os_str().to_str());
-    while let Some(first) = components.next() {
-        if first == "storage"
-            && let Some(second) = components.next()
-            && second == "framework"
-        {
+    let mut prev = None;
+    for s in relative.components().filter_map(|c| c.as_os_str().to_str()) {
+        if SYSTEM_DIRS.contains(&s) || (prev == Some("storage") && s == "framework") {
             return true;
         }
+        prev = Some(s);
     }
     false
 }
@@ -1554,6 +1554,33 @@ mod tests {
     }
 
     #[test]
+    fn case_insensitive_match_consumes_full_grapheme() {
+        // Lowercasing 'İ' (U+0130) yields "i\u{0307}", so the needle "i" ends
+        // mid-segment in the normalized string. The span must round up to the
+        // whole grapheme instead of collapsing to zero width.
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), "İstanbul\n").unwrap();
+
+        let options = SearchOptions::new(dir.path(), "i");
+        let summary = search(&options).unwrap();
+
+        assert_eq!(summary.matches, 1);
+        let r = &summary.results[0];
+        assert_eq!(r.match_preview_match, "İ", "match must span the full original grapheme");
+        assert_eq!(r.column_number, 1);
+    }
+
+    #[test]
+    fn map_normalized_span_rounds_end_up_to_segment_boundary() {
+        let options = SearchOptions::new("/tmp", "i");
+        let ctx = NormalizationContext::build(&options);
+        let (normalized, mapping) = normalize_with_mapping("İstanbul", &options, &ctx);
+        assert!(normalized.starts_with('i'));
+        let (start, end) = map_normalized_span(&mapping, 0, 1);
+        assert_eq!((start, end), (0, 'İ'.len_utf8()));
+    }
+
+    #[test]
     fn system_path_detects_node_modules() {
         assert!(is_system_path(
             Path::new("/home/user/project/node_modules/pkg"),
@@ -1567,6 +1594,16 @@ mod tests {
             Path::new("/home/user/project/src/main.rs"),
             Path::new("/home/user/project")
         ));
+    }
+
+    #[test]
+    fn system_path_detects_overlapping_storage_framework() {
+        assert!(is_system_path(
+            Path::new("/root/storage/storage/framework/cache"),
+            Path::new("/root")
+        ));
+        assert!(is_system_path(Path::new("/root/storage/framework/views"), Path::new("/root")));
+        assert!(!is_system_path(Path::new("/root/storage/app/file.txt"), Path::new("/root")));
     }
 
     #[test]
@@ -1608,16 +1645,11 @@ mod tests {
     fn whole_word_nfc_normalization_maps_offsets_correctly() {
         let dir = tempdir().unwrap();
         let decomposed = "e\u{0301}clair";
-        fs::write(
-            dir.path().join("a.txt"),
-            format!("un {decomposed} test\n"),
-        )
-        .unwrap();
+        fs::write(dir.path().join("a.txt"), format!("un {decomposed} test\n")).unwrap();
 
         let mut options = SearchOptions::new(dir.path(), "éclair");
         options.whole_word = true;
-        options.unicode_normalization_mode =
-            crate::models::UnicodeNormalizationMode::FormC;
+        options.unicode_normalization_mode = crate::models::UnicodeNormalizationMode::FormC;
 
         let summary = search(&options).unwrap();
         assert_eq!(summary.matches, 1);

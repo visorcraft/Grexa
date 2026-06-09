@@ -492,8 +492,7 @@ impl RecentPathStore {
         }
 
         let mut paths = self.load()?;
-        let lower = recent_path.to_string_lossy().to_ascii_lowercase();
-        paths.retain(|path| path.to_string_lossy().to_ascii_lowercase() != lower);
+        paths.retain(|path| path != &recent_path);
         paths.insert(0, recent_path);
         paths.truncate(self.limit);
         save_json(&self.path, &paths)?;
@@ -1031,6 +1030,13 @@ mod tests {
 
         let after_remove = store.remove(Path::new("/tmp/a")).unwrap();
         assert_eq!(after_remove, vec![PathBuf::from("/tmp/b")]);
+
+        // Linux paths are case-sensitive: /tmp/Foo and /tmp/foo are distinct
+        // entries and must both survive dedup.
+        store.add("/tmp/Foo").unwrap();
+        let after_case = store.add("/tmp/foo").unwrap();
+        assert!(after_case.contains(&PathBuf::from("/tmp/Foo")));
+        assert!(after_case.contains(&PathBuf::from("/tmp/foo")));
     }
 
     #[test]

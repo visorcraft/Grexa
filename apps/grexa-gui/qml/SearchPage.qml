@@ -134,7 +134,7 @@ Kirigami.Page {
     }
 
     function focusSearchBar() {
-        searchBar.forceActiveFocus()
+        searchBar.focusTermField()
     }
 
     function focusWithinFilter() {

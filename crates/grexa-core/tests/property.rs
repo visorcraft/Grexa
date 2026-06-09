@@ -62,6 +62,11 @@ proptest! {
         prop_assume!(excluded != keeper);
         prop_assume!(!excluded.starts_with('.'));
         prop_assume!(!keeper.starts_with('.'));
+        // System dirs are auto-excluded regardless of `exclude_dirs`.
+        prop_assume!(
+            !["sys", "proc", "dev", "bin", "obj", "vendor", "node_modules"]
+                .contains(&keeper.as_str())
+        );
 
         let dir = tempdir().unwrap();
         let excluded_sub = dir.path().join(&excluded);

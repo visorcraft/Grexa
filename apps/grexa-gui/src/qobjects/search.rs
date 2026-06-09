@@ -449,9 +449,14 @@ mod role {
     pub const PREVIEW_AFTER: i32 = 0x0106;
 }
 
-struct WithinContext {
-    trimmed: String,
-    compiled: Option<regex::Regex>,
+enum WithinContext {
+    PassAll,
+    /// Pre-lowercased needle for case-insensitive substring match.
+    Literal(String),
+    Regex(regex::Regex),
+    /// Regex mode with a pattern that failed to compile — fail
+    /// closed (match nothing) rather than degrading to substring.
+    InvalidRegex,
 }
 
 /// Rust-side state for `SearchController`. Owned by the cxx-qt-generated
@@ -604,55 +609,57 @@ impl SearchControllerRust {
     /// from accidentally consulting a partially-emptied
     /// `self.rows` (the original bug found in code review).
     fn row_passes_within(&self, row: &ResultRow, ctx: &WithinContext) -> bool {
-        if ctx.trimmed.is_empty() {
-            return true;
-        }
-        let line = format!("{}{}{}", row.preview_before, row.preview_match, row.preview_after);
-        match &ctx.compiled {
-            Some(re) => re.is_match(&line),
-            None => {
-                let needle = ctx.trimmed.to_lowercase();
-                line.to_lowercase().contains(&needle)
+        match ctx {
+            WithinContext::PassAll => true,
+            WithinContext::Literal(needle) => {
+                let line =
+                    format!("{}{}{}", row.preview_before, row.preview_match, row.preview_after);
+                line.to_lowercase().contains(needle)
             }
+            WithinContext::Regex(re) => {
+                let line =
+                    format!("{}{}{}", row.preview_before, row.preview_match, row.preview_after);
+                re.is_match(&line)
+            }
+            WithinContext::InvalidRegex => false,
         }
     }
 
     fn build_within_context(&self) -> WithinContext {
         let within = self.within_filter.to_string();
-        let trimmed = within.trim().to_string();
-        let compiled = if trimmed.is_empty() {
-            None
+        let trimmed = within.trim();
+        if trimmed.is_empty() {
+            WithinContext::PassAll
         } else if self.within_regex {
-            regex::Regex::new(&trimmed).ok()
+            match regex::Regex::new(trimmed) {
+                Ok(re) => WithinContext::Regex(re),
+                Err(_) => WithinContext::InvalidRegex,
+            }
         } else {
-            None
-        };
-        WithinContext { trimmed, compiled }
+            WithinContext::Literal(trimmed.to_lowercase())
+        }
     }
 
     /// Recompute `visible` from scratch. O(rows.len()). Called when
     /// `within_filter`, `within_regex`, or `result_mode` changes.
     ///
-    /// Iterates `self.rows` by index so we never have to take
-    /// ownership of the vector mid-loop — the previous version
-    /// did `mem::take(&mut self.rows)` and then asked the
-    /// view-pass helper to consult `self.rows` for files-mode
-    /// dedup, which always returned None because the vector was
-    /// empty. The seen-set is now local to this function so dedup
-    /// works regardless of `self.rows`'s state at entry.
+    /// Resets and repopulates the persistent `seen_paths` set so it
+    /// always equals "paths currently represented in `visible`" —
+    /// a local set here would desync `seen_paths` from the view,
+    /// making later streamed batches duplicate or drop file rows
+    /// after a mid-search mode toggle or within-filter change.
     pub fn rebuild_visible(&mut self) {
         self.visible.clear();
+        self.seen_paths.clear();
         let ctx = self.build_within_context();
         let files_mode = self.result_mode == 1;
-        let mut seen: std::collections::HashSet<std::path::PathBuf> =
-            std::collections::HashSet::new();
         for i in 0..self.rows.len() {
             if !self.row_passes_within(&self.rows[i], &ctx) {
                 continue;
             }
             if files_mode {
                 let full = self.rows[i].full_path.clone();
-                if !seen.insert(full) {
+                if !self.seen_paths.insert(full) {
                     continue;
                 }
             }
@@ -770,6 +777,8 @@ impl ffi::SearchController {
                 pattern: term_str.clone(),
                 case_sensitive,
                 regex,
+                whole_word,
+                max_results: None,
                 diacritic_sensitive: settings.diacritic_sensitive,
                 unicode_normalization_mode: settings.unicode_normalization_mode,
                 string_comparison_mode: settings.string_comparison_mode,
@@ -781,11 +790,7 @@ impl ffi::SearchController {
             };
             let thread = self.qt_thread();
             std::thread::spawn(move || {
-                let summary = run_container_search(
-                    target_kind,
-                    &container_id,
-                    container_opts,
-                );
+                let summary = run_container_search(target_kind, &container_id, container_opts);
                 if let Err(err) = thread.queue(move |pin| {
                     finish_container_search(pin, generation, summary);
                 }) {
@@ -2000,6 +2005,33 @@ fn build_containers_json() -> String {
     .unwrap_or_else(|_| "{\"runtimes\":[],\"containers\":[]}".into())
 }
 
+/// Build the `SearchOptions` recorded into search history when a
+/// search finishes. Qt-free so tests can pin that the replayed shape
+/// (including `whole_word`, which feeds `RecentSearch::key()`)
+/// matches what was actually searched.
+fn history_search_options(
+    path_str: &str,
+    term: String,
+    regex: bool,
+    case_sensitive: bool,
+    whole_word: bool,
+    settings: &grexa_core::DefaultSettings,
+) -> SearchOptions {
+    let mut options = SearchOptions::new(PathBuf::from(path_str), term);
+    options.regex = regex;
+    options.case_sensitive = case_sensitive;
+    options.whole_word = whole_word;
+    options.respect_gitignore = settings.respect_gitignore;
+    options.include_hidden = settings.include_hidden_items;
+    options.include_binary = settings.include_binary_files;
+    options.include_system = settings.include_system_files;
+    options.include_subfolders = settings.include_subfolders;
+    options.include_symlinks = settings.include_symbolic_links;
+    options.match_file_names = settings.default_match_files.clone();
+    options.exclude_dirs = settings.default_exclude_dirs.clone();
+    options
+}
+
 fn finish_search(
     mut pin: Pin<&mut ffi::SearchController>,
     generation: u64,
@@ -2039,20 +2071,18 @@ fn finish_search(
                 let term = pin.as_ref().rust().last_term.clone();
                 let regex = pin.as_ref().rust().last_regex;
                 let case_sensitive = pin.as_ref().rust().last_case_sensitive;
+                let whole_word = pin.as_ref().rust().last_whole_word;
                 let files_search = pin.as_ref().rust().result_mode == 1;
                 with_workspace(|w| {
                     let settings = w.settings.load().unwrap_or_default();
-                    let mut options = SearchOptions::new(PathBuf::from(path_str), term);
-                    options.regex = regex;
-                    options.case_sensitive = case_sensitive;
-                    options.respect_gitignore = settings.respect_gitignore;
-                    options.include_hidden = settings.include_hidden_items;
-                    options.include_binary = settings.include_binary_files;
-                    options.include_system = settings.include_system_files;
-                    options.include_subfolders = settings.include_subfolders;
-                    options.include_symlinks = settings.include_symbolic_links;
-                    options.match_file_names = settings.default_match_files;
-                    options.exclude_dirs = settings.default_exclude_dirs;
+                    let options = history_search_options(
+                        path_str,
+                        term,
+                        regex,
+                        case_sensitive,
+                        whole_word,
+                        &settings,
+                    );
                     w.history
                         .add(grexa_core::RecentSearch::from_options(
                             &options,
@@ -2270,6 +2300,79 @@ mod tests {
         assert!(state.last_term.is_empty());
         assert!(!state.last_regex);
         assert!(!state.last_case_sensitive);
+    }
+
+    fn row(path: &str, preview: &str) -> ResultRow {
+        ResultRow {
+            full_path: PathBuf::from(path),
+            relative_path: PathBuf::from(path.trim_start_matches('/')),
+            line: 1,
+            column: 1,
+            preview_before: String::new(),
+            preview_match: preview.into(),
+            preview_after: String::new(),
+        }
+    }
+
+    #[test]
+    fn mode_toggle_mid_search_does_not_duplicate_file_rows() {
+        let mut state = SearchControllerRust::default();
+        state.append_batch(vec![row("/a", "m"), row("/b", "m")]);
+
+        state.result_mode = 1;
+        state.rebuild_visible();
+        assert_eq!(state.row_count(), 2);
+
+        state.append_batch(vec![row("/a", "m"), row("/c", "m")]);
+        assert_eq!(state.row_count(), 3);
+    }
+
+    #[test]
+    fn within_filter_change_in_files_mode_does_not_drop_later_rows() {
+        let mut state = SearchControllerRust {
+            result_mode: 1,
+            ..Default::default()
+        };
+        state.append_batch(vec![row("/a", "alpha")]);
+        assert_eq!(state.row_count(), 1);
+
+        state.within_filter = QString::from("beta");
+        state.rebuild_visible();
+        assert_eq!(state.row_count(), 0);
+
+        state.append_batch(vec![row("/a", "beta")]);
+        assert_eq!(state.row_count(), 1);
+    }
+
+    #[test]
+    fn invalid_within_regex_matches_nothing() {
+        let mut state = SearchControllerRust {
+            within_filter: QString::from("error("),
+            within_regex: true,
+            ..Default::default()
+        };
+        state.append_batch(vec![row("/a", "error(")]);
+        assert_eq!(state.row_count(), 0);
+
+        state.within_regex = false;
+        state.rebuild_visible();
+        assert_eq!(state.row_count(), 1);
+    }
+
+    #[test]
+    fn history_options_record_whole_word() {
+        let settings = grexa_core::DefaultSettings::default();
+        let options = history_search_options(
+            "/tmp/project",
+            "TODO".to_string(),
+            false,
+            true,
+            true,
+            &settings,
+        );
+        let recent = grexa_core::RecentSearch::from_options(&options, false, 3);
+        assert!(recent.whole_word);
+        assert!(recent.search_case_sensitive);
     }
 
     #[test]

@@ -51,6 +51,9 @@ grexa-cli manpage
 | `--max-results <N>`        | none        | Stop after N matching lines. |
 | `--regex-engine <auto|fast|extended>` | `auto` | Force a specific regex engine. |
 
+Lines are compared up to 2 MiB; content past that point on a single line is
+not matched, and a `warn`-level log is emitted for the affected file.
+
 ### Exit codes
 
 | Code | Meaning |

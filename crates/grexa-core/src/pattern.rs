@@ -160,10 +160,18 @@ impl PatternEngine {
                 let mut prev_end = 0;
                 for &(start, end) in matches {
                     result.push_str(&haystack[prev_end..start]);
-                    if let Some(caps) = re.captures(&haystack[start..end]) {
-                        caps.expand(replacement, &mut result);
-                    } else {
-                        result.push_str(replacement);
+                    // Re-query on the full haystack so lookaround/anchored
+                    // context stays visible; expanding the raw template on a
+                    // failed re-match would emit literal `$1`.
+                    match re.captures_at(haystack, start) {
+                        Some(caps)
+                            if caps
+                                .get(0)
+                                .is_some_and(|m| m.start() == start && m.end() == end) =>
+                        {
+                            caps.expand(replacement, &mut result);
+                        }
+                        _ => result.push_str(&haystack[start..end]),
                     }
                     prev_end = end;
                 }
@@ -175,10 +183,15 @@ impl PatternEngine {
                 let mut prev_end = 0;
                 for &(start, end) in matches {
                     result.push_str(&haystack[prev_end..start]);
-                    if let Ok(Some(caps)) = re.captures(&haystack[start..end]) {
-                        caps.expand(replacement, &mut result);
-                    } else {
-                        result.push_str(replacement);
+                    match re.captures_from_pos(haystack, start) {
+                        Ok(Some(caps))
+                            if caps
+                                .get(0)
+                                .is_some_and(|m| m.start() == start && m.end() == end) =>
+                        {
+                            caps.expand(replacement, &mut result);
+                        }
+                        _ => result.push_str(&haystack[start..end]),
                     }
                     prev_end = end;
                 }
@@ -264,6 +277,29 @@ mod tests {
         let engine = PatternEngine::build(r"(\w+) (\w+)", false).unwrap();
         let out = engine.replace_all("foo bar baz qux", "$2 $1");
         assert_eq!(out, "bar foo qux baz");
+    }
+
+    #[test]
+    fn expand_matches_with_lookahead_expands_captures() {
+        // The lookahead only matches in the full-haystack context; re-running
+        // the pattern on the isolated match slice used to fail and leak the
+        // raw `${1}X` template into the output.
+        let engine = PatternEngine::build(r"(\w+)(?=;)", false).unwrap();
+        assert!(engine.is_extended());
+        let haystack = "foo; bar baz;";
+        let matches = engine.find_iter(haystack);
+        let out = engine.expand_matches(haystack, &matches, "${1}X");
+        assert_eq!(out, "fooX; bar bazX;");
+    }
+
+    #[test]
+    fn expand_matches_through_fast_engine_expands_captures() {
+        let engine = PatternEngine::build(r"(\w+)-(\w+)", false).unwrap();
+        assert!(!engine.is_extended());
+        let haystack = "a-b c-d";
+        let matches = engine.find_iter(haystack);
+        let out = engine.expand_matches(haystack, &matches, "$2-$1");
+        assert_eq!(out, "b-a d-c");
     }
 
     #[test]

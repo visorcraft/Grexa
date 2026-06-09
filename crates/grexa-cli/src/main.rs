@@ -458,11 +458,7 @@ fn run_search(args: SearchArgs) -> anyhow::Result<i32> {
         anyhow::bail!("search term exceeds maximum length of 4096 characters");
     }
     options.regex = args.regex;
-    options.regex_engine = match args.regex_engine {
-        CliRegexEngine::Auto => RegexEngine::Auto,
-        CliRegexEngine::Fast => RegexEngine::Fast,
-        CliRegexEngine::Extended => RegexEngine::Extended,
-    };
+    options.regex_engine = args.regex_engine.into();
     options.case_sensitive = args.case_sensitive;
     options.respect_gitignore = args.gitignore;
     options.include_hidden = args.include_hidden;
@@ -570,11 +566,7 @@ fn run_replace(
     search.regex = regex;
     search.case_sensitive = case_sensitive;
     search.whole_word = whole_word;
-    search.regex_engine = match regex_engine {
-        CliRegexEngine::Auto => RegexEngine::Auto,
-        CliRegexEngine::Fast => RegexEngine::Fast,
-        CliRegexEngine::Extended => RegexEngine::Extended,
-    };
+    search.regex_engine = regex_engine.into();
     search.respect_gitignore = gitignore;
     search.include_hidden = include_hidden;
     search.include_binary = include_binary;
@@ -584,18 +576,8 @@ fn run_replace(
     search.match_file_names = match_files.unwrap_or_default();
     search.exclude_dirs = exclude_dirs.unwrap_or_default();
     search.diacritic_sensitive = !ignore_diacritics;
-    search.unicode_normalization_mode = match normalization {
-        CliNormalizationMode::None => UnicodeNormalizationMode::None,
-        CliNormalizationMode::FormC => UnicodeNormalizationMode::FormC,
-        CliNormalizationMode::FormD => UnicodeNormalizationMode::FormD,
-        CliNormalizationMode::FormKc => UnicodeNormalizationMode::FormKC,
-        CliNormalizationMode::FormKd => UnicodeNormalizationMode::FormKD,
-    };
-    search.string_comparison_mode = match comparison {
-        CliComparisonMode::Ordinal => StringComparisonMode::Ordinal,
-        CliComparisonMode::CurrentCulture => StringComparisonMode::CurrentCulture,
-        CliComparisonMode::InvariantCulture => StringComparisonMode::InvariantCulture,
-    };
+    search.unicode_normalization_mode = normalization.into();
+    search.string_comparison_mode = comparison.into();
     search.culture = culture;
 
     if dry_run {
@@ -652,12 +634,12 @@ fn run_replace(
         eprintln!("{}: {}", failure.path.display(), failure.error);
     }
 
-    Ok(if summary.failures.is_empty() && summary.files_modified > 0 {
-        0
+    Ok(if !summary.failures.is_empty() {
+        2
     } else if summary.files_modified == 0 {
         1
     } else {
-        2
+        0
     })
 }
 
@@ -722,19 +704,11 @@ fn run_container_search(args: SearchArgs) -> anyhow::Result<i32> {
         pattern: args.term.clone(),
         case_sensitive: args.case_sensitive,
         regex: args.regex,
+        whole_word: args.whole_word,
+        max_results: args.max_results,
         diacritic_sensitive: !args.ignore_diacritics,
-        unicode_normalization_mode: match args.normalization {
-            CliNormalizationMode::None => UnicodeNormalizationMode::None,
-            CliNormalizationMode::FormC => UnicodeNormalizationMode::FormC,
-            CliNormalizationMode::FormD => UnicodeNormalizationMode::FormD,
-            CliNormalizationMode::FormKc => UnicodeNormalizationMode::FormKC,
-            CliNormalizationMode::FormKd => UnicodeNormalizationMode::FormKD,
-        },
-        string_comparison_mode: match args.comparison {
-            CliComparisonMode::Ordinal => StringComparisonMode::Ordinal,
-            CliComparisonMode::CurrentCulture => StringComparisonMode::CurrentCulture,
-            CliComparisonMode::InvariantCulture => StringComparisonMode::InvariantCulture,
-        },
+        unicode_normalization_mode: args.normalization.into(),
+        string_comparison_mode: args.comparison.into(),
         culture: args.culture.clone(),
     };
     let summary = search_container(&cli, container, &opts)?;
@@ -885,6 +859,16 @@ impl From<CliSizeLimitType> for SizeLimitType {
             CliSizeLimitType::Equal => Self::EqualTo,
             CliSizeLimitType::Greater => Self::GreaterThan,
             CliSizeLimitType::None => Self::NoLimit,
+        }
+    }
+}
+
+impl From<CliRegexEngine> for RegexEngine {
+    fn from(value: CliRegexEngine) -> Self {
+        match value {
+            CliRegexEngine::Auto => Self::Auto,
+            CliRegexEngine::Fast => Self::Fast,
+            CliRegexEngine::Extended => Self::Extended,
         }
     }
 }
