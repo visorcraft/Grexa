@@ -1572,4 +1572,51 @@ mod tests {
             Path::new("/home/user/project")
         ));
     }
+
+    #[test]
+    fn whole_word_diacritic_insensitive_detects_accented_match() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), "un café résumé\n").unwrap();
+
+        let mut options = SearchOptions::new(dir.path(), "cafe");
+        options.whole_word = true;
+        options.diacritic_sensitive = false;
+
+        let summary = search(&options).unwrap();
+        assert_eq!(summary.matches, 1);
+        assert_eq!(summary.results[0].line_number, 1);
+    }
+
+    #[test]
+    fn whole_word_diacritic_insensitive_rejects_substring() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), "caféline\n").unwrap();
+
+        let mut options = SearchOptions::new(dir.path(), "cafe");
+        options.whole_word = true;
+        options.diacritic_sensitive = false;
+
+        let summary = search(&options).unwrap();
+        assert_eq!(summary.matches, 0);
+    }
+
+    #[test]
+    fn whole_word_nfc_normalization_maps_offsets_correctly() {
+        let dir = tempdir().unwrap();
+        let decomposed = "e\u{0301}clair";
+        fs::write(
+            dir.path().join("a.txt"),
+            format!("un {decomposed} test\n"),
+        )
+        .unwrap();
+
+        let mut options = SearchOptions::new(dir.path(), "éclair");
+        options.whole_word = true;
+        options.unicode_normalization_mode =
+            crate::models::UnicodeNormalizationMode::FormC;
+
+        let summary = search(&options).unwrap();
+        assert_eq!(summary.matches, 1);
+        assert!(summary.results[0].column_number > 0);
+    }
 }

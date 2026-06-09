@@ -232,7 +232,9 @@ pub fn parse_grep_output_with_pattern(
                     container_id: container_id.to_string(),
                     container_path: path.to_string(),
                     line_number,
-                    column_number: mat.start() + 1,
+                    column_number: content.get(..mat.start())
+                        .map(|prefix| prefix.chars().count() + 1)
+                        .unwrap_or(mat.start() + 1),
                     line_content: content.to_string(),
                 });
             }

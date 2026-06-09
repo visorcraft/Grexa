@@ -496,10 +496,8 @@ pub struct SearchControllerRust {
     /// per-tab isolation; closing a tab drops its snapshot.
     tab_snapshots: std::collections::HashMap<i32, TabSnapshot>,
     cancel_token: Option<CancelToken>,
-    /// Monotonic counter incremented on every `start_search`. Late
-    /// `thread.queue` hops from a prior worker compare their captured
-    /// generation against this and drop themselves when stale.
     active_generation: u64,
+    seen_paths: std::collections::HashSet<std::path::PathBuf>,
 }
 
 impl SearchControllerRust {
@@ -545,22 +543,15 @@ impl SearchControllerRust {
     ///
     /// Splitting filter from append lets the model contract hold —
     /// `rowCount` always grows by exactly `kept.len()`.
-    pub fn filter_batch_for_view(&self, batch: &[ResultRow]) -> Vec<usize> {
+    pub fn filter_batch_for_view(&mut self, batch: &[ResultRow]) -> Vec<usize> {
         let mut kept: Vec<usize> = Vec::with_capacity(batch.len());
         let ctx = self.build_within_context();
         if self.result_mode == 1 {
-            let mut seen: std::collections::HashSet<std::path::PathBuf> =
-                std::collections::HashSet::with_capacity(self.visible.len() + batch.len());
-            for &idx in &self.visible {
-                if let Some(r) = self.rows.get(idx) {
-                    seen.insert(r.full_path.clone());
-                }
-            }
             for (i, row) in batch.iter().enumerate() {
                 if !self.row_passes_within(row, &ctx) {
                     continue;
                 }
-                if seen.insert(row.full_path.clone()) {
+                if self.seen_paths.insert(row.full_path.clone()) {
                     kept.push(i);
                 }
             }
@@ -685,6 +676,7 @@ impl SearchControllerRust {
     fn clear_rows_and_last_search(&mut self) {
         self.rows.clear();
         self.visible.clear();
+        self.seen_paths.clear();
         self.last_path.clear();
         self.last_term.clear();
         self.last_regex = false;
@@ -731,6 +723,7 @@ impl ffi::SearchController {
             let mut s = self.as_mut().rust_mut();
             s.rows.clear();
             s.visible.clear();
+            s.seen_paths.clear();
         }
         unsafe { self.as_mut().end_reset_model() };
 
@@ -810,6 +803,14 @@ impl ffi::SearchController {
         options.match_file_names = settings.default_match_files.clone();
         options.exclude_dirs = settings.default_exclude_dirs.clone();
         options.whole_word = whole_word;
+        options.diacritic_sensitive = settings.diacritic_sensitive;
+        options.unicode_normalization_mode = settings.unicode_normalization_mode;
+        options.string_comparison_mode = settings.string_comparison_mode;
+        options.culture = if settings.culture.is_empty() {
+            None
+        } else {
+            Some(settings.culture.clone())
+        };
 
         let thread = self.qt_thread();
 
@@ -1070,6 +1071,14 @@ impl ffi::SearchController {
         options.include_symlinks = settings.include_symbolic_links;
         options.match_file_names = settings.default_match_files.clone();
         options.exclude_dirs = settings.default_exclude_dirs.clone();
+        options.diacritic_sensitive = settings.diacritic_sensitive;
+        options.unicode_normalization_mode = settings.unicode_normalization_mode;
+        options.string_comparison_mode = settings.string_comparison_mode;
+        options.culture = if settings.culture.is_empty() {
+            None
+        } else {
+            Some(settings.culture.clone())
+        };
 
         let cancel = CancelToken::new();
         let thread = self.qt_thread();
@@ -1434,7 +1443,7 @@ fn push_rows(
     // begin/endInsertRows to bracket EXACTLY the number of rows
     // `rowCount()` will grow by; announcing more than we append
     // corrupts QML's ListView indexing.
-    let kept = pin.as_ref().rust().filter_batch_for_view(&rows);
+    let kept = pin.as_mut().rust_mut().filter_batch_for_view(&rows);
     if kept.is_empty() {
         // Match count still grows — we accumulate the raw matches
         // even when the view filter hides them. Without this, the

@@ -391,8 +391,8 @@ fn whole_word_flag_isolates_standalone_tokens() {
         .args([dir.path().to_str().unwrap(), "foo", "--whole-word"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("foo bar"))
-        .stdout(predicate::str::contains("foobar").not());
+        .stdout(predicate::str::contains(":1:1:"))
+        .stdout(predicate::str::contains(":1:5:").not());
 }
 
 #[test]

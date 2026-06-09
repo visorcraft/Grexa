@@ -281,6 +281,14 @@ fn rewrite_one_pre_read(
     regex_engine: Option<&PatternEngine>,
 ) -> Result<FileResult, io::Error> {
     ensure_within_root(path, &options.search.path)?;
+
+    if is_searchable_binary(path) {
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "cannot replace inside searchable binary containers (docx, xlsx, pdf, etc.)",
+        ));
+    }
+
     let (text, encoding, original_metadata) = read_regular_text(path)?;
     let (new_text, matches) = apply_substitution(&text, options, regex_engine);
     if matches == 0 || new_text == text {
@@ -290,6 +298,19 @@ fn rewrite_one_pre_read(
     let encoded = encode_for_writeback(&new_text, &encoding)?;
     atomic_write(path, &encoded, &original_metadata)?;
     Ok(FileResult::Replaced { matches, encoding })
+}
+
+const SEARCHABLE_BINARY_EXTENSIONS: &[&str] = &[
+    "docx", "xlsx", "pptx", "odt", "ods", "odp", "zip", "pdf", "rtf",
+];
+
+fn is_searchable_binary(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            let lower = ext.trim_start_matches('.').to_ascii_lowercase();
+            SEARCHABLE_BINARY_EXTENSIONS.contains(&lower.as_str())
+        })
 }
 
 /// Refuse to rewrite a file whose real (symlink-resolved) path escapes the
@@ -357,13 +378,15 @@ fn apply_substitution(
     regex_engine: Option<&PatternEngine>,
 ) -> (String, usize) {
     if let Some(engine) = regex_engine {
+        if !options.search.whole_word {
+            let count = engine.find_iter(text).len();
+            let replaced = engine.replace_all(text, options.replacement.as_str());
+            return (replaced, count);
+        }
         let matches: Vec<_> = engine
             .find_iter(text)
             .into_iter()
-            .filter(|(start, end)| {
-                !options.search.whole_word
-                    || is_whole_word_match(text, *start, *end)
-            })
+            .filter(|(start, end)| is_whole_word_match(text, *start, *end))
             .collect();
         let count = matches.len();
         if count == 0 {
@@ -431,7 +454,10 @@ fn apply_substitution(
                 result.push_str(&text[prev_end..]);
                 (result, count)
             }
-            Err(_) => (text.to_string(), 0),
+            Err(err) => {
+                tracing::warn!(%err, pattern, "regex build failed for literal replace");
+                (text.to_string(), 0)
+            }
         }
     }
 }
@@ -501,16 +527,6 @@ fn apply_normalized_substitution(
     }
     result.push_str(&text[prev_end..]);
     (result, count)
-}
-
-fn count_occurrences(text: &str, needle: &str) -> usize {
-    let mut count = 0;
-    let mut offset = 0;
-    while let Some(index) = text[offset..].find(needle) {
-        count += 1;
-        offset += index + needle.len();
-    }
-    count
 }
 
 fn encode_for_writeback(text: &str, encoding: &DetectedEncoding) -> Result<Vec<u8>, io::Error> {
@@ -1024,5 +1040,41 @@ mod tests {
         assert_eq!(summary.matches_replaced, 1);
         let rewritten = fs::read_to_string(&target).unwrap();
         assert_eq!(rewritten, "MATCHED test testing\n");
+    }
+
+    #[test]
+    fn whole_word_diacritic_replace_only_touches_standalone() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("a.txt");
+        fs::write(&target, "caféline un café résumé\n").unwrap();
+
+        let mut search = SearchOptions::new(dir.path(), "cafe");
+        search.whole_word = true;
+        search.diacritic_sensitive = false;
+        let options = ReplaceOptions {
+            search,
+            replacement: "DRINK".to_string(),
+        };
+
+        let summary = replace_with(&options, &CancelToken::new(), None).unwrap();
+        assert_eq!(summary.matches_replaced, 1);
+        let rewritten = fs::read_to_string(&target).unwrap();
+        assert_eq!(rewritten, "caféline un DRINK résumé\n");
+    }
+
+    #[test]
+    fn is_searchable_binary_detects_container_extensions() {
+        assert!(is_searchable_binary(Path::new("report.docx")));
+        assert!(is_searchable_binary(Path::new("data.xlsx")));
+        assert!(is_searchable_binary(Path::new("pres.pptx")));
+        assert!(is_searchable_binary(Path::new("doc.odt")));
+        assert!(is_searchable_binary(Path::new("sheet.ods")));
+        assert!(is_searchable_binary(Path::new("slides.odp")));
+        assert!(is_searchable_binary(Path::new("archive.zip")));
+        assert!(is_searchable_binary(Path::new("paper.pdf")));
+        assert!(is_searchable_binary(Path::new("notes.rtf")));
+        assert!(!is_searchable_binary(Path::new("code.rs")));
+        assert!(!is_searchable_binary(Path::new("data.txt")));
+        assert!(!is_searchable_binary(Path::new("no_ext")));
     }
 }

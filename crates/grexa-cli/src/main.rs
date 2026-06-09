@@ -88,6 +88,15 @@ enum Command {
         #[arg(short = 'L', long = "include-symlinks")]
         include_symlinks: bool,
 
+        /// Match whole words only (surrounded by non-word characters).
+        #[arg(short = 'w', long = "whole-word")]
+        whole_word: bool,
+
+        /// Force a specific regex engine. `auto` (default) picks the fast
+        /// engine and falls back to the extended engine when needed.
+        #[arg(long = "regex-engine", default_value = "auto")]
+        regex_engine: CliRegexEngine,
+
         /// File name pattern, e.g. '*.rs;*.toml|-target*'.
         #[arg(short = 'm', long = "match-files")]
         match_files: Option<String>,
@@ -381,6 +390,8 @@ fn dispatch(cli: Cli) -> anyhow::Result<i32> {
             include_system,
             no_subfolders,
             include_symlinks,
+            whole_word,
+            regex_engine,
             match_files,
             exclude_dirs,
             dry_run,
@@ -396,6 +407,8 @@ fn dispatch(cli: Cli) -> anyhow::Result<i32> {
             include_system,
             no_subfolders,
             include_symlinks,
+            whole_word,
+            regex_engine,
             match_files,
             exclude_dirs,
             dry_run,
@@ -513,6 +526,8 @@ fn run_replace(
     include_system: bool,
     no_subfolders: bool,
     include_symlinks: bool,
+    whole_word: bool,
+    regex_engine: CliRegexEngine,
     match_files: Option<String>,
     exclude_dirs: Option<String>,
     dry_run: bool,
@@ -520,6 +535,12 @@ fn run_replace(
     let mut search = SearchOptions::new(&path, &term);
     search.regex = regex;
     search.case_sensitive = case_sensitive;
+    search.whole_word = whole_word;
+    search.regex_engine = match regex_engine {
+        CliRegexEngine::Auto => RegexEngine::Auto,
+        CliRegexEngine::Fast => RegexEngine::Fast,
+        CliRegexEngine::Extended => RegexEngine::Extended,
+    };
     search.respect_gitignore = gitignore;
     search.include_hidden = include_hidden;
     search.include_binary = include_binary;
