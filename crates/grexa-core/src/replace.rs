@@ -11,12 +11,16 @@ use serde::{Deserialize, Serialize};
 
 use regex::RegexBuilder;
 use thiserror::Error;
+use unicode_normalization::UnicodeNormalization;
 
 use crate::cancel::CancelToken;
 use crate::encoding::{DetectedEncoding, decode_text};
-use crate::models::SearchOptions;
+use crate::models::{SearchOptions, UnicodeNormalizationMode};
 use crate::pattern::PatternEngine;
-use crate::search::{ProgressSink, SearchError, search_with};
+use crate::search::{
+    NormalizationContext, ProgressSink, SearchError, culture_aware_lowercase,
+    normalize_with_mapping, search_with,
+};
 use crate::storage::AppPaths;
 
 /// Configuration for a safe replace operation. The replace pipeline reuses
@@ -363,6 +367,13 @@ fn apply_substitution(
         return (text.to_string(), 0);
     }
 
+    let needs_normalization = !options.search.diacritic_sensitive
+        || options.search.unicode_normalization_mode != UnicodeNormalizationMode::None;
+
+    if needs_normalization {
+        return apply_normalized_substitution(text, needle, &options.search, &options.replacement);
+    }
+
     if options.search.case_sensitive {
         let count = count_occurrences(text, needle);
         if count == 0 {
@@ -383,6 +394,57 @@ fn apply_substitution(
             Err(_) => (text.to_string(), 0),
         }
     }
+}
+
+fn apply_normalized_substitution(
+    text: &str,
+    needle: &str,
+    options: &SearchOptions,
+    replacement: &str,
+) -> (String, usize) {
+    let norm_ctx = NormalizationContext::build(options);
+    let normalized_needle = {
+        let mut n = needle.to_string();
+        if norm_ctx.strip_diacritics {
+            use icu_properties::props::GeneralCategory;
+            n = n
+                .nfd()
+                .filter(|c| norm_ctx.gc_map.get(*c) != GeneralCategory::NonspacingMark)
+                .collect();
+        }
+        if !options.case_sensitive {
+            n = culture_aware_lowercase(&n, &norm_ctx);
+        }
+        n
+    };
+
+    let (normalized, mapping) = normalize_with_mapping(text, options, &norm_ctx);
+
+    let mut norm_matches = Vec::new();
+    let mut offset = 0;
+    while let Some(index) = normalized[offset..].find(&normalized_needle) {
+        let norm_start = offset + index;
+        let norm_end = norm_start + normalized_needle.len();
+        let orig_start = mapping[norm_start];
+        let orig_end = mapping.get(norm_end).copied().unwrap_or(text.len());
+        norm_matches.push((orig_start, orig_end));
+        offset = norm_end;
+    }
+
+    if norm_matches.is_empty() {
+        return (text.to_string(), 0);
+    }
+
+    let count = norm_matches.len();
+    let mut result = String::with_capacity(text.len());
+    let mut prev_end = 0;
+    for (start, end) in norm_matches {
+        result.push_str(&text[prev_end..start]);
+        result.push_str(replacement);
+        prev_end = end;
+    }
+    result.push_str(&text[prev_end..]);
+    (result, count)
 }
 
 fn count_occurrences(text: &str, needle: &str) -> usize {
@@ -830,5 +892,39 @@ mod tests {
         let bytes = fs::read(dir.path().join("a.txt")).unwrap();
         let (text, _encoding, _had_errors) = encoding_rs::WINDOWS_1252.decode(&bytes);
         assert!(text.contains("CAFÉ"), "replacement must appear in decoded text");
+    }
+
+    #[test]
+    fn diacritic_insensitive_replace_substitutes_accented_matches() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("a.txt");
+        fs::write(&target, "café résumé\n").unwrap();
+
+        let mut options = opts(dir.path(), "cafe", "CAFE");
+        options.search.diacritic_sensitive = false;
+
+        let summary = replace_with(&options, &CancelToken::new(), None).unwrap();
+        assert_eq!(summary.files_modified, 1, "file should be modified");
+        assert_eq!(summary.matches_replaced, 1, "one match should be replaced");
+
+        let rewritten = fs::read_to_string(&target).unwrap();
+        assert_eq!(rewritten, "CAFE résumé\n", "only the matched portion should be replaced");
+    }
+
+    #[test]
+    fn diacritic_insensitive_replace_handles_multiple_matches() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("a.txt");
+        fs::write(&target, "café CAFÉ Café\n").unwrap();
+
+        let mut options = opts(dir.path(), "cafe", "REPL");
+        options.search.diacritic_sensitive = false;
+        options.search.case_sensitive = false;
+
+        let summary = replace_with(&options, &CancelToken::new(), None).unwrap();
+        assert_eq!(summary.matches_replaced, 3, "all three variants should match");
+
+        let rewritten = fs::read_to_string(&target).unwrap();
+        assert_eq!(rewritten, "REPL REPL REPL\n");
     }
 }

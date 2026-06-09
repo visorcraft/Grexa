@@ -620,7 +620,7 @@ fn scan_text_buffer(ctx: &ScanContext, text: &str) -> Vec<SearchResult> {
                 .map(|name| name.to_string_lossy().to_string())
                 .unwrap_or_default(),
             line_number,
-            column_number: start + 1,
+            column_number: line[..start].chars().count() + 1,
             line_content: truncate_chars(line, MATCH_PREVIEW_MAX_CHARS),
             match_preview_before: before,
             match_preview_match: matched,
@@ -656,28 +656,105 @@ fn find_line_matches(
         return Vec::new();
     }
 
-    let original = normalize_for_text_search(line, options, norm_ctx);
+    let needs_mapping = !options.diacritic_sensitive
+        || options.unicode_normalization_mode != UnicodeNormalizationMode::None;
+
+    let (normalized, mapping) = if needs_mapping {
+        let (n, m) = normalize_with_mapping(line, options, norm_ctx);
+        (n, Some(m))
+    } else {
+        let mut n = line.to_string();
+        if !options.case_sensitive {
+            n = culture_aware_lowercase(&n, norm_ctx);
+        }
+        (n, None)
+    };
+
     let mut matches = Vec::new();
     let mut offset = 0;
-    while let Some(index) = original[offset..].find(needle) {
-        let start = offset + index;
-        let end = start + needle.len();
-        matches.push((start, end));
-        offset = end;
+    while let Some(index) = normalized[offset..].find(needle) {
+        let norm_start = offset + index;
+        let norm_end = norm_start + needle.len();
+        if let Some(ref m) = mapping {
+            let orig_start = m[norm_start];
+            let orig_end = m.get(norm_end).copied().unwrap_or(line.len());
+            matches.push((orig_start, orig_end));
+        } else {
+            matches.push((norm_start, norm_end));
+        }
+        offset = norm_end;
     }
     matches
 }
 
-struct NormalizationContext {
-    strip_diacritics: bool,
-    gc_map:
+pub(crate) fn normalize_with_mapping(
+    original: &str,
+    options: &SearchOptions,
+    ctx: &NormalizationContext,
+) -> (String, Vec<usize>) {
+    use icu_properties::props::GeneralCategory;
+
+    let mut normalized = String::with_capacity(original.len());
+    let mut mapping = Vec::with_capacity(original.len().saturating_add(1));
+
+    let mut char_iter = original.char_indices().peekable();
+    while let Some((byte_off, ch)) = char_iter.next() {
+        let mut segment = ch.to_string();
+        while let Some(&(_, next_ch)) = char_iter.peek() {
+            let gc = ctx.gc_map.get(next_ch);
+            if gc == GeneralCategory::NonspacingMark || gc == GeneralCategory::SpacingMark {
+                segment.push(next_ch);
+                char_iter.next();
+            } else {
+                break;
+            }
+        }
+
+        let norm_segment = normalize_segment(&segment, options, ctx);
+
+        for _ in 0..norm_segment.len() {
+            mapping.push(byte_off);
+        }
+        normalized.push_str(&norm_segment);
+    }
+
+    mapping.push(original.len());
+    (normalized, mapping)
+}
+
+fn normalize_segment(segment: &str, options: &SearchOptions, ctx: &NormalizationContext) -> String {
+    let mut value = match options.unicode_normalization_mode {
+        UnicodeNormalizationMode::None => segment.to_string(),
+        UnicodeNormalizationMode::FormC => segment.nfc().collect(),
+        UnicodeNormalizationMode::FormD => segment.nfd().collect(),
+        UnicodeNormalizationMode::FormKC => segment.nfkc().collect(),
+        UnicodeNormalizationMode::FormKD => segment.nfkd().collect(),
+    };
+
+    if ctx.strip_diacritics {
+        use icu_properties::props::GeneralCategory;
+        value = value
+            .nfd()
+            .filter(|c| ctx.gc_map.get(*c) != GeneralCategory::NonspacingMark)
+            .collect();
+    }
+
+    if !options.case_sensitive {
+        value = culture_aware_lowercase(&value, ctx);
+    }
+    value
+}
+
+pub(crate) struct NormalizationContext {
+    pub(crate) strip_diacritics: bool,
+    pub(crate) gc_map:
         icu_properties::CodePointMapDataBorrowed<'static, icu_properties::props::GeneralCategory>,
     case_mapper: Option<icu_casemap::CaseMapperBorrowed<'static>>,
     locale: Option<icu_locale_core::LanguageIdentifier>,
 }
 
 impl NormalizationContext {
-    fn build(options: &SearchOptions) -> Self {
+    pub(crate) fn build(options: &SearchOptions) -> Self {
         use crate::models::StringComparisonMode;
 
         let gc_map =
@@ -736,7 +813,7 @@ fn normalize_for_text_search(
     value
 }
 
-fn culture_aware_lowercase(value: &str, ctx: &NormalizationContext) -> String {
+pub(crate) fn culture_aware_lowercase(value: &str, ctx: &NormalizationContext) -> String {
     match (&ctx.case_mapper, &ctx.locale) {
         (Some(mapper), Some(locale)) => mapper
             .lowercase_to_string(value, locale)
@@ -1340,5 +1417,67 @@ mod tests {
         let input = "café";
         let truncated = truncate_bytes(input, 4);
         assert_eq!(truncated, "caf", "must not split the é codepoint");
+    }
+
+    #[test]
+    fn diacritic_insensitive_preview_maps_offsets_to_original() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("words.txt"), "café\n").unwrap();
+
+        let mut options = SearchOptions::new(dir.path(), "cafe");
+        options.diacritic_sensitive = false;
+
+        let summary = search(&options).unwrap();
+        assert_eq!(summary.matches, 1);
+        let r = &summary.results[0];
+        assert_eq!(r.column_number, 1, "column should be char-based in original");
+        assert!(
+            !r.match_preview_match.is_empty(),
+            "match preview must not be empty — offsets should map to original string"
+        );
+        assert!(
+            r.match_preview_match.contains('é') || r.match_preview_match.contains("caf"),
+            "match preview should contain the matched portion of the original line, got {:?}",
+            r.match_preview_match
+        );
+    }
+
+    #[test]
+    fn diacritic_insensitive_middle_match_maps_offsets() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("words.txt"), "le café est bon\n").unwrap();
+
+        let mut options = SearchOptions::new(dir.path(), "cafe");
+        options.diacritic_sensitive = false;
+
+        let summary = search(&options).unwrap();
+        assert_eq!(summary.matches, 1);
+        let r = &summary.results[0];
+        assert_eq!(r.column_number, 4, "column should be 4 (after 'le ')");
+        assert!(
+            r.match_preview_before.starts_with("le "),
+            "before-segment should contain 'le ', got {:?}",
+            r.match_preview_before
+        );
+    }
+
+    #[test]
+    fn nfc_normalization_preview_maps_offsets_to_original() {
+        let dir = tempdir().unwrap();
+        let precomposed_e = "\u{00E9}";
+        let decomposed_e = "e\u{0301}";
+        let line = format!("hello {decomposed_e} world\n");
+        fs::write(dir.path().join("words.txt"), &line).unwrap();
+
+        let mut options = SearchOptions::new(dir.path(), precomposed_e);
+        options.unicode_normalization_mode = UnicodeNormalizationMode::FormC;
+
+        let summary = search(&options).unwrap();
+        assert_eq!(summary.matches, 1);
+        let r = &summary.results[0];
+        assert!(
+            !r.match_preview_match.is_empty(),
+            "match preview must not be empty when NFC normalization changes byte lengths"
+        );
     }
 }
