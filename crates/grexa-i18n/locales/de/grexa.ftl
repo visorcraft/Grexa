@@ -81,3 +81,4 @@ count-failures = {$count ->
     [one] 1 Fehler
    *[other] {$count} Fehler
 }
+flag-whole-word = Ganzes Wort

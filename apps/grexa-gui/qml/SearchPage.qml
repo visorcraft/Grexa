@@ -84,7 +84,7 @@ Kirigami.Page {
             })
         }
         controller.startSearch(searchBar.pathText, searchBar.termText,
-                               searchBar.regexEnabled, searchBar.caseSensitive, false)
+                               searchBar.regexEnabled, searchBar.caseSensitive, searchBar.wholeWordEnabled)
     }
 
     function applyExample(path, term) {
@@ -738,6 +738,7 @@ Kirigami.Page {
                     page.controller.withinFilter = text
                     page.refreshView()
                 }
+                Accessible.name: qsTr("Filter results")
             }
             AppCheckBox {
                 text: qsTr("regex")
@@ -1063,8 +1064,9 @@ Kirigami.Page {
             AppTextField {
                 id: profileNameField
                 Layout.fillWidth: true
-                placeholderText: qsTr("e.g. “TODOs in ~/code”")
+                placeholderText: qsTr("e.g. \u201cTODOs in ~/code\u201d")
                 Keys.onReturnPressed: saveButton.commit()
+                Accessible.name: qsTr("Profile name")
             }
             RowLayout {
                 Layout.fillWidth: true

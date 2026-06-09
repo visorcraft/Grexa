@@ -23,6 +23,7 @@ Item {
     property alias recentPathsModel: pathField.model
     property bool regexEnabled: false
     property bool caseSensitive: false
+    property bool wholeWordEnabled: false
     property bool busy: false
     signal submitted()
     signal browse()
@@ -201,6 +202,13 @@ Item {
                 tooltip: qsTr("Case-sensitive")
                 active: root.caseSensitive
                 onToggled: root.caseSensitive = !root.caseSensitive
+            }
+            FlagChip {
+                id: wholeWordChip
+                label: qsTr("W")
+                tooltip: qsTr("Whole word")
+                active: root.wholeWordEnabled
+                onToggled: root.wholeWordEnabled = !root.wholeWordEnabled
             }
 
             // Vertical divider before primary action

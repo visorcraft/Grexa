@@ -87,6 +87,7 @@ pub struct SearchOptions {
     pub culture: Option<String>,
     pub use_file_index: bool,
     pub max_results: Option<usize>,
+    pub whole_word: bool,
 }
 
 impl SearchOptions {
@@ -114,6 +115,7 @@ impl SearchOptions {
             culture: None,
             use_file_index: false,
             max_results: None,
+            whole_word: false,
         }
     }
 }

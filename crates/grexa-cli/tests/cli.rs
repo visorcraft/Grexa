@@ -381,3 +381,28 @@ fn replace_with_empty_string_deletes_matches() {
     let content = fs::read_to_string(dir.path().join("a.txt")).unwrap();
     assert_eq!(content, "fix\nbug\n");
 }
+
+#[test]
+fn whole_word_flag_isolates_standalone_tokens() {
+    let dir = tempdir().unwrap();
+    write(&dir.path().join("a.txt"), "foo bar foobar\n");
+
+    cmd()
+        .args([dir.path().to_str().unwrap(), "foo", "--whole-word"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("foo bar"))
+        .stdout(predicate::str::contains("foobar").not());
+}
+
+#[test]
+fn empty_search_term_is_rejected() {
+    let dir = tempdir().unwrap();
+    write(&dir.path().join("a.txt"), "content\n");
+
+    cmd()
+        .args([dir.path().to_str().unwrap(), ""])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("must not be empty"));
+}

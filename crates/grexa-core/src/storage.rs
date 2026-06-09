@@ -488,7 +488,8 @@ impl RecentPathStore {
         }
 
         let mut paths = self.load()?;
-        paths.retain(|path| path != &recent_path);
+        let lower = recent_path.to_string_lossy().to_ascii_lowercase();
+        paths.retain(|path| path.to_string_lossy().to_ascii_lowercase() != lower);
         paths.insert(0, recent_path);
         paths.truncate(self.limit);
         save_json(&self.path, &paths)?;

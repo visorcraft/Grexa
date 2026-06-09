@@ -150,6 +150,10 @@ struct SearchArgs {
     #[arg(short = 'L', long = "include-symlinks")]
     include_symlinks: bool,
 
+    /// Match whole words only (surrounded by non-word characters).
+    #[arg(short = 'w', long = "whole-word")]
+    whole_word: bool,
+
     /// File name pattern, e.g. '*.rs;*.toml|-target*'.
     #[arg(short = 'm', long = "match-files")]
     match_files: Option<String>,
@@ -410,6 +414,12 @@ fn run_search(args: SearchArgs) -> anyhow::Result<i32> {
         return run_container_search(args);
     }
     let mut options = SearchOptions::new(&args.path, &args.term);
+    if options.search_term.is_empty() {
+        anyhow::bail!("search term must not be empty");
+    }
+    if options.search_term.len() > 4096 {
+        anyhow::bail!("search term exceeds maximum length of 4096 characters");
+    }
     options.regex = args.regex;
     options.regex_engine = match args.regex_engine {
         CliRegexEngine::Auto => RegexEngine::Auto,
@@ -423,6 +433,7 @@ fn run_search(args: SearchArgs) -> anyhow::Result<i32> {
     options.include_system = args.include_system;
     options.include_subfolders = !args.no_subfolders;
     options.include_symlinks = args.include_symlinks;
+    options.whole_word = args.whole_word;
     options.match_file_names = args.match_files.unwrap_or_default();
     options.exclude_dirs = args.exclude_dirs.unwrap_or_default();
     options.size_limit_kb = args

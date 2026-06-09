@@ -25,6 +25,8 @@ use serde::{Deserialize, Serialize};
 use crate::runtime::{RuntimeError, RuntimeOperations};
 use crate::{ContainerInfo, ContainerRuntimeKind};
 
+const CONTAINER_SEARCH_TIMEOUT_SECS: u64 = 30;
+
 /// Single grep hit produced by either backend.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContainerSearchHit {
@@ -115,7 +117,13 @@ fn direct_grep<R: RuntimeOperations>(
     argv.push(&options.pattern);
     argv.push(&options.container_path);
 
+    let start = std::time::Instant::now();
     let result = runtime.exec_capture(&container.id, &argv)?;
+    tracing::debug!(
+        elapsed_ms = start.elapsed().as_millis(),
+        timeout_secs = CONTAINER_SEARCH_TIMEOUT_SECS,
+        "direct_grep completed"
+    );
     // grep exits 1 when nothing matched — that's a successful empty search.
     if result.status != 0 && result.status != 1 {
         return Err(RuntimeError::Cli {

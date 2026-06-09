@@ -74,6 +74,17 @@ pub fn context_preview(
         _ => PreviewError::Io(err),
     })?;
 
+    let mut check_bound = text.len().min(8192);
+    while check_bound > 0 && !text.is_char_boundary(check_bound) {
+        check_bound -= 1;
+    }
+    if text[..check_bound].contains('\0') {
+        return Err(PreviewError::Io(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "file appears to be binary (contains null bytes)",
+        )));
+    }
+
     let start_line = line_number.saturating_sub(lines_before).max(1);
     let end_line = line_number.saturating_add(lines_after);
 

@@ -217,7 +217,7 @@ pub fn search_with(
         walker.max_depth(Some(1));
     }
 
-    let mut results = Vec::new();
+    let mut results = Vec::with_capacity(256);
     let mut files_scanned = 0;
     let mut skipped_files = 0;
     let mut matched_files = HashSet::new();
@@ -645,7 +645,11 @@ fn find_line_matches(
     norm_ctx: &NormalizationContext,
 ) -> Vec<(usize, usize)> {
     if let Some(engine) = regex {
-        return engine.find_iter(line);
+        let mut matches = engine.find_iter(line);
+        if options.whole_word {
+            matches.retain(|&(start, end)| is_whole_word_match(line, start, end));
+        }
+        return matches;
     }
 
     let needle = match normalized_needle {
@@ -684,7 +688,32 @@ fn find_line_matches(
         }
         offset = norm_end;
     }
+    if options.whole_word {
+        matches.retain(|&(start, end)| is_whole_word_match(line, start, end));
+    }
     matches
+}
+
+fn is_word_char(ch: char) -> bool {
+    ch.is_alphanumeric() || ch == '_'
+}
+
+fn is_whole_word_match(text: &str, start: usize, end: usize) -> bool {
+    let before_ok = if start == 0 {
+        true
+    } else {
+        text.get(..start)
+            .and_then(|s| s.chars().next_back())
+            .is_none_or(|c| !is_word_char(c))
+    };
+    let after_ok = if end >= text.len() {
+        true
+    } else {
+        text.get(end..)
+            .and_then(|s| s.chars().next())
+            .is_none_or(|c| !is_word_char(c))
+    };
+    before_ok && after_ok
 }
 
 pub(crate) fn normalize_with_mapping(
@@ -1479,5 +1508,43 @@ mod tests {
             !r.match_preview_match.is_empty(),
             "match preview must not be empty when NFC normalization changes byte lengths"
         );
+    }
+
+    #[test]
+    fn whole_word_matches_standalone_token() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), "foo bar foobar\n").unwrap();
+
+        let mut options = SearchOptions::new(dir.path(), "foo");
+        options.whole_word = true;
+
+        let summary = search(&options).unwrap();
+        assert_eq!(summary.matches, 1);
+        assert_eq!(summary.results[0].column_number, 1);
+    }
+
+    #[test]
+    fn whole_word_rejects_substring_match() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), "foobar\n").unwrap();
+
+        let mut options = SearchOptions::new(dir.path(), "foo");
+        options.whole_word = true;
+
+        let summary = search(&options).unwrap();
+        assert_eq!(summary.matches, 0);
+    }
+
+    #[test]
+    fn whole_word_with_regex_mode() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), "test123 test testing\n").unwrap();
+
+        let mut options = SearchOptions::new(dir.path(), r"test\d+");
+        options.regex = true;
+        options.whole_word = true;
+
+        let summary = search(&options).unwrap();
+        assert_eq!(summary.matches, 1);
     }
 }

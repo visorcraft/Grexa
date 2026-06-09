@@ -24,3 +24,37 @@ impl CancelToken {
         self.flag.load(Ordering::SeqCst)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_token_is_not_cancelled() {
+        let token = CancelToken::new();
+        assert!(!token.is_cancelled());
+    }
+
+    #[test]
+    fn cancel_sets_flag() {
+        let token = CancelToken::new();
+        token.cancel();
+        assert!(token.is_cancelled());
+    }
+
+    #[test]
+    fn cancel_is_idempotent() {
+        let token = CancelToken::new();
+        token.cancel();
+        token.cancel();
+        assert!(token.is_cancelled());
+    }
+
+    #[test]
+    fn cloned_token_shares_state() {
+        let token = CancelToken::new();
+        let clone = token.clone();
+        token.cancel();
+        assert!(clone.is_cancelled());
+    }
+}

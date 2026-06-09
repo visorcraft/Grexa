@@ -805,10 +805,7 @@ impl ffi::SearchController {
         options.include_symlinks = settings.include_symbolic_links;
         options.match_file_names = settings.default_match_files.clone();
         options.exclude_dirs = settings.default_exclude_dirs.clone();
-        // Whole-word filtering isn't yet exposed in `SearchOptions`;
-        // tracked as a real follow-up against grexa-core, not a
-        // silent drop. When that lands, set `options.whole_word`.
-        let _ = whole_word;
+        options.whole_word = whole_word;
 
         let thread = self.qt_thread();
 
@@ -1104,7 +1101,9 @@ impl ffi::SearchController {
         let path = grexa_core::AppPaths::from_env()
             .state_dir
             .join("replace-journal.json");
-        let _ = std::fs::remove_file(&path);
+        if let Err(err) = std::fs::remove_file(&path) {
+            tracing::warn!(%err, "failed to remove residual journal");
+        }
     }
 
     fn history_json(&self) -> QString {
@@ -1121,7 +1120,9 @@ impl ffi::SearchController {
             Ok(v) => v,
             Err(_) => return,
         };
-        let _ = with_workspace(|w| w.history.remove(&entry));
+        if let Err(err) = with_workspace(|w| w.history.remove(&entry)) {
+            tracing::warn!(%err, "failed to remove history entry");
+        }
     }
 
     fn profiles_json(&self) -> QString {
@@ -1549,10 +1550,11 @@ fn finish_container_search(
             pin.as_mut().set_match_count(added);
             // Files matched is the unique file count in the result set.
             let unique_files: i32 = {
-                let mut seen: std::collections::HashSet<std::path::PathBuf> =
-                    std::collections::HashSet::new();
-                for r in &pin.as_ref().rust().rows {
-                    seen.insert(r.full_path.clone());
+                let pin_ref = pin.as_ref();
+                let rust = pin_ref.rust();
+                let mut seen = std::collections::HashSet::new();
+                for r in &rust.rows {
+                    seen.insert(&r.full_path);
                 }
                 seen.len() as i32
             };

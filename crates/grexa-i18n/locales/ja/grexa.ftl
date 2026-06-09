@@ -43,3 +43,4 @@ count-files = {$count} 件のファイル
 count-files-modified = {$count} 件のファイルを変更
 count-matches-replaced = {$count} 件のマッチを置換
 count-failures = {$count} 件の失敗
+flag-whole-word = 単語全体

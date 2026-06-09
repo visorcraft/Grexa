@@ -102,3 +102,4 @@ count-failures = {$count ->
     [one] 1 failure
    *[other] {$count} failures
 }
+flag-whole-word = Whole word
