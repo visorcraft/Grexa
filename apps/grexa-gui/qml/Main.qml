@@ -153,9 +153,9 @@ Kirigami.ApplicationWindow {
     pageStack.globalToolBar.style: Kirigami.ApplicationHeaderStyle.None
 
     // -- Global keyboard shortcuts -----------------------------------
-    // F1 → About; Ctrl+, → Settings; Ctrl+1..4 jump to pages;
-    // Esc cancels a running search; Ctrl+L focuses the search bar
-    // (handled by the SearchPage); Ctrl+Q quits.
+    // F1 → About; Ctrl+, → Settings; Ctrl+1..5 jump to pages;
+    // Esc cancels a running search; Ctrl+L focuses the search bar;
+    // Ctrl+F focuses the within-filter; Ctrl+Q quits.
     //
     // `Shortcut` (not `Controls.Action`) is the correct primitive for
     // window-scoped keybindings — top-level `Action`s only fire when
@@ -184,7 +184,12 @@ Kirigami.ApplicationWindow {
     Shortcut {
         sequence: "Ctrl+4"
         context: Qt.ApplicationShortcut
-        onActivated: app.goTo("about")
+        onActivated: app.goTo("history")
+    }
+    Shortcut {
+        sequence: "Ctrl+5"
+        context: Qt.ApplicationShortcut
+        onActivated: app.goTo("profiles")
     }
     // Esc only intercepts when a search is in flight — otherwise it
     // falls through to Qt's default popup/dialog/drawer close
@@ -235,6 +240,24 @@ Kirigami.ApplicationWindow {
             if (p && p.closeTab && p.activeTab !== undefined) {
                 p.closeTab(p.activeTab)
             }
+        }
+    }
+    Shortcut {
+        sequence: "Ctrl+L"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            app.goTo("search")
+            const p = app.pageStack.currentItem
+            if (p && p.focusSearchBar) p.focusSearchBar()
+        }
+    }
+    Shortcut {
+        sequence: "Ctrl+F"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            app.goTo("search")
+            const p = app.pageStack.currentItem
+            if (p && p.focusWithinFilter) p.focusWithinFilter()
         }
     }
 

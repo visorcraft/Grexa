@@ -191,8 +191,9 @@ pub fn search_with(
     let binary_extensions = extension_set(BINARY_EXTENSIONS);
     let searchable_binary_extensions = extension_set(SEARCHABLE_BINARY_EXTENSIONS);
 
+    let norm_ctx = NormalizationContext::build(options);
     let normalized_needle = if regex.is_none() {
-        Some(normalize_for_text_search(&options.search_term, options))
+        Some(normalize_for_text_search(&options.search_term, options, &norm_ctx))
     } else {
         None
     };
@@ -296,6 +297,7 @@ pub fn search_with(
             regex.as_ref(),
             cancel,
             normalized_needle.as_deref(),
+            &norm_ctx,
         )?;
         if let Some(encoding) = scan.encoding {
             file_encodings.insert(entry.path().to_path_buf(), encoding);
@@ -510,6 +512,7 @@ fn search_file(
     regex: Option<&PatternEngine>,
     cancel: &CancelToken,
     normalized_needle: Option<&str>,
+    norm_ctx: &NormalizationContext,
 ) -> Result<FileScan, SearchError> {
     // Searchable-document path: handed off to extractors that decode OOXML,
     // ODF, ZIP, PDF, and RTF into plain text before line scanning. The
@@ -539,8 +542,18 @@ fn search_file(
                 });
             }
         };
-        let results =
-            scan_text_buffer(path, root, options, regex, cancel, normalized_needle, &extracted);
+        let results = scan_text_buffer(
+            &ScanContext {
+                path,
+                root,
+                options,
+                regex,
+                cancel,
+                normalized_needle,
+                norm_ctx,
+            },
+            &extracted,
+        );
         return Ok(FileScan {
             results,
             encoding: Some(DetectedEncoding::Utf8),
@@ -548,7 +561,18 @@ fn search_file(
     }
 
     let (text, encoding) = read_text(path)?;
-    let results = scan_text_buffer(path, root, options, regex, cancel, normalized_needle, &text);
+    let results = scan_text_buffer(
+        &ScanContext {
+            path,
+            root,
+            options,
+            regex,
+            cancel,
+            normalized_needle,
+            norm_ctx,
+        },
+        &text,
+    );
     Ok(FileScan {
         results,
         encoding: Some(encoding),
@@ -557,24 +581,32 @@ fn search_file(
 
 /// Walk the buffered text line-by-line and collect matches. Used by both the
 /// plain-text reader and the document extractor path.
-fn scan_text_buffer(
-    path: &Path,
-    root: &Path,
-    options: &SearchOptions,
-    regex: Option<&PatternEngine>,
-    cancel: &CancelToken,
-    normalized_needle: Option<&str>,
-    text: &str,
-) -> Vec<SearchResult> {
+struct ScanContext<'a> {
+    path: &'a Path,
+    root: &'a Path,
+    options: &'a SearchOptions,
+    regex: Option<&'a PatternEngine>,
+    cancel: &'a CancelToken,
+    normalized_needle: Option<&'a str>,
+    norm_ctx: &'a NormalizationContext,
+}
+
+fn scan_text_buffer(ctx: &ScanContext, text: &str) -> Vec<SearchResult> {
     let mut results = Vec::new();
     for (idx, line) in text.lines().enumerate() {
-        if idx % 64 == 0 && cancel.is_cancelled() {
+        if idx % 64 == 0 && ctx.cancel.is_cancelled() {
             return results;
         }
 
         let line_number = idx + 1;
         let compare_line = truncate_bytes(line, MAX_COMPARE_LINE_BYTES);
-        let matches = find_line_matches(&compare_line, options, regex, normalized_needle);
+        let matches = find_line_matches(
+            &compare_line,
+            ctx.options,
+            ctx.regex,
+            ctx.normalized_needle,
+            ctx.norm_ctx,
+        );
         if matches.is_empty() {
             continue;
         }
@@ -582,7 +614,8 @@ fn scan_text_buffer(
         let (start, end) = matches[0];
         let (before, matched, after) = preview_segments(line, start, end);
         results.push(SearchResult {
-            file_name: path
+            file_name: ctx
+                .path
                 .file_name()
                 .map(|name| name.to_string_lossy().to_string())
                 .unwrap_or_default(),
@@ -592,8 +625,12 @@ fn scan_text_buffer(
             match_preview_before: before,
             match_preview_match: matched,
             match_preview_after: after,
-            full_path: path.to_path_buf(),
-            relative_path: path.strip_prefix(root).unwrap_or(path).to_path_buf(),
+            full_path: ctx.path.to_path_buf(),
+            relative_path: ctx
+                .path
+                .strip_prefix(ctx.root)
+                .unwrap_or(ctx.path)
+                .to_path_buf(),
             match_count: matches.len(),
         });
     }
@@ -605,6 +642,7 @@ fn find_line_matches(
     options: &SearchOptions,
     regex: Option<&PatternEngine>,
     normalized_needle: Option<&str>,
+    norm_ctx: &NormalizationContext,
 ) -> Vec<(usize, usize)> {
     if let Some(engine) = regex {
         return engine.find_iter(line);
@@ -618,7 +656,7 @@ fn find_line_matches(
         return Vec::new();
     }
 
-    let original = normalize_for_text_search(line, options);
+    let original = normalize_for_text_search(line, options, norm_ctx);
     let mut matches = Vec::new();
     let mut offset = 0;
     while let Some(index) = original[offset..].find(needle) {
@@ -630,45 +668,24 @@ fn find_line_matches(
     matches
 }
 
-fn normalize_for_text_search(input: &str, options: &SearchOptions) -> String {
-    let mut value = match options.unicode_normalization_mode {
-        UnicodeNormalizationMode::None => input.to_string(),
-        UnicodeNormalizationMode::FormC => input.nfc().collect(),
-        UnicodeNormalizationMode::FormD => input.nfd().collect(),
-        UnicodeNormalizationMode::FormKC => input.nfkc().collect(),
-        UnicodeNormalizationMode::FormKD => input.nfkd().collect(),
-    };
-
-    if !options.diacritic_sensitive {
-        use icu_properties::props::GeneralCategory;
-        let gc_map = icu_properties::CodePointMapData::<GeneralCategory>::new();
-        value = value
-            .nfd()
-            .filter(|ch| gc_map.get(*ch) != GeneralCategory::NonspacingMark)
-            .collect();
-    }
-
-    if !options.case_sensitive {
-        value = culture_aware_lowercase(&value, options);
-    }
-
-    value
+struct NormalizationContext {
+    strip_diacritics: bool,
+    gc_map:
+        icu_properties::CodePointMapDataBorrowed<'static, icu_properties::props::GeneralCategory>,
+    case_mapper: Option<icu_casemap::CaseMapperBorrowed<'static>>,
+    locale: Option<icu_locale_core::LanguageIdentifier>,
 }
 
-/// Locale-aware lowercase. Falls through to `str::to_lowercase` for the
-/// `Ordinal` and `InvariantCulture` modes (default Unicode lowercasing);
-/// uses ICU4X's `CaseMapper` for `CurrentCulture` so Turkish-i and other
-/// locale-specific rules behave the way Grex's .NET `String.ToLower(culture)`
-/// behaves.
-fn culture_aware_lowercase(value: &str, options: &SearchOptions) -> String {
-    use crate::models::StringComparisonMode;
+impl NormalizationContext {
+    fn build(options: &SearchOptions) -> Self {
+        use crate::models::StringComparisonMode;
 
-    match options.string_comparison_mode {
-        StringComparisonMode::Ordinal | StringComparisonMode::InvariantCulture => {
-            value.to_lowercase()
-        }
-        StringComparisonMode::CurrentCulture => {
-            let mapper = icu_casemap::CaseMapper::new();
+        let gc_map =
+            icu_properties::CodePointMapData::<icu_properties::props::GeneralCategory>::new();
+
+        let (case_mapper, locale) = if !options.case_sensitive
+            && options.string_comparison_mode == StringComparisonMode::CurrentCulture
+        {
             let locale = options
                 .culture
                 .as_deref()
@@ -677,11 +694,55 @@ fn culture_aware_lowercase(value: &str, options: &SearchOptions) -> String {
                     icu_locale_core::LanguageIdentifier::try_from_str("en")
                         .expect("\"en\" is a valid BCP-47 tag")
                 });
-            mapper
-                .lowercase_to_string(value, &locale)
-                .into_owned()
-                .to_string()
+            (Some(icu_casemap::CaseMapper::new()), Some(locale))
+        } else {
+            (None, None)
+        };
+
+        Self {
+            strip_diacritics: !options.diacritic_sensitive,
+            gc_map,
+            case_mapper,
+            locale,
         }
+    }
+}
+
+fn normalize_for_text_search(
+    input: &str,
+    options: &SearchOptions,
+    ctx: &NormalizationContext,
+) -> String {
+    let mut value = match options.unicode_normalization_mode {
+        UnicodeNormalizationMode::None => input.to_string(),
+        UnicodeNormalizationMode::FormC => input.nfc().collect(),
+        UnicodeNormalizationMode::FormD => input.nfd().collect(),
+        UnicodeNormalizationMode::FormKC => input.nfkc().collect(),
+        UnicodeNormalizationMode::FormKD => input.nfkd().collect(),
+    };
+
+    if ctx.strip_diacritics {
+        use icu_properties::props::GeneralCategory;
+        value = value
+            .nfd()
+            .filter(|ch| ctx.gc_map.get(*ch) != GeneralCategory::NonspacingMark)
+            .collect();
+    }
+
+    if !options.case_sensitive {
+        value = culture_aware_lowercase(&value, ctx);
+    }
+
+    value
+}
+
+fn culture_aware_lowercase(value: &str, ctx: &NormalizationContext) -> String {
+    match (&ctx.case_mapper, &ctx.locale) {
+        (Some(mapper), Some(locale)) => mapper
+            .lowercase_to_string(value, locale)
+            .into_owned()
+            .to_string(),
+        _ => value.to_lowercase(),
     }
 }
 
@@ -960,7 +1021,8 @@ mod tests {
         options.case_sensitive = false;
 
         // Ordinal — should NOT match against an `İSTANBUL` source.
-        let ordinal = normalize_for_text_search("İSTANBUL", &options);
+        let ordinal =
+            normalize_for_text_search("İSTANBUL", &options, &NormalizationContext::build(&options));
         assert!(ordinal.contains('i'), "ordinal must lower-case I to i");
 
         // CurrentCulture + tr-TR — Turkish lowering of `İ` is `i`,
@@ -969,15 +1031,16 @@ mod tests {
         // lowercase form goes through ICU.
         options.string_comparison_mode = StringComparisonMode::CurrentCulture;
         options.culture = Some("tr-TR".to_string());
-        let turkish = normalize_for_text_search("İSTANBUL", &options);
-        // Verify ICU produced something different from Rust's default.
+        let turkish =
+            normalize_for_text_search("İSTANBUL", &options, &NormalizationContext::build(&options));
         // The lowered form starts with `i` (dotted) + lower stem.
         assert!(
             turkish.to_lowercase() == turkish,
             "ICU result should be all-lowercase, got {turkish:?}"
         );
         // Cross-check against the dotless ı for plain I in tr-TR.
-        let dotless = normalize_for_text_search("ISTANBUL", &options);
+        let dotless =
+            normalize_for_text_search("ISTANBUL", &options, &NormalizationContext::build(&options));
         assert!(
             dotless.contains('ı') || dotless.contains('i'),
             "tr-TR lowering should produce one of i/ı for capital I, got {dotless:?}"
@@ -998,7 +1061,8 @@ mod tests {
         options.string_comparison_mode = StringComparisonMode::CurrentCulture;
         options.culture = Some("de-DE".to_string());
 
-        let lowered = normalize_for_text_search("STRAßE", &options);
+        let lowered =
+            normalize_for_text_search("STRAßE", &options, &NormalizationContext::build(&options));
         // ICU should keep ß intact when lowering a string that already
         // contains ß; never expands it.
         assert!(lowered.contains('ß'), "got {lowered:?}");
@@ -1029,7 +1093,11 @@ mod tests {
         );
         let mut options = SearchOptions::new("/tmp", "x");
         options.diacritic_sensitive = false;
-        let result = normalize_for_text_search("क\u{093E}", &options);
+        let result = normalize_for_text_search(
+            "क\u{093E}",
+            &options,
+            &NormalizationContext::build(&options),
+        );
         assert!(
             result.contains(devanagari_aa),
             "Mc marks must survive Mn-only diacritic stripping, got {result:?}"
@@ -1044,7 +1112,8 @@ mod tests {
         options.string_comparison_mode = StringComparisonMode::CurrentCulture;
         options.culture = Some("el-GR".to_string());
 
-        let lowered = normalize_for_text_search("ΣΟΦΟΣ", &options);
+        let lowered =
+            normalize_for_text_search("ΣΟΦΟΣ", &options, &NormalizationContext::build(&options));
         assert!(
             lowered.contains('σ') || lowered.contains('ς'),
             "Greek sigma should lowercase to σ/ς, got {lowered:?}"

@@ -297,8 +297,37 @@ mod tests {
 
     #[test]
     fn heuristic_label_returns_static_str() {
-        // Pure smoke test: chardetng + encoding_rs labels are static.
         let label = heuristic_label(b"plain ASCII");
         assert!(!label.is_empty());
+    }
+
+    #[test]
+    fn read_text_nonexistent_file_returns_error() {
+        let result = read_text(Path::new("/nonexistent/path/that/does/not/exist.txt"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn read_text_zero_byte_file_returns_empty_utf8() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("empty.txt");
+        std::fs::write(&path, "").unwrap();
+        let (text, encoding) = read_text(&path).unwrap();
+        assert!(text.is_empty());
+        assert!(matches!(encoding, DetectedEncoding::Utf8));
+    }
+
+    #[test]
+    fn read_utf16_be_decodes_correctly() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("be.txt");
+        let mut bytes = vec![0xFE, 0xFF];
+        for ch in "hello\nTODO\n".encode_utf16() {
+            bytes.extend_from_slice(&ch.to_be_bytes());
+        }
+        std::fs::write(&path, bytes).unwrap();
+        let (text, encoding) = read_text(&path).unwrap();
+        assert!(text.contains("TODO"));
+        assert!(matches!(encoding, DetectedEncoding::Utf16Be));
     }
 }

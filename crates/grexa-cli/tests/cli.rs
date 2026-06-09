@@ -332,3 +332,52 @@ fn replace_reports_zero_matches_exit_code() {
         .assert()
         .code(1);
 }
+
+#[test]
+fn replace_skips_binary_files() {
+    let dir = tempdir().unwrap();
+    write(&dir.path().join("a.txt"), "TODO\n");
+    fs::write(dir.path().join("image.png"), b"TODO\x00PNG").unwrap();
+
+    cmd()
+        .args(["replace", dir.path().to_str().unwrap(), "TODO", "DONE"])
+        .assert()
+        .success();
+
+    let text_content = fs::read_to_string(dir.path().join("a.txt")).unwrap();
+    assert_eq!(text_content, "DONE\n");
+    let png_content = fs::read(dir.path().join("image.png")).unwrap();
+    assert!(png_content.starts_with(b"TODO"), "binary file must not be modified");
+}
+
+#[test]
+fn replace_across_multiple_files() {
+    let dir = tempdir().unwrap();
+    write(&dir.path().join("a.txt"), "TODO one\n");
+    write(&dir.path().join("b.txt"), "TODO two\n");
+    write(&dir.path().join("c.txt"), "TODO three\n");
+
+    cmd()
+        .args(["replace", dir.path().to_str().unwrap(), "TODO", "DONE"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("3 files modified"));
+
+    assert_eq!(fs::read_to_string(dir.path().join("a.txt")).unwrap(), "DONE one\n");
+    assert_eq!(fs::read_to_string(dir.path().join("b.txt")).unwrap(), "DONE two\n");
+    assert_eq!(fs::read_to_string(dir.path().join("c.txt")).unwrap(), "DONE three\n");
+}
+
+#[test]
+fn replace_with_empty_string_deletes_matches() {
+    let dir = tempdir().unwrap();
+    write(&dir.path().join("a.txt"), "TODO fix\nTODO bug\n");
+
+    cmd()
+        .args(["replace", dir.path().to_str().unwrap(), "TODO ", ""])
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(dir.path().join("a.txt")).unwrap();
+    assert_eq!(content, "fix\nbug\n");
+}

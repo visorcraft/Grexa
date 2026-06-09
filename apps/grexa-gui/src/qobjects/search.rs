@@ -1159,12 +1159,10 @@ impl ffi::SearchController {
     }
 
     fn save_tab_snapshot(mut self: Pin<&mut Self>, tab_id: i32) {
-        // Build each field via separate accessors so the `rust()`
-        // temporary doesn't outlive the struct-literal expression.
         let snapshot = TabSnapshot {
-            rows: self.as_ref().rust().rows.clone(),
-            last_path: self.as_ref().rust().last_path.clone(),
-            last_term: self.as_ref().rust().last_term.clone(),
+            rows: std::mem::take(&mut self.as_mut().rust_mut().rows),
+            last_path: std::mem::take(&mut self.as_mut().rust_mut().last_path),
+            last_term: std::mem::take(&mut self.as_mut().rust_mut().last_term),
             last_regex: self.as_ref().rust().last_regex,
             last_case_sensitive: self.as_ref().rust().last_case_sensitive,
             status_text: self.as_ref().rust().status_text.to_string(),
@@ -1181,6 +1179,7 @@ impl ffi::SearchController {
             replacing: self.as_ref().rust().replacing,
             last_replace_summary: self.as_ref().rust().last_replace_summary.to_string(),
         };
+        self.as_mut().rust_mut().visible.clear();
         self.as_mut()
             .rust_mut()
             .tab_snapshots

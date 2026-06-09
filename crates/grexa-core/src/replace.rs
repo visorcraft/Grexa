@@ -229,7 +229,7 @@ pub fn replace_with(
             break;
         }
 
-        match rewrite_one(&path, options, regex_engine.as_ref()) {
+        match rewrite_one_pre_read(&path, options, regex_engine.as_ref()) {
             Ok(FileResult::Unchanged) => summary.files_unchanged += 1,
             Ok(FileResult::Replaced { matches, encoding }) => {
                 summary.files_modified += 1;
@@ -271,7 +271,7 @@ enum FileResult {
     },
 }
 
-fn rewrite_one(
+fn rewrite_one_pre_read(
     path: &Path,
     options: &ReplaceOptions,
     regex_engine: Option<&PatternEngine>,
@@ -772,5 +772,63 @@ mod tests {
             "an in-root file must still be rewritten even when reached via a symlink"
         );
         assert!(summary.files_modified >= 1);
+    }
+
+    #[test]
+    fn load_residual_journal_recovers_crash_state() {
+        let journal_dir = tempdir().unwrap();
+        let journal_path = journal_dir.path().join("replace-journal.json");
+        set_journal_path_override(Some(journal_path.clone()));
+
+        let entry = ReplaceJournalEntry {
+            started_unix: 1000,
+            finished_unix: None,
+            search_term: "TODO".to_string(),
+            replacement: "DONE".to_string(),
+            root: PathBuf::from("/some/root"),
+            regex: false,
+            modified_files: vec![PathBuf::from("/some/root/a.txt")],
+            failed_files: vec![PathBuf::from("/some/root/b.txt")],
+        };
+        fs::write(&journal_path, serde_json::to_vec(&entry).unwrap()).unwrap();
+
+        let loaded = load_residual_journal().unwrap();
+        assert!(loaded.is_some(), "residual journal must be loadable");
+        let journal = loaded.unwrap();
+        assert_eq!(journal.search_term, "TODO");
+        assert_eq!(journal.modified_files.len(), 1);
+        assert_eq!(journal.failed_files.len(), 1);
+        assert!(journal.finished_unix.is_none());
+
+        set_journal_path_override(None);
+    }
+
+    #[test]
+    fn load_residual_journal_handles_corrupt_json() {
+        let journal_dir = tempdir().unwrap();
+        let journal_path = journal_dir.path().join("replace-journal.json");
+        set_journal_path_override(Some(journal_path.clone()));
+
+        fs::write(&journal_path, b"this is not valid json{{{").unwrap();
+
+        let result = load_residual_journal();
+        assert!(result.is_err(), "corrupt journal must return an error");
+
+        set_journal_path_override(None);
+    }
+
+    #[test]
+    fn rewrites_windows1252_preserves_encoding() {
+        let dir = tempdir().unwrap();
+        let original = encoding_rs::WINDOWS_1252.encode("café résumé\n").0;
+        fs::write(dir.path().join("a.txt"), &original).unwrap();
+
+        let summary =
+            replace_with(&opts(dir.path(), "café", "CAFÉ"), &CancelToken::new(), None).unwrap();
+        assert_eq!(summary.files_modified, 1);
+
+        let bytes = fs::read(dir.path().join("a.txt")).unwrap();
+        let (text, _encoding, _had_errors) = encoding_rs::WINDOWS_1252.decode(&bytes);
+        assert!(text.contains("CAFÉ"), "replacement must appear in decoded text");
     }
 }

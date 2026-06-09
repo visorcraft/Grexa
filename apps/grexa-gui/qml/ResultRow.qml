@@ -22,12 +22,12 @@ Controls.ItemDelegate {
     property string previewBefore: ""
     property string previewMatch: ""
     property string previewAfter: ""
-    /// Full filesystem path — needed for the context-menu actions
-    /// that route through `SearchController` (open in editor,
-    /// reveal in file manager, copy path). Set by the SearchPage
-    /// delegate factory from `searchController.rowFullPath(index)`.
     property string fullPath: ""
     signal openPreview()
+
+    Accessible.role: Accessible.ListItem
+    Accessible.name: relativePath + ":" + line
+    Accessible.onActivated: root.openPreview()
 
     height: 68
     padding: 0

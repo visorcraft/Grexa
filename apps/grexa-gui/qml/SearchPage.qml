@@ -130,6 +130,14 @@ Kirigami.Page {
         return tabsModel.get(activeTab).tabId
     }
 
+    function focusSearchBar() {
+        searchBar.forceActiveFocus()
+    }
+
+    function focusWithinFilter() {
+        withinField.forceActiveFocus()
+    }
+
     function persistActiveTab() {
         if (activeTab < 0 || activeTab >= tabsModel.count) return
         // Cancel any in-flight search so its worker doesn't queue
