@@ -674,4 +674,35 @@ mod tests {
             Err(_) => {}
         }
     }
+
+    #[test]
+    fn extract_rtf_handles_hex_escapes() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("hex.rtf");
+        let rtf = r#"{\rtf1 Hello \'AB world}"#;
+        std::fs::write(&path, rtf).unwrap();
+        let text = extract_rtf(&path).unwrap();
+        assert!(text.contains("Hello"));
+    }
+
+    #[test]
+    fn extract_rtf_handles_nested_groups() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("nested.rtf");
+        let rtf = r#"{\rtf1 {\b bold} normal {\i {\b both}} end}"#;
+        std::fs::write(&path, rtf).unwrap();
+        let text = extract_rtf(&path).unwrap();
+        assert!(text.contains("bold"));
+        assert!(text.contains("normal"));
+        assert!(text.contains("end"));
+    }
+
+    #[test]
+    fn extract_rtf_handles_empty_input() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("empty.rtf");
+        std::fs::write(&path, b"").unwrap();
+        let result = extract_rtf(&path);
+        assert!(result.is_err() || result.as_ref().unwrap().is_empty());
+    }
 }

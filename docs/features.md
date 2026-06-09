@@ -172,12 +172,19 @@ crashes on malformed input.
     `--include-hidden` `--include-binary` `--include-system`
     `--no-subfolders` `--include-symlinks` `--match-files`
     `--exclude-dirs` `--size-limit` `--size-unit` `--size-type`
+    `--whole-word` / `-w` `--max-results <N>`
+    `--regex-engine <auto|fast|extended>`
   - Output: `--format text|json|csv` `--count` `--files-only`
     `--quiet`
   - Advanced: `--comparison` `--normalization` `--ignore-diacritics`
     `--culture` `--use-index` `--no-index`
   - Container: `--container <id>` `--runtime auto|docker|podman`
   - `rg`-style aliases: `--hidden`, `--no-ignore`
+- Replace subcommand: `grexa-cli replace <path> <term> <replacement>`
+  with flags `--regex`, `--case-sensitive`, `--gitignore`,
+  `--include-hidden`, `--include-binary`, `--include-system`,
+  `--no-subfolders`, `--include-symlinks`, `--match-files`,
+  `--exclude-dirs`, `--dry-run`.
 - Exit codes: `0` matches, `1` no matches, `2` error.
 - `completions <shell>` and `manpage` subcommands.
 - Ctrl-C cancels the in-flight search.

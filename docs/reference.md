@@ -47,6 +47,9 @@ grexa-cli manpage
 | `--no-index`               | off         | Force the walker even when the setting enables Baloo. |
 | `--container <id-or-name>` | none        | Search inside a container; positional `<path>` is interpreted in-container. |
 | `--runtime <auto|docker|podman>` | `auto` | Used only with `--container`. |
+| `-w`, `--whole-word`       | off         | Match whole words only (boundary check on both sides). |
+| `--max-results <N>`        | none        | Stop after N matching lines. |
+| `--regex-engine <auto|fast|extended>` | `auto` | Force a specific regex engine. |
 
 ### Exit codes
 
@@ -62,6 +65,23 @@ grexa-cli manpage
 | ---------- | ------- |
 | `completions <bash|zsh|fish|elvish|powershell>` | Emit a shell completion script to stdout. |
 | `manpage` | Emit a roff(7) man page to stdout. |
+| `replace <path> <term> <replacement>` | Replace every match of `term` with `replacement`. |
+
+#### Replace flags
+
+| Flag | Default | Effect |
+| ---- | ------- | ------ |
+| `-E`, `--regex` | off | Treat `term` as a regex. |
+| `-i`, `--case-sensitive` | off | Case-sensitive comparison. |
+| `-g`, `--gitignore` | off | Respect `.gitignore` / `.ignore` / global git excludes. |
+| `-H`, `--include-hidden` | off | Include dotfiles and dot-directories. |
+| `-b`, `--include-binary` | off | Include searchable binary/document formats. |
+| `-s`, `--include-system` | off | Include `.git`, `node_modules`, etc. |
+| `-d`, `--no-subfolders` | off | Do not recurse. |
+| `-L`, `--include-symlinks` | off | Follow symbolic links. |
+| `-m`, `--match-files <glob>` | empty | Pipe/semicolon-separated globs. |
+| `-x`, `--exclude-dirs <names-or-regex>` | empty | Directory excludes. |
+| `--dry-run` | off | Preview changes without writing files. |
 
 ## Settings schema (`$XDG_CONFIG_HOME/grexa/settings.json`)
 

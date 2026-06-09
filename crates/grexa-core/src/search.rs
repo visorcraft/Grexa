@@ -667,11 +667,12 @@ fn find_line_matches(
         let (n, m) = normalize_with_mapping(line, options, norm_ctx);
         (n, Some(m))
     } else {
-        let mut n = line.to_string();
-        if !options.case_sensitive {
-            n = culture_aware_lowercase(&n, norm_ctx);
-        }
-        (n, None)
+        let normalized = if !options.case_sensitive {
+            culture_aware_lowercase(line, norm_ctx)
+        } else {
+            line.to_string()
+        };
+        (normalized, None)
     };
 
     let mut matches = Vec::new();
@@ -698,7 +699,7 @@ fn is_word_char(ch: char) -> bool {
     ch.is_alphanumeric() || ch == '_'
 }
 
-fn is_whole_word_match(text: &str, start: usize, end: usize) -> bool {
+pub(crate) fn is_whole_word_match(text: &str, start: usize, end: usize) -> bool {
     let before_ok = if start == 0 {
         true
     } else {
@@ -1546,5 +1547,29 @@ mod tests {
 
         let summary = search(&options).unwrap();
         assert_eq!(summary.matches, 1);
+    }
+
+    #[test]
+    fn system_path_detects_node_modules() {
+        assert!(is_system_path(
+            Path::new("/home/user/project/node_modules/pkg"),
+            Path::new("/home/user/project")
+        ));
+    }
+
+    #[test]
+    fn system_path_allows_src_directory() {
+        assert!(!is_system_path(
+            Path::new("/home/user/project/src/main.rs"),
+            Path::new("/home/user/project")
+        ));
+    }
+
+    #[test]
+    fn system_path_root_equals_path() {
+        assert!(!is_system_path(
+            Path::new("/home/user/project"),
+            Path::new("/home/user/project")
+        ));
     }
 }

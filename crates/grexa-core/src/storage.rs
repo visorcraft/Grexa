@@ -1306,4 +1306,13 @@ mod tests {
         // missing file → no-op
         store.clear().unwrap();
     }
+
+    #[test]
+    fn import_json_tolerates_unknown_fields() {
+        let (_dir, paths) = make_paths();
+        let store = SettingsStore::new(&paths);
+        let json = r#"{"unknown_field": true, "respect_gitignore": true, "nonexistent_key": 42}"#;
+        let result = store.import_json(json);
+        assert!(result.is_ok());
+    }
 }

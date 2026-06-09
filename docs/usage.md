@@ -64,13 +64,23 @@ Extracts text from `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`,
 
 ## Replace
 
-CLI replace isn't exposed today — replace runs only from the GUI to
-keep the confirmation step explicit. In the GUI: Replace button →
-review the term + replacement + filter snapshot → Replace All →
-auto-flip to Files mode. If the process was killed mid-run, the
-residual journal dialog surfaces on next launch so the half-written
-work is reviewable or dismissable. The library API is documented in
-[features.md](features.md#safe-replace).
+```bash
+grexa-cli replace <path> <term> <replacement> [flags]
+```
+
+Replaces every match of `<term>` with `<replacement>` across all
+matching files. Supports the same filter flags as search (`--regex`,
+`--case-sensitive`, `--gitignore`, `--include-hidden`,
+`--include-binary`, `--include-system`, `--no-subfolders`,
+`--include-symlinks`, `--match-files`, `--exclude-dirs`). Add
+`--dry-run` to preview which files and matches would be affected
+without writing anything.
+
+In the GUI: Replace button → review the term + replacement + filter
+snapshot → Replace All → auto-flip to Files mode. If the process was
+killed mid-run, the residual journal dialog surfaces on next launch
+so the half-written work is reviewable or dismissable. The library
+API is documented in [features.md](features.md#safe-replace).
 
 ## Container search
 

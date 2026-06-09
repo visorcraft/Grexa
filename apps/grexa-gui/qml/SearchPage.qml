@@ -55,7 +55,10 @@ Kirigami.Page {
         function onHistoryChanged() { page.refreshRecentPaths() }
     }
 
-    Component.onCompleted: refreshRecentPaths()
+    Component.onCompleted: {
+        refreshRecentPaths()
+        tabsModel.setProperty(0, "label", qsTr("Search %1").arg(1))
+    }
 
     function refreshRecentPaths() {
         recentPaths.clear()

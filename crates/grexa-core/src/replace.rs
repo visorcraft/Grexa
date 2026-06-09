@@ -19,7 +19,7 @@ use crate::models::{SearchOptions, UnicodeNormalizationMode};
 use crate::pattern::PatternEngine;
 use crate::search::{
     NormalizationContext, ProgressSink, SearchError, culture_aware_lowercase,
-    normalize_with_mapping, search_with,
+    is_whole_word_match, normalize_with_mapping, search_with,
 };
 use crate::storage::AppPaths;
 
@@ -287,7 +287,7 @@ fn rewrite_one_pre_read(
         return Ok(FileResult::Unchanged);
     }
 
-    let encoded = encode_for_writeback(&new_text, &encoding);
+    let encoded = encode_for_writeback(&new_text, &encoding)?;
     atomic_write(path, &encoded, &original_metadata)?;
     Ok(FileResult::Replaced { matches, encoding })
 }
@@ -357,9 +357,27 @@ fn apply_substitution(
     regex_engine: Option<&PatternEngine>,
 ) -> (String, usize) {
     if let Some(engine) = regex_engine {
-        let count = engine.find_iter(text).len();
-        let replaced = engine.replace_all(text, options.replacement.as_str());
-        return (replaced, count);
+        let matches: Vec<_> = engine
+            .find_iter(text)
+            .into_iter()
+            .filter(|(start, end)| {
+                !options.search.whole_word
+                    || is_whole_word_match(text, *start, *end)
+            })
+            .collect();
+        let count = matches.len();
+        if count == 0 {
+            return (text.to_string(), 0);
+        }
+        let mut result = String::with_capacity(text.len());
+        let mut prev_end = 0;
+        for (start, end) in &matches {
+            result.push_str(&text[prev_end..*start]);
+            result.push_str(&options.replacement);
+            prev_end = *end;
+        }
+        result.push_str(&text[prev_end..]);
+        return (result, count);
     }
 
     let needle = &options.search.search_term;
@@ -375,25 +393,61 @@ fn apply_substitution(
     }
 
     if options.search.case_sensitive {
-        let count = count_occurrences(text, needle);
-        if count == 0 {
+        let matches = collect_literal_matches(text, needle, options.search.whole_word);
+        if matches.is_empty() {
             return (text.to_string(), 0);
         }
-        (text.replace(needle, &options.replacement), count)
+        let count = matches.len();
+        let mut result = String::with_capacity(text.len());
+        let mut prev_end = 0;
+        for (start, end) in &matches {
+            result.push_str(&text[prev_end..*start]);
+            result.push_str(&options.replacement);
+            prev_end = *end;
+        }
+        result.push_str(&text[prev_end..]);
+        (result, count)
     } else {
         let escaped = regex::escape(needle);
-        match RegexBuilder::new(&escaped).case_insensitive(true).build() {
+        let pattern = if options.search.whole_word {
+            format!(r"\b{escaped}\b")
+        } else {
+            escaped
+        };
+        match RegexBuilder::new(&pattern).case_insensitive(true).build() {
             Ok(re) => {
-                let count = re.find_iter(text).count();
+                let matches: Vec<_> = re.find_iter(text).collect();
+                let count = matches.len();
                 if count == 0 {
                     return (text.to_string(), 0);
                 }
-                let replacement = regex::NoExpand(options.replacement.as_str());
-                (re.replace_all(text, replacement).into_owned(), count)
+                let mut result = String::with_capacity(text.len());
+                let mut prev_end = 0;
+                for m in &matches {
+                    result.push_str(&text[prev_end..m.start()]);
+                    result.push_str(&options.replacement);
+                    prev_end = m.end();
+                }
+                result.push_str(&text[prev_end..]);
+                (result, count)
             }
             Err(_) => (text.to_string(), 0),
         }
     }
+}
+
+fn collect_literal_matches(text: &str, needle: &str, whole_word: bool) -> Vec<(usize, usize)> {
+    let mut matches = Vec::new();
+    let mut offset = 0;
+    while let Some(index) = text[offset..].find(needle) {
+        let start = offset + index;
+        let end = start + needle.len();
+        if !whole_word || is_whole_word_match(text, start, end) {
+            matches.push((start, end));
+        }
+        offset = end;
+    }
+    matches
 }
 
 fn apply_normalized_substitution(
@@ -427,7 +481,9 @@ fn apply_normalized_substitution(
         let norm_end = norm_start + normalized_needle.len();
         let orig_start = mapping[norm_start];
         let orig_end = mapping.get(norm_end).copied().unwrap_or(text.len());
-        norm_matches.push((orig_start, orig_end));
+        if !options.whole_word || is_whole_word_match(text, orig_start, orig_end) {
+            norm_matches.push((orig_start, orig_end));
+        }
         offset = norm_end;
     }
 
@@ -457,20 +513,23 @@ fn count_occurrences(text: &str, needle: &str) -> usize {
     count
 }
 
-fn encode_for_writeback(text: &str, encoding: &DetectedEncoding) -> Vec<u8> {
+fn encode_for_writeback(text: &str, encoding: &DetectedEncoding) -> Result<Vec<u8>, io::Error> {
     match encoding {
-        DetectedEncoding::Utf8 => text.as_bytes().to_vec(),
+        DetectedEncoding::Utf8 => Ok(text.as_bytes().to_vec()),
         DetectedEncoding::Utf8Bom => {
             let mut bytes = Vec::with_capacity(text.len() + 3);
             bytes.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
             bytes.extend_from_slice(text.as_bytes());
-            bytes
+            Ok(bytes)
         }
-        DetectedEncoding::Utf16Le => encode_utf16(text, &[0xFF, 0xFE], true),
-        DetectedEncoding::Utf16Be => encode_utf16(text, &[0xFE, 0xFF], false),
-        // UTF-32 round-trip is not supported yet (detect-only); fall back to
-        // UTF-8 so we never silently corrupt the file by writing garbage.
-        DetectedEncoding::Utf32Le | DetectedEncoding::Utf32Be => text.as_bytes().to_vec(),
+        DetectedEncoding::Utf16Le => Ok(encode_utf16(text, &[0xFF, 0xFE], true)),
+        DetectedEncoding::Utf16Be => Ok(encode_utf16(text, &[0xFE, 0xFF], false)),
+        DetectedEncoding::Utf32Le | DetectedEncoding::Utf32Be => {
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "UTF-32 round-trip is not supported; file skipped to prevent data loss",
+            ))
+        }
         // Heuristic encodings (windows-1252, Shift_JIS, etc.): re-encode
         // through encoding_rs so the file stays in its detected charset.
         // Characters that can't be represented in the target encoding are
@@ -481,9 +540,9 @@ fn encode_for_writeback(text: &str, encoding: &DetectedEncoding) -> Vec<u8> {
             match encoding_rs::Encoding::for_label(name.as_bytes()) {
                 Some(codec) => {
                     let (encoded, _, _) = codec.encode(text);
-                    encoded.into_owned()
+                    Ok(encoded.into_owned())
                 }
-                None => text.as_bytes().to_vec(),
+                None => Ok(text.as_bytes().to_vec()),
             }
         }
     }
@@ -926,5 +985,44 @@ mod tests {
 
         let rewritten = fs::read_to_string(&target).unwrap();
         assert_eq!(rewritten, "REPL REPL REPL\n");
+    }
+
+    #[test]
+    fn whole_word_replace_only_touches_standalone_tokens() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("a.txt");
+        fs::write(&target, "foo bar foobar\n").unwrap();
+
+        let mut search = SearchOptions::new(dir.path(), "foo");
+        search.whole_word = true;
+        let options = ReplaceOptions {
+            search,
+            replacement: "REPL".to_string(),
+        };
+
+        let summary = replace_with(&options, &CancelToken::new(), None).unwrap();
+        assert_eq!(summary.matches_replaced, 1);
+        let rewritten = fs::read_to_string(&target).unwrap();
+        assert_eq!(rewritten, "REPL bar foobar\n");
+    }
+
+    #[test]
+    fn whole_word_replace_rejects_substring_in_regex_mode() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("a.txt");
+        fs::write(&target, "test123 test testing\n").unwrap();
+
+        let mut search = SearchOptions::new(dir.path(), r"test\d+");
+        search.regex = true;
+        search.whole_word = true;
+        let options = ReplaceOptions {
+            search,
+            replacement: "MATCHED".to_string(),
+        };
+
+        let summary = replace_with(&options, &CancelToken::new(), None).unwrap();
+        assert_eq!(summary.matches_replaced, 1);
+        let rewritten = fs::read_to_string(&target).unwrap();
+        assert_eq!(rewritten, "MATCHED test testing\n");
     }
 }

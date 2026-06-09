@@ -598,4 +598,26 @@ mod tests {
             "/data/a/b"
         );
     }
+
+    #[test]
+    fn parse_grep_output_with_colon_in_filename() {
+        let stdout = "path:with:colons:42:matched content\n";
+        let hits = parse_grep_output(stdout, ContainerRuntimeKind::Docker, "abc123");
+        assert_eq!(hits.len(), 0);
+    }
+
+    #[test]
+    fn parse_grep_output_skips_malformed_lines() {
+        let stdout = "no-colons-at-all\n:only-one-colon\nok:10:content\n";
+        let hits = parse_grep_output(stdout, ContainerRuntimeKind::Docker, "abc123");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].line_number, 10);
+    }
+
+    #[test]
+    fn parse_grep_output_skips_non_numeric_lineno() {
+        let stdout = "file:abc:content\n";
+        let hits = parse_grep_output(stdout, ContainerRuntimeKind::Podman, "abc123");
+        assert!(hits.is_empty());
+    }
 }

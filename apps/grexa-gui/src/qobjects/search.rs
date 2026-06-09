@@ -71,6 +71,7 @@ struct TabSnapshot {
     last_term: String,
     last_regex: bool,
     last_case_sensitive: bool,
+    last_whole_word: bool,
     status_text: String,
     match_count: i32,
     files_matched: i32,
@@ -486,6 +487,7 @@ pub struct SearchControllerRust {
     last_term: String,
     last_regex: bool,
     last_case_sensitive: bool,
+    last_whole_word: bool,
     /// Per-tab result-row snapshots keyed by the QML-side monotonic
     /// tab id. Switching to a different tab calls
     /// `save_tab_snapshot(prev)` then `restore_tab_snapshot(next)`
@@ -687,6 +689,7 @@ impl SearchControllerRust {
         self.last_term.clear();
         self.last_regex = false;
         self.last_case_sensitive = false;
+        self.last_whole_word = false;
     }
 
     #[cfg(test)]
@@ -744,6 +747,7 @@ impl ffi::SearchController {
             s.last_term = term_str.clone();
             s.last_regex = regex;
             s.last_case_sensitive = case_sensitive;
+            s.last_whole_word = whole_word;
         }
 
         self.as_mut().set_match_count(0);
@@ -1052,9 +1056,11 @@ impl ffi::SearchController {
         // Build the same SearchOptions the last search used.
         let regex = self.as_ref().rust().last_regex;
         let case_sensitive = self.as_ref().rust().last_case_sensitive;
+        let whole_word = self.as_ref().rust().last_whole_word;
         let mut options = grexa_core::SearchOptions::new(PathBuf::from(&path), &term);
         options.regex = regex;
         options.case_sensitive = case_sensitive;
+        options.whole_word = whole_word;
         let settings = with_workspace(|w| w.settings.load().unwrap_or_default());
         options.respect_gitignore = settings.respect_gitignore;
         options.include_hidden = settings.include_hidden_items;
@@ -1166,6 +1172,7 @@ impl ffi::SearchController {
             last_term: std::mem::take(&mut self.as_mut().rust_mut().last_term),
             last_regex: self.as_ref().rust().last_regex,
             last_case_sensitive: self.as_ref().rust().last_case_sensitive,
+            last_whole_word: self.as_ref().rust().last_whole_word,
             status_text: self.as_ref().rust().status_text.to_string(),
             match_count: self.as_ref().rust().match_count,
             files_matched: self.as_ref().rust().files_matched,
@@ -1200,6 +1207,7 @@ impl ffi::SearchController {
             last_term,
             last_regex,
             last_case_sensitive,
+            last_whole_word,
             status_text,
             match_count,
             files_matched,
@@ -1220,6 +1228,7 @@ impl ffi::SearchController {
                 snap.last_term,
                 snap.last_regex,
                 snap.last_case_sensitive,
+                snap.last_whole_word,
                 QString::from(&snap.status_text),
                 snap.match_count,
                 snap.files_matched,
@@ -1238,6 +1247,7 @@ impl ffi::SearchController {
                 Vec::new(),
                 String::new(),
                 String::new(),
+                false,
                 false,
                 false,
                 QString::default(),
@@ -1276,6 +1286,7 @@ impl ffi::SearchController {
             s.last_term = last_term;
             s.last_regex = last_regex;
             s.last_case_sensitive = last_case_sensitive;
+            s.last_whole_word = last_whole_word;
             // Re-project: the visible vec is derived from rows +
             // result_mode + within_filter on every restore, never
             // persisted to the snapshot. This keeps the projection
