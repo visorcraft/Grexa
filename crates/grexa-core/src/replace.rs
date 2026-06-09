@@ -392,15 +392,8 @@ fn apply_substitution(
         if count == 0 {
             return (text.to_string(), 0);
         }
-        let mut result = String::with_capacity(text.len());
-        let mut prev_end = 0;
-        for (start, end) in &matches {
-            result.push_str(&text[prev_end..*start]);
-            result.push_str(&options.replacement);
-            prev_end = *end;
-        }
-        result.push_str(&text[prev_end..]);
-        return (result, count);
+        let replaced = engine.expand_matches(text, &matches, &options.replacement);
+        return (replaced, count);
     }
 
     let needle = &options.search.search_term;
@@ -484,7 +477,13 @@ fn apply_normalized_substitution(
 ) -> (String, usize) {
     let norm_ctx = NormalizationContext::build(options);
     let normalized_needle = {
-        let mut n = needle.to_string();
+        let mut n = match options.unicode_normalization_mode {
+            UnicodeNormalizationMode::None => needle.to_string(),
+            UnicodeNormalizationMode::FormC => needle.nfc().collect(),
+            UnicodeNormalizationMode::FormD => needle.nfd().collect(),
+            UnicodeNormalizationMode::FormKC => needle.nfkc().collect(),
+            UnicodeNormalizationMode::FormKD => needle.nfkd().collect(),
+        };
         if norm_ctx.strip_diacritics {
             use icu_properties::props::GeneralCategory;
             n = n

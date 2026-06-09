@@ -660,33 +660,35 @@ fn find_line_matches(
         return Vec::new();
     }
 
-    let needs_mapping = !options.diacritic_sensitive
-        || options.unicode_normalization_mode != UnicodeNormalizationMode::None;
+    let identity_mapping = options.case_sensitive
+        && options.diacritic_sensitive
+        && options.unicode_normalization_mode == UnicodeNormalizationMode::None;
 
-    let (normalized, mapping) = if needs_mapping {
-        let (n, m) = normalize_with_mapping(line, options, norm_ctx);
-        (n, Some(m))
-    } else {
-        let normalized = if !options.case_sensitive {
-            culture_aware_lowercase(line, norm_ctx)
-        } else {
-            line.to_string()
-        };
-        (normalized, None)
-    };
+    if identity_mapping {
+        let mut matches = Vec::new();
+        let mut offset = 0;
+        while let Some(index) = line[offset..].find(needle) {
+            let start = offset + index;
+            let end = start + needle.len();
+            matches.push((start, end));
+            offset = end;
+        }
+        if options.whole_word {
+            matches.retain(|&(start, end)| is_whole_word_match(line, start, end));
+        }
+        return matches;
+    }
+
+    let (normalized, mapping) = normalize_with_mapping(line, options, norm_ctx);
 
     let mut matches = Vec::new();
     let mut offset = 0;
     while let Some(index) = normalized[offset..].find(needle) {
         let norm_start = offset + index;
         let norm_end = norm_start + needle.len();
-        if let Some(ref m) = mapping {
-            let orig_start = m[norm_start];
-            let orig_end = m.get(norm_end).copied().unwrap_or(line.len());
-            matches.push((orig_start, orig_end));
-        } else {
-            matches.push((norm_start, norm_end));
-        }
+        let orig_start = mapping[norm_start];
+        let orig_end = mapping.get(norm_end).copied().unwrap_or(line.len());
+        matches.push((orig_start, orig_end));
         offset = norm_end;
     }
     if options.whole_word {
@@ -1059,6 +1061,8 @@ impl ExcludeDirFilter {
                 .filter_map(|component| component.as_os_str().to_str())
                 .any(|component| names.contains(&component.to_ascii_lowercase())),
             Self::Regex(regex) => path
+                .strip_prefix(root)
+                .unwrap_or(path)
                 .components()
                 .filter_map(|component| component.as_os_str().to_str())
                 .any(|component| regex.is_match(component)),
@@ -1618,5 +1622,43 @@ mod tests {
         let summary = search(&options).unwrap();
         assert_eq!(summary.matches, 1);
         assert!(summary.results[0].column_number > 0);
+    }
+
+    #[test]
+    fn multiple_matches_per_line_reports_correct_count() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), "TODO first TODO second\n").unwrap();
+
+        let options = SearchOptions::new(dir.path(), "TODO");
+        let summary = search(&options).unwrap();
+        assert_eq!(summary.results.len(), 1);
+        assert_eq!(summary.results[0].match_count, 2);
+        assert_eq!(summary.results[0].column_number, 1);
+    }
+
+    #[test]
+    fn exclude_dir_filter_names_strips_root_prefix() {
+        let filter = ExcludeDirFilter::parse("node_modules,build").unwrap();
+        let root = Path::new("/home/user/project");
+        let inside = Path::new("/home/user/project/node_modules/pkg/file.rs");
+        assert!(filter.matches(inside, root));
+        let outside = Path::new("/home/user/project/src/main.rs");
+        assert!(!filter.matches(outside, root));
+    }
+
+    #[test]
+    fn exclude_dir_filter_regex_strips_root_prefix() {
+        let filter = ExcludeDirFilter::parse(r"^src$").unwrap();
+        let root = Path::new("/home/user/src/project");
+        let src_inside = Path::new("/home/user/src/project/src/main.rs");
+        assert!(filter.matches(src_inside, root));
+        let parent_src = Path::new("/home/user/src/project/other.rs");
+        assert!(!filter.matches(parent_src, root));
+    }
+
+    #[test]
+    fn exclude_dir_filter_empty_never_matches() {
+        let filter = ExcludeDirFilter::parse("").unwrap();
+        assert!(!filter.matches(Path::new("/any/path"), Path::new("/any")));
     }
 }

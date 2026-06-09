@@ -533,6 +533,12 @@ fn run_replace(
     dry_run: bool,
 ) -> anyhow::Result<i32> {
     let mut search = SearchOptions::new(&path, &term);
+    if search.search_term.is_empty() {
+        anyhow::bail!("search term must not be empty");
+    }
+    if search.search_term.len() > 4096 {
+        anyhow::bail!("search term exceeds maximum length of 4096 characters");
+    }
     search.regex = regex;
     search.case_sensitive = case_sensitive;
     search.whole_word = whole_word;
@@ -674,6 +680,20 @@ fn run_container_search(args: SearchArgs) -> anyhow::Result<i32> {
         pattern: args.term.clone(),
         case_sensitive: args.case_sensitive,
         regex: args.regex,
+        diacritic_sensitive: !args.ignore_diacritics,
+        unicode_normalization_mode: match args.normalization {
+            CliNormalizationMode::None => UnicodeNormalizationMode::None,
+            CliNormalizationMode::FormC => UnicodeNormalizationMode::FormC,
+            CliNormalizationMode::FormD => UnicodeNormalizationMode::FormD,
+            CliNormalizationMode::FormKc => UnicodeNormalizationMode::FormKC,
+            CliNormalizationMode::FormKd => UnicodeNormalizationMode::FormKD,
+        },
+        string_comparison_mode: match args.comparison {
+            CliComparisonMode::Ordinal => StringComparisonMode::Ordinal,
+            CliComparisonMode::CurrentCulture => StringComparisonMode::CurrentCulture,
+            CliComparisonMode::InvariantCulture => StringComparisonMode::InvariantCulture,
+        },
+        culture: args.culture.clone(),
     };
     let summary = search_container(&cli, container, &opts)?;
     if summary.used_mirror {

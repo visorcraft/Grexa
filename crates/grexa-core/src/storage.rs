@@ -709,6 +709,9 @@ where
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let mut tmp = tempfile::NamedTempFile::new_in(parent)?;
     std::io::Write::write_all(&mut tmp, &json)?;
+    if let Ok(original) = fs::metadata(path) {
+        let _ = tmp.as_file().set_permissions(original.permissions());
+    }
     tmp.persist(path)
         .map_err(|err| JsonStoreError::Io(std::io::Error::other(err.to_string())))?;
     Ok(())

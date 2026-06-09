@@ -147,6 +147,46 @@ impl PatternEngine {
             PatternEngine::Extended(re) => re.replace_all(haystack, replacement).into_owned(),
         }
     }
+
+    pub fn expand_matches(
+        &self,
+        haystack: &str,
+        matches: &[(usize, usize)],
+        replacement: &str,
+    ) -> String {
+        match self {
+            PatternEngine::Fast(re) => {
+                let mut result = String::with_capacity(haystack.len());
+                let mut prev_end = 0;
+                for &(start, end) in matches {
+                    result.push_str(&haystack[prev_end..start]);
+                    if let Some(caps) = re.captures(&haystack[start..end]) {
+                        caps.expand(replacement, &mut result);
+                    } else {
+                        result.push_str(replacement);
+                    }
+                    prev_end = end;
+                }
+                result.push_str(&haystack[prev_end..]);
+                result
+            }
+            PatternEngine::Extended(re) => {
+                let mut result = String::with_capacity(haystack.len());
+                let mut prev_end = 0;
+                for &(start, end) in matches {
+                    result.push_str(&haystack[prev_end..start]);
+                    if let Ok(Some(caps)) = re.captures(&haystack[start..end]) {
+                        caps.expand(replacement, &mut result);
+                    } else {
+                        result.push_str(replacement);
+                    }
+                    prev_end = end;
+                }
+                result.push_str(&haystack[prev_end..]);
+                result
+            }
+        }
+    }
 }
 
 #[cfg(test)]

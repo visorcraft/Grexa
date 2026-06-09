@@ -61,6 +61,10 @@ pub struct ContainerSearchOptions {
     pub pattern: String,
     pub case_sensitive: bool,
     pub regex: bool,
+    pub diacritic_sensitive: bool,
+    pub unicode_normalization_mode: grexa_core::UnicodeNormalizationMode,
+    pub string_comparison_mode: grexa_core::StringComparisonMode,
+    pub culture: Option<String>,
 }
 
 impl ContainerSearchOptions {
@@ -70,6 +74,10 @@ impl ContainerSearchOptions {
             pattern: pattern.into(),
             case_sensitive: false,
             regex: false,
+            diacritic_sensitive: true,
+            unicode_normalization_mode: grexa_core::UnicodeNormalizationMode::None,
+            string_comparison_mode: grexa_core::StringComparisonMode::Ordinal,
+            culture: None,
         }
     }
 }
@@ -104,7 +112,7 @@ fn direct_grep<R: RuntimeOperations>(
     container: &ContainerInfo,
     options: &ContainerSearchOptions,
 ) -> Result<Vec<ContainerSearchHit>, RuntimeError> {
-    let mut argv: Vec<&str> = vec!["grep", "-rnH"];
+    let mut argv: Vec<&str> = vec!["grep", "-rnHZ"];
     if options.regex {
         argv.push("-E");
     } else {
@@ -200,25 +208,32 @@ pub fn parse_grep_output_with_pattern(
 
     let mut hits = Vec::new();
     for line in stdout.lines() {
-        // Need exactly two colons to split into (path, lineno, content).
-        let mut first_colon = None;
-        let mut second_colon = None;
-        for (i, byte) in line.bytes().enumerate() {
-            if byte == b':' {
-                if first_colon.is_none() {
-                    first_colon = Some(i);
-                } else if second_colon.is_none() {
-                    second_colon = Some(i);
-                    break;
+        let (path, lineno_str, content) = if let Some(null_pos) = line.find('\0') {
+            let p = &line[..null_pos];
+            let rest = &line[null_pos + 1..];
+            let colon_pos = match rest.find(':') {
+                Some(pos) => pos,
+                None => continue,
+            };
+            (p, &rest[..colon_pos], &rest[colon_pos + 1..])
+        } else {
+            let mut first_colon = None;
+            let mut second_colon = None;
+            for (i, byte) in line.bytes().enumerate() {
+                if byte == b':' {
+                    if first_colon.is_none() {
+                        first_colon = Some(i);
+                    } else if second_colon.is_none() {
+                        second_colon = Some(i);
+                        break;
+                    }
                 }
             }
-        }
-        let (Some(first), Some(second)) = (first_colon, second_colon) else {
-            continue;
+            let (Some(first), Some(second)) = (first_colon, second_colon) else {
+                continue;
+            };
+            (&line[..first], &line[first + 1..second], &line[second + 1..])
         };
-        let path = &line[..first];
-        let lineno_str = &line[first + 1..second];
-        let content = &line[second + 1..];
         let Ok(line_number) = lineno_str.parse::<usize>() else {
             continue;
         };
@@ -280,6 +295,10 @@ fn mirror_search<R: RuntimeOperations>(
     let mut search_opts = SearchOptions::new(&local, &options.pattern);
     search_opts.regex = options.regex;
     search_opts.case_sensitive = options.case_sensitive;
+    search_opts.diacritic_sensitive = options.diacritic_sensitive;
+    search_opts.unicode_normalization_mode = options.unicode_normalization_mode;
+    search_opts.string_comparison_mode = options.string_comparison_mode;
+    search_opts.culture = options.culture.clone();
     search_opts.include_subfolders = true;
     let summary = search(&search_opts).map_err(|err| RuntimeError::Unsupported(err.to_string()))?;
 
@@ -526,7 +545,7 @@ mod tests {
         // Second invocation: the actual grep call.
         let grep_args = &inv[1].args;
         assert!(grep_args.iter().any(|a| a == &OsString::from("grep")));
-        assert!(grep_args.iter().any(|a| a == &OsString::from("-rnH")));
+        assert!(grep_args.iter().any(|a| a == &OsString::from("-rnHZ")));
         assert!(grep_args.iter().any(|a| a == &OsString::from("-F")));
         assert!(grep_args.iter().any(|a| a == &OsString::from("-i")));
         assert!(grep_args.iter().any(|a| a == &OsString::from("host")));
@@ -606,6 +625,25 @@ mod tests {
         let stdout = "path:with:colons:42:matched content\n";
         let hits = parse_grep_output(stdout, ContainerRuntimeKind::Docker, "abc123");
         assert_eq!(hits.len(), 0);
+    }
+
+    #[test]
+    fn parse_grep_output_null_delimited_handles_colons_in_filename() {
+        let stdout = "path:with:colons\x0042:matched content\n";
+        let hits = parse_grep_output_with_pattern(
+            stdout,
+            ContainerRuntimeKind::Docker,
+            "abc123",
+            Some(GrepPattern {
+                needle: "match",
+                regex: false,
+                case_sensitive: false,
+            }),
+        );
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].container_path, "path:with:colons");
+        assert_eq!(hits[0].line_number, 42);
+        assert_eq!(hits[0].line_content, "matched content");
     }
 
     #[test]

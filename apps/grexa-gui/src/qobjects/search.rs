@@ -764,17 +764,27 @@ impl ffi::SearchController {
                 self.as_mut().search_completed(false);
                 return;
             }
+            let settings = with_workspace(|w| w.settings.load().unwrap_or_default());
+            let container_opts = grexa_containers::ContainerSearchOptions {
+                container_path: path_str.clone(),
+                pattern: term_str.clone(),
+                case_sensitive,
+                regex,
+                diacritic_sensitive: settings.diacritic_sensitive,
+                unicode_normalization_mode: settings.unicode_normalization_mode,
+                string_comparison_mode: settings.string_comparison_mode,
+                culture: if settings.culture.is_empty() {
+                    None
+                } else {
+                    Some(settings.culture.clone())
+                },
+            };
             let thread = self.qt_thread();
-            let path_for_container = path_str.clone();
-            let term_for_container = term_str.clone();
             std::thread::spawn(move || {
                 let summary = run_container_search(
                     target_kind,
                     &container_id,
-                    &path_for_container,
-                    &term_for_container,
-                    regex,
-                    case_sensitive,
+                    container_opts,
                 );
                 if let Err(err) = thread.queue(move |pin| {
                     finish_container_search(pin, generation, summary);
@@ -1482,13 +1492,10 @@ fn push_rows(
 fn run_container_search(
     target_kind: i32,
     container_id: &str,
-    container_path: &str,
-    pattern: &str,
-    regex: bool,
-    case_sensitive: bool,
+    options: grexa_containers::ContainerSearchOptions,
 ) -> Result<Vec<ResultRow>, String> {
     use grexa_containers::{
-        ContainerRuntimeKind, ContainerSearchOptions, LiveProbe, detect_runtimes,
+        ContainerRuntimeKind, LiveProbe, detect_runtimes,
         runtime::{CliRuntime, RuntimeOperations, SystemCommandRunner},
         search_container,
     };
@@ -1517,12 +1524,6 @@ fn run_container_search(
         .find(|c| c.id == container_id || c.id.starts_with(container_id))
         .ok_or_else(|| format!("container {container_id} not found"))?;
 
-    let options = ContainerSearchOptions {
-        container_path: container_path.to_string(),
-        pattern: pattern.to_string(),
-        case_sensitive,
-        regex,
-    };
     let summary = search_container(&cli, &info, &options)
         .map_err(|e| format!("container search failed: {e}"))?;
 
