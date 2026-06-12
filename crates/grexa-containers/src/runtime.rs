@@ -231,6 +231,14 @@ pub trait RuntimeOperations {
         path: &str,
         dest_dir: &Path,
     ) -> Result<PathBuf, RuntimeError>;
+    /// Copy a local file or directory into the container at `container_path`.
+    /// The inverse of `archive_path`.
+    fn copy_into_container(
+        &self,
+        container_id: &str,
+        local_path: &Path,
+        container_path: &str,
+    ) -> Result<(), RuntimeError>;
 }
 
 /// `docker` / `podman` CLI adapter. Identical wire shape for both runtimes.
@@ -374,6 +382,22 @@ impl<R: CommandRunner> RuntimeOperations for CliRuntime<R> {
         ];
         self.invoke(args)?;
         Ok(target)
+    }
+
+    fn copy_into_container(
+        &self,
+        container_id: &str,
+        local_path: &Path,
+        container_path: &str,
+    ) -> Result<(), RuntimeError> {
+        let args = vec![
+            OsString::from("cp"),
+            OsString::from("--"),
+            local_path.as_os_str().to_os_string(),
+            OsString::from(format!("{container_id}:{container_path}")),
+        ];
+        self.invoke(args)?;
+        Ok(())
     }
 }
 

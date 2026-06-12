@@ -14,8 +14,6 @@ Controls.Dialog {
     id: dialog
     modal: true
     standardButtons: Controls.Dialog.Close
-    Accessible.role: Accessible.Dialog
-    Accessible.name: qsTr("Context preview")
     width: Math.min(parent ? parent.width * 0.85 : 900, 900)
     height: Math.min(parent ? parent.height * 0.75 : 540, 540)
 

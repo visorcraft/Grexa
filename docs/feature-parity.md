@@ -47,7 +47,7 @@ Status legend:
 | Switch to Files mode after replace | ✅ | `Workspace::run_replace_blocking` flips `result_mode` on completion. |
 | Crash-recovery journal | ✅ | `replace-journal.json` under `$XDG_STATE_HOME/grexa/`. |
 | No-undo, no backup files | ✅ | Documented in `docs/features.md`. |
-| Replace disabled for containers / archives | ✅ | `RuntimeOperations` has no write path; document extractor only emits text. |
+| Replace disabled for containers / archives | ⚠️ | Writable container replace is implemented in `replace_container`, but GUI/CLI integration is pending; replace remains disabled in the UI. Archives still have no write path. |
 
 ## Encoding
 
@@ -84,7 +84,7 @@ Status legend:
 | Archive mirror fallback | ✅ | `archive_path` + `search_container` mirror branch. |
 | Container path display | ✅ | `rewrite_path` keeps the container path intact. |
 | Container context preview | ✅ | `grexa_containers::container_context_preview`. |
-| Replace disabled for containers | ✅ | No write path on `RuntimeOperations`. |
+| Replace disabled for containers | ⚠️ | `replace_container` + `copy_into_container` implement the write path, but it is not wired into the GUI/CLI yet. |
 | Live Docker test suite | ⏸ | Gated behind the `container-live` Cargo feature; runs in CI when a daemon is present. |
 | Live Podman test suite | ⏸ | Same. |
 

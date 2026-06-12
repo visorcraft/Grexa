@@ -75,6 +75,21 @@
   </supports>
 
   <releases>
+    <release version="1.5.0" date="2026-06-11">
+      <description>
+        <p>Search and replace hardening release.</p>
+        <ul>
+          <li>Add whole-word search matching.</li>
+          <li>Add CLI replace subcommand with full search flag parity.</li>
+          <li>Harden search/replace correctness: normalized offset mapping,
+              capture expansion, and whole-word boundary handling.</li>
+          <li>Improve container search: flag forwarding, binary replace guard,
+              and correct column offsets.</li>
+          <li>Cache GUI search options and deduplicate per-tab results.</li>
+          <li>Add accessibility settings and keyboard shortcuts.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.4.1" date="2026-06-02">
       <description>
         <p>Packaging fix release.</p>

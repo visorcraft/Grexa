@@ -27,7 +27,9 @@ Controls.ItemDelegate {
 
     Accessible.role: Accessible.ListItem
     Accessible.name: relativePath + ":" + line
-    Accessible.onActivated: root.openPreview()
+    Accessible.description: previewMatch.length > 0
+        ? previewBefore + "[" + previewMatch + "]" + previewAfter
+        : ""
 
     height: 68
     padding: 0
@@ -178,6 +180,7 @@ Controls.ItemDelegate {
                 implicitWidth: 22
                 implicitHeight: 22
                 isMask: false
+                Accessible.ignored: true
             }
         }
 
@@ -265,6 +268,7 @@ Controls.ItemDelegate {
             isMask: true
             opacity: root.hovered ? 0.9 : 0
             x: root.hovered ? 0 : -4
+            Accessible.ignored: true
             Behavior on opacity { NumberAnimation { duration: app.tokens.durationSnap } }
             Behavior on x { NumberAnimation { duration: app.tokens.durationSnap; easing.type: Easing.OutCubic } }
         }

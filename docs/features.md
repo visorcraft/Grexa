@@ -116,7 +116,10 @@ crashes on malformed input.
   and run the local search engine over the mirrored tree.
 - **Container path display** even when mirroring is used; the
   `used_mirror` flag on the summary lets the UI badge the result.
-- **Replace deliberately disabled** for container targets in v1.0.
+- **Writable container replace** is implemented at the library level
+  (`grexa_containers::replace_container`): files are copied out, replaced
+  locally, and copied back. GUI and CLI integration are still pending, so
+  the feature is not yet exposed to end users.
 
 ## AI Search Chat
 

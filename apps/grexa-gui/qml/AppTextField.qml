@@ -15,6 +15,7 @@ import QtQuick.Controls as Controls
 import org.kde.kirigami as Kirigami
 
 Controls.TextField {
+    Accessible.role: Accessible.EditableText
     Accessible.name: placeholderText
     Kirigami.Theme.inherit: true
     Kirigami.Theme.colorSet: Kirigami.Theme.View

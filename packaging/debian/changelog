@@ -1,3 +1,16 @@
+grexa (1.5.0-1) unstable; urgency=medium
+
+  * Add whole-word search matching and a CLI replace subcommand with full
+    search flag parity.
+  * Harden search/replace correctness: normalized offset mapping, capture
+    expansion, and whole-word boundary handling.
+  * Improve container search: flag forwarding, binary replace guard, and
+    correct column offsets.
+  * Cache GUI search options and deduplicate per-tab results.
+  * Add accessibility settings and keyboard shortcuts.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Thu, 11 Jun 2026 00:00:00 +0000
+
 grexa (1.4.1-1) unstable; urgency=medium
 
   * Refresh the pinned linuxdeploy `continuous` hash so the AppImage

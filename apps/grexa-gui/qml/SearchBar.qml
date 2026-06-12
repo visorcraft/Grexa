@@ -85,6 +85,7 @@ Item {
                 color: pathField.activeFocus ? app.tokens.accent : Kirigami.Theme.textColor
                 opacity: pathField.activeFocus ? 1.0 : 0.55
                 isMask: true
+                Accessible.ignored: true
                 Behavior on color { ColorAnimation { duration: app.tokens.durationSnap } }
             }
 
@@ -92,6 +93,7 @@ Item {
                 id: pathField
                 editable: true
                 textRole: "pathText"
+                Accessible.name: qsTr("Search path")
                 // Preferred 300 but allow shrinking to a usable
                 // ~140 so a narrow window still shows the term
                 // input and primary action without clipping.
@@ -152,6 +154,7 @@ Item {
                 display: Controls.AbstractButton.IconOnly
                 Layout.preferredWidth: 32
                 Layout.preferredHeight: 32
+                Accessible.name: qsTr("Browse for a folder")
                 Controls.ToolTip.text: qsTr("Browse for a folder")
                 Controls.ToolTip.visible: hovered
                 onClicked: root.browse()
@@ -175,6 +178,7 @@ Item {
                 color: termField.activeFocus ? app.tokens.accent : Kirigami.Theme.textColor
                 opacity: termField.activeFocus ? 1.0 : 0.55
                 isMask: true
+                Accessible.ignored: true
                 Behavior on color { ColorAnimation { duration: app.tokens.durationSnap } }
             }
 

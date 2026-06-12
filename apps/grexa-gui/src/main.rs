@@ -141,8 +141,23 @@ fn main() {
     if let Some(engine) = engine.as_mut() {
         let flag = load_failed.clone();
         engine
-            .on_object_creation_failed(move |_pin, url| {
+            .on_object_creation_failed(move |eng, url| {
+                // cxx-qt-lib 0.8 exposes neither `QQmlComponent::errors()` nor a
+                // message-handler hook, so we cannot print the individual
+                // `QQmlError` lines here. The next-most-useful diagnostic for a
+                // *packaged* build — where a failed load almost always means a
+                // QML module is missing from the bundle (e.g. Kirigami's
+                // `org.kde.desktop` style absent from an AppImage) — is the set
+                // of directories the engine searched for modules.
                 tracing::error!("QML failed to load: {}", url.to_string());
+                tracing::error!(qml_import_paths = %eng.import_path_list(),
+                    "engine QML import search paths");
+                tracing::error!(
+                    "A failed load in a packaged build (AppImage/Flatpak) almost \
+                     always means a required QML module is missing from the bundle. \
+                     Re-run with QML2_IMPORT_PATH=/usr/lib/qt6/qml — if it then \
+                     loads, the bundle is missing that module."
+                );
                 flag.store(true, std::sync::atomic::Ordering::SeqCst);
             })
             .release();
@@ -170,12 +185,38 @@ fn main() {
         std::process::exit(2);
     }
 
+    // Start background mirror cleanup thread. Prunes container mirrors
+    // older than 24 hours every 30 minutes so the cache directory doesn't
+    // grow unbounded when the user searches many containers in a session.
+    start_mirror_cleanup_thread();
+
     if let Some(app) = app.as_mut() {
         let code = app.exec();
         if code != 0 {
             tracing::warn!("Qt event loop exited with code {code}");
         }
     }
+}
+
+/// Spawn a detached thread that calls `prune_mirrors` on a schedule.
+/// The thread exits when the process terminates; no join needed.
+fn start_mirror_cleanup_thread() {
+    const PRUNE_INTERVAL_SECS: u64 = 30 * 60; // 30 minutes
+    const MAX_AGE_SECS: u64 = 24 * 60 * 60; // 24 hours
+
+    std::thread::spawn(move || {
+        // First prune at startup (mirrors from a previous run may be stale).
+        if let Err(err) = grexa_containers::prune_mirrors(MAX_AGE_SECS) {
+            tracing::debug!(error = %err, "initial mirror prune failed");
+        }
+
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(PRUNE_INTERVAL_SECS));
+            if let Err(err) = grexa_containers::prune_mirrors(MAX_AGE_SECS) {
+                tracing::debug!(error = %err, "scheduled mirror prune failed");
+            }
+        }
+    });
 }
 
 fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {

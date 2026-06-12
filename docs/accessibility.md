@@ -69,6 +69,11 @@ The QML shell must:
 
 ## Manual checklist (before each release)
 
+- [x] `Accessible.role` set on all interactive controls (Button, CheckBox, ComboBox, SpinBox, ListItem, EditableText).
+- [x] `Accessible.name` bound to control text or placeholder.
+- [x] `Accessible.description` wired to tooltip text where available.
+- [x] `Accessible.focusOnPress: true` on interactive controls.
+- [x] Decorative icons marked `Accessible.ignored: true`.
 - [ ] Run Orca on KDE Plasma against the live app; verify every
   command-strip button announces correctly.
 - [ ] Verify keyboard-only flow: tab between every focusable control,

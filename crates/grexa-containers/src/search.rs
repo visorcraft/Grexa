@@ -419,6 +419,216 @@ pub fn container_context_preview<R: RuntimeOperations>(
     Ok(preview)
 }
 
+/// Replace options for a single container.
+#[derive(Debug, Clone)]
+pub struct ContainerReplaceOptions {
+    pub container_path: String,
+    pub pattern: String,
+    pub replacement: String,
+    pub case_sensitive: bool,
+    pub regex: bool,
+    pub whole_word: bool,
+    pub diacritic_sensitive: bool,
+    pub unicode_normalization_mode: grexa_core::UnicodeNormalizationMode,
+    pub string_comparison_mode: grexa_core::StringComparisonMode,
+    pub culture: Option<String>,
+}
+
+impl ContainerReplaceOptions {
+    pub fn new(
+        path: impl Into<String>,
+        pattern: impl Into<String>,
+        replacement: impl Into<String>,
+    ) -> Self {
+        Self {
+            container_path: path.into(),
+            pattern: pattern.into(),
+            replacement: replacement.into(),
+            case_sensitive: false,
+            regex: false,
+            whole_word: false,
+            diacritic_sensitive: true,
+            unicode_normalization_mode: grexa_core::UnicodeNormalizationMode::None,
+            string_comparison_mode: grexa_core::StringComparisonMode::Ordinal,
+            culture: None,
+        }
+    }
+}
+
+/// Result of a container replace operation.
+#[derive(Debug, Clone)]
+pub struct ContainerReplaceSummary {
+    pub files_modified: usize,
+    pub matches_replaced: usize,
+    pub failures: Vec<String>,
+}
+
+/// Replace matches inside a running container. The strategy is:
+///
+/// 1. Run a container search to discover which files contain matches.
+/// 2. For each unique file, copy it out via `archive_path`, run the
+///    local Grexa replace engine against the mirror, then copy the
+///    modified file back via `copy_into_container`.
+///
+/// This avoids shell-escaping issues and reuses the proven local
+/// replace pipeline (atomic temp-file rename, encoding round-trip,
+/// CRLF handling). Note: `docker/podman cp` is used for the container
+/// boundary, so container-side ownership/mode are best-effort only.
+pub fn replace_container<R: RuntimeOperations>(
+    runtime: &R,
+    container: &ContainerInfo,
+    options: &ContainerReplaceOptions,
+) -> Result<ContainerReplaceSummary, RuntimeError> {
+    let started = std::time::Instant::now();
+
+    // Step 1: search to find matching files.
+    let search_opts = ContainerSearchOptions {
+        container_path: options.container_path.clone(),
+        pattern: options.pattern.clone(),
+        case_sensitive: options.case_sensitive,
+        regex: options.regex,
+        whole_word: options.whole_word,
+        max_results: None,
+        diacritic_sensitive: options.diacritic_sensitive,
+        unicode_normalization_mode: options.unicode_normalization_mode,
+        string_comparison_mode: options.string_comparison_mode,
+        culture: options.culture.clone(),
+    };
+    let search_summary = search_container(runtime, container, &search_opts)?;
+    if search_summary.hits.is_empty() {
+        return Ok(ContainerReplaceSummary {
+            files_modified: 0,
+            matches_replaced: 0,
+            failures: Vec::new(),
+        });
+    }
+
+    // Collect unique file paths.
+    let mut unique_paths: Vec<String> = search_summary
+        .hits
+        .iter()
+        .map(|h| h.container_path.clone())
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .filter(|p| is_safe_container_path(p))
+        .collect();
+    unique_paths.sort();
+
+    // Any rejected path is treated as a failure so the summary is honest.
+    let unsafe_paths: Vec<String> = search_summary
+        .hits
+        .iter()
+        .map(|h| h.container_path.clone())
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .filter(|p| !is_safe_container_path(p))
+        .collect();
+
+    let mut files_modified = 0usize;
+    let mut matches_replaced = 0usize;
+    let mut failures: Vec<String> = unsafe_paths
+        .into_iter()
+        .map(|p| format!("{p}: rejected unsafe container path"))
+        .collect();
+
+    // One mirror root for the whole replace operation. Per-file
+    // subdirectories preserve the in-container directory structure so
+    // two files with the same basename in different directories do not
+    // collide.
+    let mirror_root = container_mirror_dir(&container.id, runtime.kind()).join("replace");
+
+    // Step 2: for each file, copy out → replace → copy back.
+    for container_file in unique_paths {
+        let container_path = std::path::Path::new(&container_file);
+
+        // Build a local directory that mirrors the parent directory
+        // chain of the in-container file. This keeps basenames unique
+        // even when many files share a name (e.g. config.json).
+        let local_dir = if let Some(parent) = container_path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+        {
+            mirror_root.join(parent.strip_prefix("/").unwrap_or(parent))
+        } else {
+            mirror_root.clone()
+        };
+
+        let local_path = match runtime.archive_path(&container.id, &container_file, &local_dir) {
+            Ok(p) => p,
+            Err(err) => {
+                failures.push(format!("{container_file}: archive failed — {err}"));
+                continue;
+            }
+        };
+
+        // Skip directories (archive_path on a directory returns the dir root).
+        if local_path.is_dir() {
+            continue;
+        }
+
+        let mut search_options = grexa_core::SearchOptions::new(&local_path, &options.pattern);
+        search_options.regex = options.regex;
+        search_options.case_sensitive = options.case_sensitive;
+        search_options.whole_word = options.whole_word;
+        search_options.diacritic_sensitive = options.diacritic_sensitive;
+        search_options.unicode_normalization_mode = options.unicode_normalization_mode;
+        search_options.string_comparison_mode = options.string_comparison_mode;
+        search_options.culture = options.culture.clone();
+
+        let replace_options = grexa_core::ReplaceOptions {
+            search: search_options,
+            replacement: options.replacement.clone(),
+        };
+
+        match grexa_core::replace_file(&local_path, &replace_options) {
+            Ok(replaced) => {
+                if replaced > 0 {
+                    if let Err(err) =
+                        runtime.copy_into_container(&container.id, &local_path, &container_file)
+                    {
+                        failures.push(format!("{container_file}: copy back failed — {err}"));
+                    } else {
+                        files_modified += 1;
+                        matches_replaced += replaced;
+                    }
+                }
+            }
+            Err(err) => {
+                failures.push(format!("{container_file}: replace failed — {err}"));
+            }
+        }
+    }
+
+    // Clean up the temporary mirror tree for this replace operation.
+    let _ = std::fs::remove_dir_all(&mirror_root);
+
+    tracing::info!(
+        files_modified,
+        matches_replaced,
+        failures = failures.len(),
+        elapsed_ms = started.elapsed().as_millis(),
+        "container replace completed"
+    );
+
+    Ok(ContainerReplaceSummary {
+        files_modified,
+        matches_replaced,
+        failures,
+    })
+}
+
+/// Reject container paths that could escape the intended root. Only
+/// absolute paths without `..` components are accepted; relative paths
+/// or paths that walk upward are treated as unsafe.
+fn is_safe_container_path(path: &str) -> bool {
+    let p = std::path::Path::new(path);
+    if !p.is_absolute() {
+        return false;
+    }
+    p.components()
+        .all(|c| !matches!(c, std::path::Component::ParentDir))
+}
+
 /// Prune mirrors older than `max_age_secs`. Called on startup and after each
 /// container search; missing or empty cache directories are not an error.
 pub fn prune_mirrors(max_age_secs: u64) -> std::io::Result<()> {
@@ -437,12 +647,19 @@ fn prune_mirrors_under(root: &Path, max_age_secs: u64) -> std::io::Result<()> {
         .map(|d| d.as_secs().saturating_sub(max_age_secs))
         .unwrap_or_default();
 
-    for runtime_entry in std::fs::read_dir(root)? {
-        let runtime_entry = runtime_entry?;
-        for container_entry in std::fs::read_dir(runtime_entry.path())? {
-            let container_entry = container_entry?;
-            for stamp_entry in std::fs::read_dir(container_entry.path())? {
-                let stamp_entry = stamp_entry?;
+    // Helper that ignores permission/IO errors on individual directories
+    // so one unreadable entry does not abort the whole prune pass.
+    let read_entries = |dir: &Path| {
+        std::fs::read_dir(dir)
+            .ok()
+            .into_iter()
+            .flatten()
+            .filter_map(|r| r.ok())
+    };
+
+    for runtime_entry in read_entries(root) {
+        for container_entry in read_entries(&runtime_entry.path()) {
+            for stamp_entry in read_entries(&container_entry.path()) {
                 let stamp_name = stamp_entry.file_name();
                 let stamp: u64 = stamp_name.to_string_lossy().parse().unwrap_or(0);
                 if stamp == 0 || stamp < cutoff {
@@ -837,5 +1054,37 @@ mod tests {
     fn prune_missing_root_is_ok() {
         let dir = tempfile::tempdir().unwrap();
         prune_mirrors_under(&dir.path().join("does-not-exist"), 3600).unwrap();
+    }
+
+    #[test]
+    fn safe_container_path_rejects_relative_and_dotdot() {
+        assert!(is_safe_container_path("/etc/hostname"));
+        assert!(is_safe_container_path("/"));
+        assert!(!is_safe_container_path("etc/hostname"));
+        assert!(!is_safe_container_path("/etc/../hostname"));
+        assert!(!is_safe_container_path("/etc/.."));
+        assert!(!is_safe_container_path(""));
+    }
+
+    #[test]
+    fn replace_container_rejects_unsafe_paths() {
+        // A hit whose reported container path contains `..` must be rejected,
+        // not joined into the local mirror tree. The safe path fails at the
+        // mock archive step (no real file is materialized), which is enough
+        // to exercise the filtering logic.
+        let runner = MockCommandRunner::default();
+        // has_grep probe + direct grep result with an unsafe path.
+        runner.push(CommandResult::success("/usr/bin/grep\n"));
+        runner.push(CommandResult::success("/etc/hostname:1:my-host\n/etc/../evil:2:my-host\n"));
+        let runtime = cli_runtime(runner);
+
+        let opts = ContainerReplaceOptions::new("/etc", "host", "HOST");
+        let summary = replace_container(&runtime, &fake_container(), &opts).unwrap();
+
+        assert!(
+            summary.failures.iter().any(|f| f.contains("/etc/../evil")),
+            "unsafe path must be reported as a failure, got {:?}",
+            summary.failures
+        );
     }
 }

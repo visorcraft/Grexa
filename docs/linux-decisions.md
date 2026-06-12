@@ -142,10 +142,15 @@ GUI work plausible without WinUI's Dispatcher pump:
 The following Grex behaviors are intentionally non-applicable for 1.0 and
 are not slated for the Linux replacement table above:
 
-- Writable container replace.
 - Custom window chrome / non-standard window decoration.
 - macOS, Windows, or web target.
 - WebView2 / WPF / WinForms compatibility shims.
 - ARM Windows.
 - Telemetry (Grex has none; Grexa explicitly opts-out unless the user
   enables diagnostics).
+
+## Post-1.0
+
+- Writable container replace: the library implementation (`replace_container`)
+  is in place; GUI/CLI integration and a security review of the copy-out/
+  replace/copy-back model remain before it is user-facing.

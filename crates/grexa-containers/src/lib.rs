@@ -15,9 +15,9 @@ pub use runtime::{
 };
 
 pub use search::{
-    ContainerSearchHit, ContainerSearchOptions, ContainerSearchSummary, GrepPattern,
-    container_context_preview, parse_grep_output, parse_grep_output_with_pattern, prune_mirrors,
-    search_container,
+    ContainerReplaceOptions, ContainerReplaceSummary, ContainerSearchHit, ContainerSearchOptions,
+    ContainerSearchSummary, GrepPattern, container_context_preview, parse_grep_output,
+    parse_grep_output_with_pattern, prune_mirrors, replace_container, search_container,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

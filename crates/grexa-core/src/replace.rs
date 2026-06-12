@@ -13,7 +13,7 @@ use thiserror::Error;
 
 use crate::cancel::CancelToken;
 use crate::encoding::{DetectedEncoding, decode_text};
-use crate::models::{SearchOptions, UnicodeNormalizationMode};
+use crate::models::{SearchOptions, StringComparisonMode, UnicodeNormalizationMode};
 use crate::pattern::PatternEngine;
 use crate::search::{
     NormalizationContext, ProgressSink, SEARCHABLE_BINARY_EXTENSIONS, SearchError,
@@ -170,6 +170,17 @@ pub fn load_residual_journal() -> Result<Option<ReplaceJournalEntry>, ReplaceErr
 ///
 /// Failures are recorded per-file in `summary.failures` rather than
 /// aborting the whole batch.
+/// Replace a single file outside the normal search pipeline.
+/// Returns the number of matches replaced (0 if the file was unchanged).
+pub fn replace_file(path: &Path, options: &ReplaceOptions) -> Result<usize, ReplaceError> {
+    let substitution = SubstitutionContext::build(options)?;
+    match rewrite_one_pre_read(path, options, &substitution) {
+        Ok(FileResult::Unchanged) => Ok(0),
+        Ok(FileResult::Replaced { matches, .. }) => Ok(matches),
+        Err(err) => Err(ReplaceError::Io(err)),
+    }
+}
+
 pub fn replace_with(
     options: &ReplaceOptions,
     cancel: &CancelToken,
@@ -297,7 +308,9 @@ impl SubstitutionContext {
         }
 
         let needs_normalization = !search.diacritic_sensitive
-            || search.unicode_normalization_mode != UnicodeNormalizationMode::None;
+            || search.unicode_normalization_mode != UnicodeNormalizationMode::None
+            || (!search.case_sensitive
+                && search.string_comparison_mode != StringComparisonMode::Ordinal);
         if needs_normalization {
             let norm_ctx = NormalizationContext::build(search);
             let normalized_needle = normalize_for_text_search(needle, search, &norm_ctx);
@@ -1103,6 +1116,68 @@ mod tests {
         assert_eq!(summary.matches_replaced, 1);
         let rewritten = fs::read_to_string(&target).unwrap();
         assert_eq!(rewritten, "caféline un DRINK résumé\n");
+    }
+
+    #[test]
+    fn replace_file_rewrites_a_single_file_outside_search_pipeline() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("single.txt");
+        fs::write(&target, "hello world\n").unwrap();
+
+        let search = SearchOptions::new(&target, "world");
+        let options = ReplaceOptions {
+            search,
+            replacement: "Rust".to_string(),
+        };
+
+        let replaced = replace_file(&target, &options).unwrap();
+        assert_eq!(replaced, 1);
+        let rewritten = fs::read_to_string(&target).unwrap();
+        assert_eq!(rewritten, "hello Rust\n");
+    }
+
+    #[test]
+    fn replace_file_returns_zero_when_needle_missing() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("unchanged.txt");
+        fs::write(&target, "hello world\n").unwrap();
+
+        let search = SearchOptions::new(&target, "missing");
+        let options = ReplaceOptions {
+            search,
+            replacement: "X".to_string(),
+        };
+
+        let replaced = replace_file(&target, &options).unwrap();
+        assert_eq!(replaced, 0);
+        let rewritten = fs::read_to_string(&target).unwrap();
+        assert_eq!(rewritten, "hello world\n");
+    }
+
+    #[test]
+    fn current_culture_replace_uses_icu_case_folding() {
+        // Searching "istanbul" against "İSTANBUL" with CurrentCulture
+        // tr-TR ignore-case should match because Turkish case-folding maps
+        // dotted capital İ to dotted i.
+        use crate::models::StringComparisonMode;
+
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("turkish.txt");
+        fs::write(&target, "İSTANBUL\n").unwrap();
+
+        let mut search = SearchOptions::new(&target, "istanbul");
+        search.case_sensitive = false;
+        search.string_comparison_mode = StringComparisonMode::CurrentCulture;
+        search.culture = Some("tr-TR".to_string());
+        let options = ReplaceOptions {
+            search,
+            replacement: "Istanbul".to_string(),
+        };
+
+        let replaced = replace_file(&target, &options).unwrap();
+        assert_eq!(replaced, 1);
+        let rewritten = fs::read_to_string(&target).unwrap();
+        assert_eq!(rewritten, "Istanbul\n");
     }
 
     #[test]

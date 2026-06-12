@@ -822,16 +822,24 @@ impl NormalizationContext {
             icu_properties::CodePointMapData::<icu_properties::props::GeneralCategory>::new();
 
         let (case_mapper, locale) = if !options.case_sensitive
-            && options.string_comparison_mode == StringComparisonMode::CurrentCulture
+            && (options.string_comparison_mode == StringComparisonMode::CurrentCulture
+                || options.string_comparison_mode == StringComparisonMode::InvariantCulture)
         {
-            let locale = options
-                .culture
-                .as_deref()
-                .and_then(|tag| icu_locale_core::LanguageIdentifier::try_from_str(tag).ok())
-                .unwrap_or_else(|| {
-                    icu_locale_core::LanguageIdentifier::try_from_str("en")
-                        .expect("\"en\" is a valid BCP-47 tag")
-                });
+            let locale = match options.string_comparison_mode {
+                StringComparisonMode::CurrentCulture => options
+                    .culture
+                    .as_deref()
+                    .and_then(|tag| icu_locale_core::LanguageIdentifier::try_from_str(tag).ok())
+                    .unwrap_or_else(|| {
+                        icu_locale_core::LanguageIdentifier::try_from_str("en")
+                            .expect("\"en\" is a valid BCP-47 tag")
+                    }),
+                StringComparisonMode::InvariantCulture => {
+                    icu_locale_core::LanguageIdentifier::try_from_str("und")
+                        .expect("\"und\" is a valid BCP-47 tag")
+                }
+                StringComparisonMode::Ordinal => unreachable!(),
+            };
             (Some(icu_casemap::CaseMapper::new()), Some(locale))
         } else {
             (None, None)

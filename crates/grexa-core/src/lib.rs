@@ -35,7 +35,7 @@ pub use pattern::{PatternEngine, PatternError};
 pub use preview::{ContextLine, ContextPreviewResult, PreviewError, context_preview};
 pub use replace::{
     FileReplaceFailure, FileReplaceReport, ReplaceError, ReplaceJournalEntry, ReplaceOptions,
-    ReplaceSummary, load_residual_journal, replace_with, set_journal_path_override,
+    ReplaceSummary, load_residual_journal, replace_file, replace_with, set_journal_path_override,
 };
 pub use search::{ProgressEvent, ProgressSink, SearchError, SkipReason, search, search_with};
 pub use sort::{SortDirection, apply_default_sort, sort_content, sort_files};

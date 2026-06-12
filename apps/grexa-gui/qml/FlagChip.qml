@@ -30,7 +30,6 @@ Item {
 
     Accessible.role: Accessible.Button
     Accessible.name: root.label
-    Accessible.onActivated: root.toggled()
 
     implicitWidth: 34
     implicitHeight: 30

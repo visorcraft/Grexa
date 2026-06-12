@@ -28,7 +28,6 @@ Item {
 
     Accessible.role: Accessible.Button
     Accessible.name: label
-    Accessible.onActivated: root.triggered()
 
     Rectangle {
         anchors.fill: parent

@@ -60,8 +60,10 @@ No other Grexa subsystem opens a socket.
 - **Archived documents are never modified.** OOXML / ODF / ZIP / PDF /
   RTF files are extracted read-only for search and skipped by the
   replace pipeline.
-- **Containers are read-only.** The container adapter has no replace
-  entry point; the search engine refuses to write to a container target.
+- **Container replace is not exposed to users.** The library-level
+  `replace_container` entry point exists, but the GUI/CLI still block
+  replace when the target is a container, so an end user cannot trigger
+  it accidentally.
 
 ## Container runtime sockets
 

@@ -1,5 +1,5 @@
 Name:           grexa
-Version:        1.4.1
+Version:        1.5.0
 Release:        1%{?dist}
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 
@@ -89,6 +89,16 @@ command -v appstream-util >/dev/null && \
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Thu Jun 11 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.5.0-1
+- Add whole-word search matching and a CLI replace subcommand with full
+  search flag parity.
+- Harden search/replace correctness: normalized offset mapping, capture
+  expansion, and whole-word boundary handling.
+- Improve container search: flag forwarding, binary replace guard, and
+  correct column offsets.
+- Cache GUI search options and deduplicate per-tab results.
+- Add accessibility settings and keyboard shortcuts.
+
 * Tue Jun 02 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.4.1-1
 - Refresh the pinned linuxdeploy continuous hash so the AppImage release
   artifact builds again (1.4.0 did not publish). No functional change
