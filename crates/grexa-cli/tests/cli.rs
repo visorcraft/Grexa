@@ -338,6 +338,14 @@ fn replace_reports_zero_matches_exit_code() {
 fn replace_all_failures_exits_two() {
     use std::os::unix::fs::PermissionsExt;
 
+    // A read-only directory only blocks writes for non-root users; root can
+    // still create files there, so the atomic rewrite would succeed and the
+    // test would falsely fail.
+    let uid = std::process::Command::new("id").arg("-u").output().unwrap();
+    if String::from_utf8_lossy(&uid.stdout).trim() == "0" {
+        return;
+    }
+
     let dir = tempdir().unwrap();
     let locked = dir.path().join("locked");
     fs::create_dir(&locked).unwrap();
