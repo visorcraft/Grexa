@@ -1,5 +1,5 @@
 Name:           grexa
-Version:        1.5.2
+Version:        1.5.3
 Release:        1%{?dist}
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 
@@ -89,6 +89,10 @@ command -v appstream-util >/dev/null && \
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Sat Jun 13 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.5.3-1
+- Skip the read-only-directory replace failure test when running as root,
+  so CI passes in containerized release builds.
+
 * Fri Jun 12 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.5.2-1
 - Expose generic QML i18n helpers and migrate all qsTr() calls to Fluent.
 - Cache per-container grep availability in container search.

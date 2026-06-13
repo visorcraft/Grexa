@@ -1,3 +1,10 @@
+grexa (1.5.3-1) unstable; urgency=medium
+
+  * Skip the read-only-directory replace failure test when running as root,
+    so CI passes in containerized release builds.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Sat, 13 Jun 2026 00:00:00 +0000
+
 grexa (1.5.2-1) unstable; urgency=medium
 
   * Version bump to 1.5.2.

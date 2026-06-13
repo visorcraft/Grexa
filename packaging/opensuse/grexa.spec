@@ -6,7 +6,7 @@
 #
 
 Name:           grexa
-Version:        1.5.2
+Version:        1.5.3
 Release:        0
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 License:        GPL-3.0-only
@@ -102,6 +102,10 @@ cargo test --workspace --release --frozen
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Sat Jun 13 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.5.3-0
+- Skip the read-only-directory replace failure test when running as root,
+  so CI passes in containerized release builds.
+
 * Fri Jun 12 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.5.2-0
 - Expose generic QML i18n helpers and migrate all qsTr() calls to Fluent.
 - Cache per-container grep availability in container search.

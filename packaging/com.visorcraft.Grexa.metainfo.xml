@@ -75,6 +75,14 @@
   </supports>
 
   <releases>
+    <release version="1.5.3" date="2026-06-13">
+      <description>
+        <p>Patch release.</p>
+        <ul>
+          <li>Skip the read-only-directory replace failure test when running as root, so CI passes in containerized release builds.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.5.2" date="2026-06-12">
       <description>
         <p>Localization, accessibility, and container hardening patch.</p>
