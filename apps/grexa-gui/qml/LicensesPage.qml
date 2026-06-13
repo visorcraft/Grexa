@@ -80,23 +80,23 @@ Kirigami.Page {
 
     function documentTitle(index) {
         switch (index) {
-        case 1: return qsTr("Third-party licenses")
-        case 2: return qsTr("Acknowledgments")
-        case 3: return qsTr("Runtime components")
-        default: return qsTr("Grexa License")
+        case 1: return app.i18n("ui-thirdparty-licenses")
+        case 2: return app.i18n("ui-acknowledgments")
+        case 3: return app.i18n("ui-runtime-components")
+        default: return app.i18n("ui-grexa-license")
         }
     }
 
     function documentSubtitle(index) {
         switch (index) {
         case 1:
-            return qsTr("The cargo-about-generated bundle with every direct and transitive Rust crate, grouped by license text.")
+            return app.i18n("ui-the-cargoaboutgenerated-bundle-with-every-direct-d02cc5")
         case 2:
-            return qsTr("Narrative attribution for Grexa, Grex, runtime components, and direct dependencies.")
+            return app.i18n("ui-narrative-attribution-for-grexa-grex-runtime-9cb532")
         case 3:
-            return qsTr("Full license texts for the Qt, KDE Frameworks, Poppler, container, and secret-service runtimes Grexa builds on.")
+            return app.i18n("ui-full-license-texts-for-the-qt-7c5dad")
         default:
-            return qsTr("The complete GPL-3.0-only license text bundled into the application.")
+            return app.i18n("ui-the-complete-gpl30only-license-text-bundled-237019")
         }
     }
 
@@ -149,7 +149,7 @@ Kirigami.Page {
         }
 
         if (matches.length === 0)
-            return qsTr("No matches for \"%1\".").arg(query)
+            return app.i18n("ui-no-matches-for-query").arg(query)
         return matches.join("\n")
     }
 
@@ -187,7 +187,7 @@ Kirigami.Page {
                 Item { Layout.fillHeight: true }
 
                 Controls.Label {
-                    text: qsTr("Licenses")
+                    text: app.i18n("ui-licenses")
                     color: app.tokens.textPrimary
                     font.pixelSize: 24
                     font.weight: app.tokens.weightBold
@@ -197,7 +197,7 @@ Kirigami.Page {
                 }
 
                 Controls.Label {
-                    text: qsTr("Bundled license and attribution documents, available without opening a browser.")
+                    text: app.i18n("ui-bundled-license-and-attribution-documents-available-9098e4")
                     color: app.tokens.textPrimary
                     font.pixelSize: app.tokens.textCaption + 1
                     font.family: app.tokens.sansFamily
@@ -230,39 +230,39 @@ Kirigami.Page {
                     onCurrentIndexChanged: page.setActiveDocument(currentIndex)
 
                     Controls.TabButton {
-                        text: qsTr("Grexa License")
+                        text: app.i18n("ui-grexa-license")
                         width: implicitWidth + app.tokens.spaceL
                     }
                     Controls.TabButton {
-                        text: qsTr("Third-party")
+                        text: app.i18n("ui-thirdparty")
                         width: implicitWidth + app.tokens.spaceL
                     }
                     Controls.TabButton {
-                        text: qsTr("Acknowledgments")
+                        text: app.i18n("ui-acknowledgments")
                         width: implicitWidth + app.tokens.spaceL
                     }
                     Controls.TabButton {
-                        text: qsTr("Runtime components")
+                        text: app.i18n("ui-runtime-components")
                         width: implicitWidth + app.tokens.spaceL
                     }
                 }
 
                 AppFlatButton {
-                    text: qsTr("Copy")
+                    text: app.i18n("ui-copy")
                     icon.name: "edit-copy-symbolic"
                     display: Controls.AbstractButton.TextBesideIcon
                     onClicked: app.searchController.copyToClipboard(page.currentBody)
-                    Controls.ToolTip.text: qsTr("Copy the current document")
+                    Controls.ToolTip.text: app.i18n("ui-copy-the-current-document")
                     Controls.ToolTip.visible: hovered
                 }
 
                 AppFlatButton {
                     visible: page.activeDocument === 0
-                    text: qsTr("Dialog")
+                    text: app.i18n("ui-dialog")
                     icon.name: "document-preview-symbolic"
                     display: Controls.AbstractButton.TextBesideIcon
                     onClicked: page.gplTextRequested()
-                    Controls.ToolTip.text: qsTr("Open the GPL text in a dialog")
+                    Controls.ToolTip.text: app.i18n("ui-open-the-gpl-text-in-a")
                     Controls.ToolTip.visible: hovered
                 }
             }
@@ -298,8 +298,8 @@ Kirigami.Page {
 
                 Controls.Label {
                     text: page.filterText.trim().length > 0
-                        ? qsTr("%1 matches").arg(page.matchingLineCount)
-                        : qsTr("%1 lines").arg(page.currentLineCount)
+                        ? app.i18n("ui-1-matches-ac30b9").arg(page.matchingLineCount)
+                        : app.i18n("ui-1-lines-9b1ae5").arg(page.currentLineCount)
                     color: app.tokens.textPrimary
                     font.pixelSize: app.tokens.textCaption
                     font.family: app.tokens.monoFamily
@@ -315,14 +315,14 @@ Kirigami.Page {
                 AppTextField {
                     id: filterField
                     Layout.fillWidth: true
-                    placeholderText: qsTr("Find by crate, package, license, or phrase...")
+                    placeholderText: app.i18n("ui-find-by-crate-package-license-or")
                     onTextChanged: page.filterText = text
-                    Accessible.name: qsTr("Find in license document")
+                    Accessible.name: app.i18n("ui-find-in-license-document")
                 }
 
                 Controls.CheckBox {
                     id: wrapToggle
-                    text: qsTr("Wrap")
+                    text: app.i18n("ui-wrap")
                     checked: page.wrapText
                     onToggled: page.wrapText = checked
                     font.pixelSize: app.tokens.textCaption + 1
@@ -332,7 +332,7 @@ Kirigami.Page {
 
                 AppFlatButton {
                     enabled: page.filterText.length > 0
-                    text: qsTr("Clear")
+                    text: app.i18n("ui-clear")
                     icon.name: "edit-clear-symbolic"
                     display: Controls.AbstractButton.TextBesideIcon
                     onClicked: {

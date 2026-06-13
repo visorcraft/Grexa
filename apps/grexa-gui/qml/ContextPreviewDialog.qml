@@ -109,7 +109,7 @@ Controls.Dialog {
                 Controls.Label {
                     id: lineLabel
                     anchors.centerIn: parent
-                    text: qsTr("line %1").arg(dialog.lineNumber)
+                    text: app.i18n("ui-line-1-630b65").arg(dialog.lineNumber)
                     font.pixelSize: app.tokens.textCaption
                     font.weight: app.tokens.weightMedium
                     color: app.tokens.accent

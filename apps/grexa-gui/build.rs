@@ -18,7 +18,9 @@ fn emit_vergen() {
 
 fn main() {
     emit_vergen();
-    CxxQtBuilder::new_qml_module(
+    println!("cargo:rerun-if-changed=src/icon_theme.cpp");
+
+    let builder = CxxQtBuilder::new_qml_module(
         QmlModule::new("com.visorcraft.Grexa")
             .version(1, 0)
             .qml_files([
@@ -71,6 +73,16 @@ fn main() {
     .file("src/qobjects/search.rs")
     .file("src/qobjects/settings.rs")
     .file("src/qobjects/regex_builder.rs")
-    .file("src/qobjects/ai.rs")
-    .build();
+    .file("src/qobjects/ai.rs");
+
+    // icon_theme.cpp prepends the bundled AppDir/usr/share/icons path to Qt's
+    // icon theme search paths so the AppImage can resolve Breeze symbolic
+    // icons without relying on the host theme.
+    let builder = unsafe {
+        builder.cc_builder(|cc| {
+            cc.file("src/icon_theme.cpp");
+        })
+    };
+
+    builder.build();
 }

@@ -72,7 +72,7 @@ Item {
             spacing: app.tokens.spaceS
 
             Controls.Label {
-                text: qsTr("TRY ONE OF THESE")
+                text: app.i18n("ui-try-one-of-these")
                 font.pixelSize: 10
                 font.weight: app.tokens.weightSemibold
                 font.letterSpacing: 0

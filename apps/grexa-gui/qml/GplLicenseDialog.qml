@@ -10,12 +10,12 @@ Controls.Dialog {
 
     property string bodyText: ""
     property string detailText: ""
-    property string titleText: qsTr("License Text")
+    property string titleText: app.i18n("ui-license-text")
 
     function openLicenseText() {
         dialog.openDocument(
-            qsTr("GNU General Public License v3"),
-            qsTr("GPL-3.0-only license text bundled with Grexa."),
+            app.i18n("ui-gnu-general-public-license-v3"),
+            app.i18n("ui-gpl30only-license-text-bundled-with-grexa"),
             app.settingsController.gplLicenseText()
         )
     }
@@ -25,7 +25,7 @@ Controls.Dialog {
         dialog.detailText = detail
         dialog.bodyText = text && text.length > 0
             ? text
-            : qsTr("No bundled license text is available.")
+            : app.i18n("ui-no-bundled-license-text-is-available")
         dialog.open()
     }
 

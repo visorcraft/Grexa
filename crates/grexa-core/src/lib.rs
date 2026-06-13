@@ -3,6 +3,7 @@
 
 pub mod baloo;
 pub mod cancel;
+pub mod constants;
 pub mod desktop;
 pub mod documents;
 pub mod encoding;
@@ -18,6 +19,7 @@ pub use baloo::{
     BalooAdapter, BalooError, BaloosearchCliAdapter, NullBalooAdapter, StubBalooAdapter,
 };
 pub use cancel::CancelToken;
+pub use constants::{MAX_SEARCH_FILE_BYTES, file_exceeds_hard_cap};
 pub use desktop::{
     EditorPreset, TrashError, UserPathKind, classify_user_path, file_manager_show_items_uris,
     move_to_trash, open_in_editor_command, reveal_with_xdg_open,

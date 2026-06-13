@@ -33,7 +33,7 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: !panel.aiEnabled
         type: Kirigami.MessageType.Information
-        text: qsTr("AI search is off. Enable it in Settings → AI Search.")
+        text: app.i18n("ui-ai-search-is-off-enable-it")
     }
 
     Kirigami.InlineMessage {
@@ -57,18 +57,18 @@ ColumnLayout {
 
         Controls.Label {
             Layout.fillWidth: true
-            // Plural-aware via Qt's qsTr overload — translators can
-            // override the singular/plural inflection per locale.
-            text: qsTr("%n message(s)", "", messageModel.count)
+            // Plural-aware via app.i18nPlural so translators drive
+            // singular/plural inflection per locale.
+            text: app.i18nPlural("count-messages", messageModel.count)
             font.pixelSize: app.tokens.textCaption
             opacity: 0.55
         }
         AppFlatButton {
             icon.name: "edit-clear-all-symbolic"
             icon.color: app.tokens.textPrimary
-            text: qsTr("Clear")
+            text: app.i18n("ui-clear")
             display: Controls.AbstractButton.TextBesideIcon
-            Controls.ToolTip.text: qsTr("Clear the chat panel. Doesn't touch your API key or stored history.")
+            Controls.ToolTip.text: app.i18n("ui-clear-the-chat-panel-doesnt-touch-2a169a")
             Controls.ToolTip.visible: hovered
             onClicked: messageModel.clear()
         }
@@ -177,8 +177,8 @@ ColumnLayout {
                 visible: messageModel.count === 0 && !controller.busy && panel.aiEnabled
                 icon.name: "tools-symbolic"
                 icon.color: app.tokens.textPrimary
-                text: qsTr("Ask AI for help shaping a search")
-                explanation: qsTr("Describe what you're looking for in plain English. The model will suggest a path, term, and flags.")
+                text: app.i18n("ui-ask-ai-for-help-shaping-a")
+                explanation: app.i18n("ui-describe-what-youre-looking-for-in-1d0236")
             }
 
             Controls.BusyIndicator {
@@ -215,12 +215,12 @@ ColumnLayout {
                 Layout.fillHeight: true
                 Controls.TextArea {
                     id: input
-                    placeholderText: qsTr("Ask the AI…")
+                    placeholderText: app.i18n("ui-ask-the-ai")
                     wrapMode: TextEdit.Wrap
                     font.family: app.tokens.sansFamily
                     font.pixelSize: app.tokens.textBody
                     background: null
-                    Accessible.name: qsTr("Chat message")
+                    Accessible.name: app.i18n("ui-chat-message")
                     Keys.onReturnPressed: (event) => {
                         if (event.modifiers & Qt.ShiftModifier) {
                             event.accepted = false   // let newline through

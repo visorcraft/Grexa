@@ -24,11 +24,12 @@
 //! function on [`RuntimeOperations`] already returns a typed value rather
 //! than a `Command` invocation.
 
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -207,6 +208,22 @@ impl CommandRunner for MockCommandRunner {
     }
 }
 
+type GrepAvailabilityCache = HashMap<(ContainerRuntimeKind, String), bool>;
+
+static GREP_AVAILABILITY_CACHE: OnceLock<Mutex<GrepAvailabilityCache>> = OnceLock::new();
+
+fn grep_availability_cache() -> &'static Mutex<GrepAvailabilityCache> {
+    GREP_AVAILABILITY_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Clear the per-container grep-availability cache. Exposed for tests and
+/// long-lived GUI sessions that want to force a fresh probe.
+pub fn clear_grep_availability_cache() {
+    if let Ok(mut cache) = grep_availability_cache().lock() {
+        cache.clear();
+    }
+}
+
 /// Operations Grexa runs against a single container runtime.
 pub trait RuntimeOperations {
     fn kind(&self) -> ContainerRuntimeKind;
@@ -354,11 +371,23 @@ impl<R: CommandRunner> RuntimeOperations for CliRuntime<R> {
     }
 
     fn has_grep(&self, container_id: &str) -> Result<bool, RuntimeError> {
+        let key = (self.kind(), container_id.to_string());
+        if let Ok(cache) = grep_availability_cache().lock()
+            && let Some(cached) = cache.get(&key)
+        {
+            return Ok(*cached);
+        }
+
         // `which grep` is universally available across Linux containers.
         // Distroless containers may lack `which`; fall back to a probe via
         // exec returning a non-127 status.
         let result = self.exec_capture(container_id, &["which", "grep"])?;
-        Ok(result.status == 0 && !result.stdout.is_empty())
+        let has = result.status == 0 && !result.stdout.is_empty();
+
+        if let Ok(mut cache) = grep_availability_cache().lock() {
+            cache.insert(key, has);
+        }
+        Ok(has)
     }
 
     fn archive_path(
@@ -498,18 +527,41 @@ mod tests {
 
     #[test]
     fn has_grep_returns_true_when_which_succeeds() {
+        clear_grep_availability_cache();
         let runner = MockCommandRunner::default();
         runner.push(CommandResult::success("/usr/bin/grep\n"));
         let runtime = CliRuntime::new(fake_runtime(), runner);
-        assert!(runtime.has_grep("abc").unwrap());
+        assert!(runtime.has_grep("has-grep-true").unwrap());
     }
 
     #[test]
     fn has_grep_returns_false_when_which_returns_nothing() {
+        clear_grep_availability_cache();
         let runner = MockCommandRunner::default();
         runner.push(CommandResult::success(""));
         let runtime = CliRuntime::new(fake_runtime(), runner);
-        assert!(!runtime.has_grep("abc").unwrap());
+        assert!(!runtime.has_grep("has-grep-false").unwrap());
+    }
+
+    #[test]
+    fn has_grep_caches_result_across_calls() {
+        clear_grep_availability_cache();
+        let runner = MockCommandRunner::default();
+        runner.push(CommandResult::success("/usr/bin/grep\n"));
+        let runtime = CliRuntime::new(fake_runtime(), runner.clone());
+
+        let id = "cached-grep";
+        assert!(runtime.has_grep(id).unwrap());
+        assert!(runtime.has_grep(id).unwrap());
+        // Only one `which grep` exec should have been issued.
+        assert_eq!(
+            runner
+                .invocations()
+                .iter()
+                .filter(|inv| inv.args.contains(&OsString::from("which")))
+                .count(),
+            1
+        );
     }
 
     #[test]

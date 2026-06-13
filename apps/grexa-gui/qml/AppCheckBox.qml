@@ -34,7 +34,7 @@ Controls.CheckBox {
             ? app.tokens.accent
             : (cb.hovered ? app.tokens.accent : app.tokens.separator)
         border.width: cb.checked ? 0 : 1
-        Behavior on color { ColorAnimation { duration: 110 } }
+        Behavior on color { ColorAnimation { duration: app.tokens.durationSnap } }
 
         // Draw the mark ourselves instead of asking the icon theme
         // for "check-symbolic"; some themes resolve that name to a

@@ -114,14 +114,14 @@ Kirigami.ScrollablePage {
                     Layout.fillWidth: true
                     spacing: 1
                     Controls.Label {
-                        text: qsTr("Profiles")
+                        text: app.i18n("ui-profiles")
                         font.pixelSize: app.tokens.textHeading
                         font.weight: app.tokens.weightBold
                         font.family: app.tokens.sansFamily
                         font.letterSpacing: 0
                     }
                     Controls.Label {
-                        text: qsTr("Named search presets. The Search page's “Save current as profile…” captures the active form here.")
+                        text: app.i18n("ui-named-search-presets-the-search-pages-5a905c")
                         font.pixelSize: app.tokens.textCaption + 1
                         font.family: app.tokens.sansFamily
                         opacity: 0.6
@@ -130,7 +130,7 @@ Kirigami.ScrollablePage {
                 AppFlatButton {
                     icon.name: "view-refresh"
                     icon.color: app.tokens.textPrimary
-                    text: qsTr("Refresh")
+                    text: app.i18n("ui-refresh")
                     display: Controls.AbstractButton.TextBesideIcon
                     onClicked: page.refresh()
                 }
@@ -155,7 +155,7 @@ Kirigami.ScrollablePage {
             }
             AppTextField {
                 Layout.fillWidth: true
-                placeholderText: qsTr("Filter profiles by name, term, or path")
+                placeholderText: app.i18n("ui-filter-profiles-by-name-term-or")
                 text: page.filterText
                 onTextEdited: { page.filterText = text; filterDebounce.restart() }
             }
@@ -175,11 +175,11 @@ Kirigami.ScrollablePage {
             icon.name: "document-save-symbolic"
             icon.color: app.tokens.textPrimary
             text: page.filterText.length > 0
-                ? qsTr("No profiles match “%1”").arg(page.filterText)
-                : qsTr("No saved profiles")
+                ? app.i18n("ui-no-profiles-match-1-275b92").arg(page.filterText)
+                : app.i18n("ui-no-saved-profiles")
             explanation: page.filterText.length > 0
-                ? qsTr("Try a shorter filter, or clear it to see every saved profile.")
-                : qsTr("Open the Search page, fill in path + term + flags, then save the form as a named profile.")
+                ? app.i18n("ui-try-a-shorter-filter-or-clear-76584b")
+                : app.i18n("ui-open-the-search-page-fill-in-2bc930")
         }
 
         ColumnLayout {
@@ -216,7 +216,7 @@ Kirigami.ScrollablePage {
                             }
                             Controls.Label {
                                 Layout.fillWidth: true
-                                text: qsTr("%1 · “%2”%3%4%5").arg(model.path).arg(model.term)
+                                text: app.i18n("ui-1-2345-67b02f").arg(model.path).arg(model.term)
                                     .arg(model.regex ? " · regex" : "")
                                     .arg(model.caseSensitive ? " · case" : "")
                                     .arg(model.filesMode ? " · files" : "")
@@ -229,7 +229,7 @@ Kirigami.ScrollablePage {
                         AppFlatButton {
                             icon.name: "edit-find-symbolic"
                             icon.color: app.tokens.textPrimary
-                            text: qsTr("Open")
+                            text: app.i18n("ui-open")
                             display: Controls.AbstractButton.TextBesideIcon
                             onClicked: {
                                 const path = model.path
@@ -256,7 +256,7 @@ Kirigami.ScrollablePage {
                             icon.name: "edit-delete-symbolic"
                             icon.color: app.tokens.textPrimary
                             display: Controls.AbstractButton.IconOnly
-                            Controls.ToolTip.text: qsTr("Delete profile")
+                            Controls.ToolTip.text: app.i18n("ui-delete-profile")
                             Controls.ToolTip.visible: hovered
                             onClicked: {
                                 app.searchController.deleteProfile(model.name)

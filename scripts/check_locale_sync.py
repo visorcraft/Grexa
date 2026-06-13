@@ -110,7 +110,7 @@ def check_qml_strings() -> bool:
     print(f"QML qsTr() check: {total_strings} strings across {len(qml_files)} files")
 
     if total_strings == 0:
-        print("  WARNING: no qsTr() strings found — QML root may be wrong", file=sys.stderr)
+        print("  (all qsTr() strings have been migrated to Fluent)")
 
     return ok
 

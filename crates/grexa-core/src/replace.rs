@@ -12,6 +12,7 @@ use regex::RegexBuilder;
 use thiserror::Error;
 
 use crate::cancel::CancelToken;
+use crate::constants::{MAX_SEARCH_FILE_BYTES, file_exceeds_hard_cap};
 use crate::encoding::{DetectedEncoding, decode_text};
 use crate::models::{SearchOptions, StringComparisonMode, UnicodeNormalizationMode};
 use crate::pattern::PatternEngine;
@@ -388,6 +389,16 @@ fn read_regular_text(path: &Path) -> io::Result<(String, DetectedEncoding, fs::M
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "replace target is not a regular file",
+        ));
+    }
+
+    if file_exceeds_hard_cap(metadata.len()) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "replace target exceeds the {} MiB read cap",
+                MAX_SEARCH_FILE_BYTES / (1024 * 1024)
+            ),
         ));
     }
 
@@ -1194,5 +1205,28 @@ mod tests {
         assert!(!is_searchable_binary(Path::new("code.rs")));
         assert!(!is_searchable_binary(Path::new("data.txt")));
         assert!(!is_searchable_binary(Path::new("no_ext")));
+    }
+
+    #[test]
+    fn replace_file_rejects_oversize_file() {
+        use std::fs::File;
+
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("huge.txt");
+        let file = File::create(&target).unwrap();
+        file.set_len(MAX_SEARCH_FILE_BYTES + 1).unwrap();
+
+        let search = SearchOptions::new(&target, "needle");
+        let options = ReplaceOptions {
+            search,
+            replacement: "replacement".to_string(),
+        };
+
+        let err = replace_file(&target, &options).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("exceeds the 512 MiB read cap"),
+            "expected size-cap error, got: {msg}"
+        );
     }
 }

@@ -119,14 +119,14 @@ Kirigami.Page {
     }
 
     readonly property var presets: [
-        { name: qsTr("Email"),  pattern: "[\\w.%+-]+@[\\w.-]+\\.[A-Za-z]{2,}" },
-        { name: qsTr("Phone"),  pattern: "\\+?\\d{1,3}[-. ]?\\(?\\d{1,4}\\)?[-. ]?\\d{1,9}[-. ]?\\d{1,9}" },
-        { name: qsTr("Date"),   pattern: "\\d{4}-\\d{2}-\\d{2}" },
-        { name: qsTr("Digits"), pattern: "\\d+" },
-        { name: qsTr("URL"),    pattern: "https?://\\S+" },
-        { name: qsTr("IPv4"),   pattern: "(\\d{1,3}\\.){3}\\d{1,3}" },
-        { name: qsTr("Hex"),    pattern: "0x[0-9a-fA-F]+" },
-        { name: qsTr("UUID"),   pattern: "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}" },
+        { name: app.i18n("ui-email"),  pattern: "[\\w.%+-]+@[\\w.-]+\\.[A-Za-z]{2,}" },
+        { name: app.i18n("ui-phone"),  pattern: "\\+?\\d{1,3}[-. ]?\\(?\\d{1,4}\\)?[-. ]?\\d{1,9}[-. ]?\\d{1,9}" },
+        { name: app.i18n("ui-date"),   pattern: "\\d{4}-\\d{2}-\\d{2}" },
+        { name: app.i18n("ui-digits"), pattern: "\\d+" },
+        { name: "URL",    pattern: "https?://\\S+" },
+        { name: app.i18n("ui-ipv4"),   pattern: "(\\d{1,3}\\.){3}\\d{1,3}" },
+        { name: app.i18n("ui-hex"),    pattern: "0x[0-9a-fA-F]+" },
+        { name: "UUID",   pattern: "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}" },
     ]
 
     ColumnLayout {
@@ -154,14 +154,14 @@ Kirigami.Page {
                     Layout.fillWidth: true
                     spacing: 1
                     Controls.Label {
-                        text: qsTr("Regex Builder")
+                        text: app.i18n("ui-regex-builder")
                         font.pixelSize: app.tokens.textHeading
                         font.weight: app.tokens.weightBold
                         font.family: app.tokens.sansFamily
                         font.letterSpacing: 0
                     }
                     Controls.Label {
-                        text: qsTr("Test patterns against sample text — same engine the search uses.")
+                        text: app.i18n("ui-test-patterns-against-sample-text-same-7198ac")
                         font.pixelSize: app.tokens.textCaption + 1
                         font.family: app.tokens.sansFamily
                         opacity: 0.6
@@ -187,8 +187,8 @@ Kirigami.Page {
                         id: badgeLabel
                         anchors.centerIn: parent
                         text: page.controller.error.length > 0
-                            ? qsTr("invalid")
-                            : qsTr("%1 match(es)").arg(page.controller.matchCount)
+                            ? app.i18n("ui-invalid")
+                            : app.i18n("ui-1-matches-2749a8").arg(page.controller.matchCount)
                         font.pixelSize: app.tokens.textCaption
                         font.weight: app.tokens.weightMedium
                         color: page.controller.error.length > 0
@@ -208,7 +208,7 @@ Kirigami.Page {
             spacing: app.tokens.spaceS
 
             Controls.Label {
-                text: qsTr("Presets")
+                text: app.i18n("ui-presets")
                 font.pixelSize: app.tokens.textCaption
                 opacity: 0.65
             }
@@ -267,7 +267,7 @@ Kirigami.Page {
             spacing: app.tokens.spaceXS
 
             Controls.Label {
-                text: qsTr("Pattern")
+                text: app.i18n("ui-pattern")
                 font.pixelSize: app.tokens.textCaption
                 opacity: 0.65
             }
@@ -277,9 +277,9 @@ Kirigami.Page {
                 AppTextField {
                     id: patternField
                     Layout.fillWidth: true
-                    placeholderText: qsTr("e.g.  fn\\s+\\w+_test")
+                    placeholderText: app.i18n("ui-regex-builder-placeholder")
                     font.family: app.tokens.monoFamily
-                    Accessible.name: qsTr("Regex pattern")
+                    Accessible.name: app.i18n("ui-regex-pattern")
                     onTextChanged: page.evaluate()
                 }
                 Controls.ToolButton {
@@ -287,7 +287,7 @@ Kirigami.Page {
                     checkable: true
                     text: "i"
                     font.family: app.tokens.monoFamily
-                    Controls.ToolTip.text: qsTr("Case-insensitive")
+                    Controls.ToolTip.text: app.i18n("ui-caseinsensitive")
                     Controls.ToolTip.visible: hovered
                     onToggled: page.evaluate()
                 }
@@ -327,7 +327,7 @@ Kirigami.Page {
                     Layout.fillWidth: true
                     spacing: app.tokens.spaceS
                     Controls.Label {
-                        text: qsTr("SAMPLE TEXT")
+                        text: "SAMPLE TEXT"
                         font.pixelSize: 10
                         font.weight: app.tokens.weightSemibold
                         font.letterSpacing: 0
@@ -338,7 +338,7 @@ Kirigami.Page {
                         visible: sampleArea.text.length > 0
                         icon.name: "edit-clear-symbolic"
                         icon.color: app.tokens.textPrimary
-                        text: qsTr("Clear")
+                        text: app.i18n("ui-clear")
                         display: Controls.AbstractButton.TextBesideIcon
                         font.pixelSize: app.tokens.textCaption
                         onClicked: { sampleArea.text = ""; page.evaluate() }
@@ -360,12 +360,12 @@ Kirigami.Page {
                         visible: patternField.text.length === 0 || sampleHighlight.text.length === 0
                         Controls.TextArea {
                             id: sampleArea
-                            placeholderText: qsTr("Paste sample text and watch the matches light up…")
+                            placeholderText: app.i18n("ui-paste-sample-text-and-watch-the")
                             font.family: app.tokens.monoFamily
                             font.pixelSize: app.tokens.textBody + 1
                             wrapMode: TextEdit.Wrap
                             background: null
-                            Accessible.name: qsTr("Test string")
+                            Accessible.name: app.i18n("ui-test-string")
                             onTextChanged: page.evaluate()
                         }
                     }
@@ -409,7 +409,7 @@ Kirigami.Page {
                 RowLayout {
                     Layout.fillWidth: true
                     Controls.Label {
-                        text: qsTr("MATCHES")
+                        text: app.i18n("ui-matches")
                         font.pixelSize: 10
                         font.weight: app.tokens.weightSemibold
                         font.letterSpacing: 0
@@ -519,12 +519,12 @@ Kirigami.Page {
                         }
                         Controls.Label {
                             text: page.controller.error.length > 0
-                                ? qsTr("Invalid pattern")
+                                ? app.i18n("ui-invalid-pattern")
                                 : patternField.text.length === 0
-                                    ? qsTr("Enter a pattern")
+                                    ? app.i18n("ui-enter-a-pattern")
                                     : sampleArea.text.length === 0
-                                        ? qsTr("Add sample text")
-                                        : qsTr("No matches")
+                                        ? app.i18n("ui-add-sample-text")
+                                        : app.i18n("ui-no-matches")
                             font.pixelSize: app.tokens.textCaption + 1
                             font.weight: app.tokens.weightMedium
                             font.family: app.tokens.sansFamily

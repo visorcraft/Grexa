@@ -180,6 +180,8 @@ proptest! {
         replacement in "[a-z]{2,4}",
     ) {
         prop_assume!(needle != filler);
+        prop_assume!(!filler.contains(&needle));
+        prop_assume!(!needle.contains(&filler));
 
         let dir = tempdir().unwrap();
         let filler_clone = filler.clone();

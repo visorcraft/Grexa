@@ -13,6 +13,7 @@ use thiserror::Error;
 use unicode_normalization::UnicodeNormalization;
 
 use crate::cancel::CancelToken;
+use crate::constants::file_exceeds_hard_cap;
 use crate::documents::extract_text;
 use crate::encoding::{DetectedEncoding, read_text};
 use crate::models::{
@@ -79,19 +80,6 @@ static BINARY_EXTENSIONS: &[&str] = &[
 pub(crate) static SEARCHABLE_BINARY_EXTENSIONS: &[&str] = &[
     "docx", "xlsx", "pptx", "odt", "ods", "odp", "zip", "pdf", "rtf",
 ];
-
-/// Hard upper bound on the size of a single file the search/replace engine
-/// will read into memory. The user-facing size filter defaults to "no limit",
-/// so without this safety net a single multi-gigabyte file could exhaust
-/// memory (decoding/normalization roughly doubles the footprint). Files above
-/// the cap are reported as `SkipReason::SizeLimit` rather than scanned.
-const MAX_SEARCH_FILE_BYTES: u64 = 512 * 1024 * 1024;
-
-/// `true` when a file of `len` bytes exceeds the hard in-memory read cap. The
-/// cap itself is allowed; only strictly larger files are rejected.
-fn file_exceeds_hard_cap(len: u64) -> bool {
-    len > MAX_SEARCH_FILE_BYTES
-}
 
 static SYSTEM_DIRS: &[&str] = &[
     ".git",
@@ -1325,11 +1313,11 @@ mod tests {
     fn hard_size_cap_rejects_only_files_above_the_limit() {
         assert!(!file_exceeds_hard_cap(0), "an empty file is within the cap");
         assert!(
-            !file_exceeds_hard_cap(MAX_SEARCH_FILE_BYTES),
+            !file_exceeds_hard_cap(crate::constants::MAX_SEARCH_FILE_BYTES),
             "a file exactly at the cap is allowed"
         );
         assert!(
-            file_exceeds_hard_cap(MAX_SEARCH_FILE_BYTES + 1),
+            file_exceeds_hard_cap(crate::constants::MAX_SEARCH_FILE_BYTES + 1),
             "a file one byte over the cap is rejected"
         );
     }

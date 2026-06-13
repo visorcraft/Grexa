@@ -66,6 +66,28 @@ fi
 QMAKE="${QMAKE:-$(command -v qmake6 || command -v qmake-qt6 || echo /usr/bin/qmake6)}"
 export QMAKE
 
+# Bundle the Breeze icon theme so symbolic sidebar/menu icons resolve inside
+# the AppImage even when the host has no KDE icon theme installed.
+for theme in breeze breeze-dark; do
+    if [ -d "/usr/share/icons/${theme}" ]; then
+        cp -r "/usr/share/icons/${theme}" "${appdir}/usr/share/icons/"
+    else
+        echo "NOTE: /usr/share/icons/${theme} not found; AppImage may miss icons." >&2
+    fi
+done
+
+# Bundle Qt SVG support. QIcon loads themed SVG icons through the SVG
+# imageformat/iconengine plugins; the binary does not link Qt6Svg directly,
+# so linuxdeploy-plugin-qt will not pull them in automatically.
+qt_plugin_dir="$("$QMAKE" -query QT_INSTALL_PLUGINS 2>/dev/null || echo /usr/lib/qt6/plugins)"
+if [ -d "$qt_plugin_dir" ]; then
+    install -Dm644 "${qt_plugin_dir}/imageformats/libqsvg.so" \
+        "${appdir}/usr/plugins/imageformats/libqsvg.so" 2>/dev/null || true
+    install -Dm644 "${qt_plugin_dir}/iconengines/libqsvgicon.so" \
+        "${appdir}/usr/plugins/iconengines/libqsvgicon.so" 2>/dev/null || true
+fi
+install -Dm644 /usr/lib/libQt6Svg.so.6 "${appdir}/usr/lib/libQt6Svg.so.6" 2>/dev/null || true
+
 # Our QML is compiled into the binary as a Qt resource (qt_add_qml_module), so
 # linuxdeploy-plugin-qt's qmlimportscanner has no on-disk QML to scan and would
 # otherwise bundle ZERO QML modules. Point it at the QML sources so it discovers

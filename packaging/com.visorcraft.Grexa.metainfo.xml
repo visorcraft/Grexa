@@ -75,6 +75,23 @@
   </supports>
 
   <releases>
+    <release version="1.5.2" date="2026-06-12">
+      <description>
+        <p>Localization, accessibility, and container hardening patch.</p>
+        <ul>
+          <li>Expose generic QML i18n helpers and migrate all qsTr() calls to Fluent.</li>
+          <li>Cache per-container grep availability in container search.</li>
+          <li>Honor the reduced-motion setting for all busy spinners.</li>
+          <li>Enforce the shared 512 MiB read cap in the replace pipeline.</li>
+          <li>Smoke-test the AppImage in release CI.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.5.1" date="2026-06-12">
+      <description>
+        <p>Patch release.</p>
+      </description>
+    </release>
     <release version="1.5.0" date="2026-06-11">
       <description>
         <p>Search and replace hardening release.</p>

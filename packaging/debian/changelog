@@ -1,3 +1,15 @@
+grexa (1.5.2-1) unstable; urgency=medium
+
+  * Version bump to 1.5.2.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Fri, 12 Jun 2026 00:00:00 +0000
+
+grexa (1.5.1-1) unstable; urgency=medium
+
+  * Version bump to 1.5.1.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Fri, 12 Jun 2026 00:00:00 +0000
+
 grexa (1.5.0-1) unstable; urgency=medium
 
   * Add whole-word search matching and a CLI replace subcommand with full

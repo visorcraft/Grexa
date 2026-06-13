@@ -11,7 +11,7 @@ pub mod search;
 
 pub use runtime::{
     CliRuntime, CommandInvocation, CommandResult, CommandRunner, MockCommandRunner, RuntimeError,
-    RuntimeOperations, SystemCommandRunner,
+    RuntimeOperations, SystemCommandRunner, clear_grep_availability_cache,
 };
 
 pub use search::{
@@ -20,7 +20,7 @@ pub use search::{
     parse_grep_output_with_pattern, prune_mirrors, replace_container, search_container,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ContainerRuntimeKind {
     Docker,
     Podman,

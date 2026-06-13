@@ -28,6 +28,7 @@ use grexa_core::AppPaths;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
+mod icon_theme;
 mod qobjects;
 mod workspace;
 
@@ -105,6 +106,9 @@ fn main() {
             .set_organization_name(&QString::from("VisorCraft"));
         app.as_mut()
             .set_organization_domain(&QString::from("visorcraft.com"));
+        // The AppImage does not inherit the host's Breeze theme, so force it
+        // explicitly. The theme files are bundled via breeze-icons / qt6-svg.
+        icon_theme::set_icon_theme("breeze");
     }
 
     // Wayland's `app_id` and X11's `WM_CLASS` map to this string.

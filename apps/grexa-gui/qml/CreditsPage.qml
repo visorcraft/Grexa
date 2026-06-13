@@ -118,7 +118,7 @@ Kirigami.Page {
 
                 Controls.Label {
                     Layout.fillWidth: true
-                    text: qsTr("Credits")
+                    text: app.i18n("ui-credits")
                     color: app.tokens.textPrimary
                     font.pixelSize: 26
                     font.weight: app.tokens.weightBold
@@ -128,7 +128,7 @@ Kirigami.Page {
 
                 Controls.Label {
                     Layout.fillWidth: true
-                    text: qsTr("%1 Cargo crates - %2 runtime components")
+                    text: app.i18n("ui-1-cargo-crates-2-runtime-components-4ce163")
                         .arg(page.crates.length)
                         .arg(page.runtimeComponents.length)
                     color: app.tokens.textPrimary
@@ -169,7 +169,7 @@ Kirigami.Page {
 
                     Controls.Label {
                         Layout.fillWidth: true
-                        text: qsTr("Runtime components")
+                        text: app.i18n("ui-runtime-components")
                         color: app.tokens.textPrimary
                         font.pixelSize: app.tokens.textBodyEmphasis
                         font.weight: app.tokens.weightBold
@@ -178,7 +178,7 @@ Kirigami.Page {
 
                     Controls.Label {
                         Layout.fillWidth: true
-                        text: qsTr("System libraries Grexa links against at execution. None are bundled - downstream packagers handle redistribution.")
+                        text: app.i18n("ui-system-libraries-grexa-links-against-at-0646c4")
                         color: app.tokens.textPrimary
                         font.pixelSize: app.tokens.textBody
                         font.family: app.tokens.sansFamily
@@ -220,7 +220,7 @@ Kirigami.Page {
                                 icon.name: "document-preview-symbolic"
                                 display: Controls.AbstractButton.IconOnly
                                 onClicked: page.openComponentLicense(modelData)
-                                Controls.ToolTip.text: qsTr("View license text")
+                                Controls.ToolTip.text: app.i18n("ui-view-license-text")
                                 Controls.ToolTip.visible: hovered
                             }
 
@@ -230,7 +230,7 @@ Kirigami.Page {
                                 icon.name: "internet-services-symbolic"
                                 display: Controls.AbstractButton.IconOnly
                                 onClicked: page.openUrl(modelData.url)
-                                Controls.ToolTip.text: qsTr("Open project website")
+                                Controls.ToolTip.text: app.i18n("ui-open-project-website")
                                 Controls.ToolTip.visible: hovered
                             }
                         }
@@ -241,7 +241,7 @@ Kirigami.Page {
             Controls.Label {
                 Layout.fillWidth: true
                 Layout.topMargin: app.tokens.spaceS
-                text: qsTr("CARGO CRATES")
+                text: app.i18n("ui-cargo-crates")
                 color: app.tokens.textPrimary
                 font.pixelSize: 10
                 font.weight: app.tokens.weightSemibold
@@ -257,14 +257,14 @@ Kirigami.Page {
                 AppTextField {
                     id: filterField
                     Layout.fillWidth: true
-                    placeholderText: qsTr("Filter by crate name or license...")
+                    placeholderText: app.i18n("ui-filter-by-crate-name-or-license")
                     onTextChanged: page.filterText = text
-                    Accessible.name: qsTr("Filter third-party credits")
+                    Accessible.name: app.i18n("ui-filter-thirdparty-credits")
                 }
 
                 Controls.Label {
                     Layout.preferredWidth: 68
-                    text: qsTr("%1 / %2").arg(page.filteredCrates.length).arg(page.crates.length)
+                    text: app.i18n("ui-1-2-d4b2ac").arg(page.filteredCrates.length).arg(page.crates.length)
                     color: app.tokens.textPrimary
                     font.pixelSize: app.tokens.textCaption + 1
                     font.family: app.tokens.monoFamily
@@ -300,7 +300,7 @@ Kirigami.Page {
 
                             Controls.Label {
                                 Layout.preferredWidth: page.nameColumnWidth
-                                text: qsTr("Crate")
+                                text: app.i18n("ui-crate")
                                 color: app.tokens.textPrimary
                                 font.pixelSize: app.tokens.textCaption + 1
                                 font.weight: app.tokens.weightSemibold
@@ -310,7 +310,7 @@ Kirigami.Page {
 
                             Controls.Label {
                                 Layout.preferredWidth: page.versionColumnWidth
-                                text: qsTr("Version")
+                                text: app.i18n("ui-version")
                                 color: app.tokens.textPrimary
                                 font.pixelSize: app.tokens.textCaption + 1
                                 font.weight: app.tokens.weightSemibold
@@ -320,7 +320,7 @@ Kirigami.Page {
 
                             Controls.Label {
                                 Layout.fillWidth: true
-                                text: qsTr("License expression")
+                                text: app.i18n("ui-license-expression")
                                 color: app.tokens.textPrimary
                                 font.pixelSize: app.tokens.textCaption + 1
                                 font.weight: app.tokens.weightSemibold
@@ -400,7 +400,7 @@ Kirigami.Page {
                                     icon.name: "internet-services-symbolic"
                                     display: Controls.AbstractButton.IconOnly
                                     onClicked: page.openUrl(modelData.url)
-                                    Controls.ToolTip.text: qsTr("Open crate project")
+                                    Controls.ToolTip.text: app.i18n("ui-open-crate-project")
                                     Controls.ToolTip.visible: hovered
                                 }
                             }

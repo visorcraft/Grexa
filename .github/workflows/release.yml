@@ -55,7 +55,9 @@ jobs:
             qt6-base \
             qt6-declarative \
             qt6-tools \
+            qt6-svg \
             kirigami \
+            breeze-icons \
             clang \
             ninja \
             mesa \
@@ -64,7 +66,8 @@ jobs:
             file \
             desktop-file-utils \
             appstream \
-            github-cli
+            github-cli \
+            xorg-server-xvfb
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -212,14 +215,27 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           bash packaging/appimage/build.sh
 
-          dist="target/dist"
-          if compgen -G "target/appimage/Grexa-*.AppImage" >/dev/null; then
-            mv target/appimage/Grexa-*.AppImage "${dist}/"
-            (cd "$dist" && sha256sum Grexa-*.AppImage >> sha256sums.txt)
-          else
+          appimage=(target/appimage/Grexa-*.AppImage)
+          if [[ ! -e "${appimage[0]}" ]]; then
             echo "AppImage was not produced" >&2
             exit 1
           fi
+
+          # AGENTS.md verification: the AppImage must keep running without
+          # falling back to the system QML2_IMPORT_PATH. Exit 2 means
+          # "QML payload did not instantiate"; exits 0/124/143 are all
+          # acceptable signs of a healthy or cleanly-terminated GUI event loop.
+          env -u QML2_IMPORT_PATH xvfb-run -a timeout --preserve-status 12 "${appimage[0]}"
+          exit_code=$?
+
+          if [[ "$exit_code" -ne 0 && "$exit_code" -ne 124 && "$exit_code" -ne 143 ]]; then
+            echo "AppImage exited unexpectedly with ${exit_code}; likely QML payload did not instantiate" >&2
+            exit "$exit_code"
+          fi
+
+          dist="target/dist"
+          mv target/appimage/Grexa-*.AppImage "${dist}/"
+          (cd "$dist" && sha256sum Grexa-*.AppImage >> sha256sums.txt)
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

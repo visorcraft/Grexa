@@ -6,7 +6,7 @@
 #
 
 Name:           grexa
-Version:        1.5.0
+Version:        1.5.2
 Release:        0
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 License:        GPL-3.0-only
@@ -102,6 +102,16 @@ cargo test --workspace --release --frozen
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Fri Jun 12 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.5.2-0
+- Expose generic QML i18n helpers and migrate all qsTr() calls to Fluent.
+- Cache per-container grep availability in container search.
+- Honor the reduced-motion setting for all busy spinners.
+- Enforce the shared 512 MiB read cap in the replace pipeline.
+- Smoke-test the AppImage in release CI.
+
+* Fri Jun 12 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.5.1-0
+- Version bump to 1.5.1.
+
 * Thu Jun 11 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.5.0-0
 - Add whole-word search matching and a CLI replace subcommand with full
   search flag parity.

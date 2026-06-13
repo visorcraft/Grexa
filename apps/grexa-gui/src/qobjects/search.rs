@@ -404,6 +404,18 @@ pub mod ffi {
         #[cxx_override]
         #[cxx_name = "roleNames"]
         fn role_names(self: &SearchController) -> QHash_i32_QByteArray;
+
+        /// Localize a simple Fluent key. Falls back to the key itself if the
+        /// catalog is missing the entry, so a bad translation never crashes
+        /// the UI.
+        #[qinvokable]
+        fn i18n(self: &SearchController, key: &QString) -> QString;
+
+        /// Localize a plural-aware Fluent key. The catalog's plural selector
+        /// receives `n` and returns the correct inflection for the current
+        /// locale.
+        #[qinvokable]
+        fn i18n_plural(self: &SearchController, key: &QString, n: i64) -> QString;
     }
 
     // Inherited from QAbstractListModel for begin/end notification.
@@ -1365,6 +1377,20 @@ impl ffi::SearchController {
         hash.insert(role::PREVIEW_MATCH, QByteArray::from("previewMatch"));
         hash.insert(role::PREVIEW_AFTER, QByteArray::from("previewAfter"));
         hash
+    }
+
+    fn i18n(&self, key: &QString) -> QString {
+        let key_str = key.to_string();
+        with_workspace(|w| {
+            w.bundle
+                .format(&key_str, &[])
+                .unwrap_or_else(|_| key_str.clone())
+        })
+        .into()
+    }
+
+    fn i18n_plural(&self, key: &QString, n: i64) -> QString {
+        plural_count(&key.to_string(), n as usize).into()
     }
 }
 

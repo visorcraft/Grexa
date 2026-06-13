@@ -99,6 +99,11 @@ Kirigami.ApplicationWindow {
     property alias aiController: aiController
     property string currentPageKey: "search"
 
+    // Fluent localization helpers. QML files use `app.i18n("key")` instead of
+    // `qsTr(...)` so strings flow through the locale-aware bundle.
+    function i18n(key) { return searchController.i18n(key); }
+    function i18nPlural(key, n) { return searchController.i18n_plural(key, n); }
+
     // Snapshot of the host Kirigami palette captured *before* our
     // overrides cascade through the window. DesignTokens reads its
     // System-theme fallback from here, not from Kirigami.Theme on
@@ -119,7 +124,7 @@ Kirigami.ApplicationWindow {
         readonly property color highlight: sysPalette.highlight
     }
 
-    title: qsTr("Grexa")
+    title: app.i18n("app-name")
 
     DesignTokens { id: tokens }
 
@@ -350,8 +355,8 @@ Kirigami.ApplicationWindow {
                     icon.name: "application-menu-symbolic"
                     icon.color: tokens.textPrimary
                     display: Controls.AbstractButton.IconOnly
-                    Controls.ToolTip.text: drawer.isCollapsed ? qsTr("Open Sidebar")
-                                                              : qsTr("Close Sidebar")
+                    Controls.ToolTip.text: drawer.isCollapsed ? app.i18n("ui-open-sidebar")
+                                                              : app.i18n("ui-close-sidebar")
                     Controls.ToolTip.visible: hovered
                     Controls.ToolTip.delay: 400
                     Accessible.name: Controls.ToolTip.text
@@ -377,7 +382,7 @@ Kirigami.ApplicationWindow {
                     spacing: 1
                     visible: !drawer.isCollapsed
                     Controls.Label {
-                        text: qsTr("Grexa")
+                        text: app.i18n("app-name")
                         font.pixelSize: tokens.textSubheading + 1
                         font.weight: tokens.weightBold
                         font.family: tokens.sansFamily
@@ -385,7 +390,7 @@ Kirigami.ApplicationWindow {
                         color: tokens.textPrimary
                     }
                     Controls.Label {
-                        text: qsTr("Fast file search")
+                        text: app.i18n("ui-fast-file-search")
                         font.pixelSize: tokens.textCaption
                         opacity: 0.55
                         color: tokens.textPrimary
@@ -400,7 +405,7 @@ Kirigami.ApplicationWindow {
                 Layout.rightMargin: tokens.spaceL
                 Layout.topMargin: tokens.spaceS
                 Layout.bottomMargin: tokens.spaceS
-                text: qsTr("WORKSPACE")
+                text: app.i18n("ui-workspace-section")
                 font.pixelSize: 10
                 font.weight: tokens.weightSemibold
                 font.letterSpacing: 0
@@ -410,7 +415,7 @@ Kirigami.ApplicationWindow {
             }
             NavItem {
                 Layout.fillWidth: true
-                label: qsTr("Search")
+                label: app.i18n("ui-search")
                 iconName: "edit-find-symbolic"
                 active: app.currentPageKey === "search"
                 compact: drawer.isCollapsed
@@ -424,7 +429,7 @@ Kirigami.ApplicationWindow {
                 Layout.rightMargin: tokens.spaceL
                 Layout.topMargin: tokens.spaceXL
                 Layout.bottomMargin: tokens.spaceS
-                text: qsTr("TOOLS")
+                text: app.i18n("ui-tools-section")
                 font.pixelSize: 10
                 font.weight: tokens.weightSemibold
                 font.letterSpacing: 0
@@ -434,7 +439,7 @@ Kirigami.ApplicationWindow {
             }
             NavItem {
                 Layout.fillWidth: true
-                label: qsTr("Regex Builder")
+                label: app.i18n("ui-regex-builder")
                 iconName: "code-context-symbolic"
                 active: app.currentPageKey === "regex"
                 compact: drawer.isCollapsed
@@ -442,7 +447,7 @@ Kirigami.ApplicationWindow {
             }
             NavItem {
                 Layout.fillWidth: true
-                label: qsTr("History")
+                label: app.i18n("ui-history")
                 iconName: "history-symbolic"
                 active: app.currentPageKey === "history"
                 compact: drawer.isCollapsed
@@ -450,7 +455,7 @@ Kirigami.ApplicationWindow {
             }
             NavItem {
                 Layout.fillWidth: true
-                label: qsTr("Profiles")
+                label: app.i18n("ui-profiles")
                 iconName: "document-save-symbolic"
                 active: app.currentPageKey === "profiles"
                 compact: drawer.isCollapsed
@@ -458,7 +463,7 @@ Kirigami.ApplicationWindow {
             }
             NavItem {
                 Layout.fillWidth: true
-                label: qsTr("Settings")
+                label: app.i18n("ui-settings")
                 iconName: "settings-configure-symbolic"
                 active: app.currentPageKey === "settings"
                 compact: drawer.isCollapsed
@@ -466,7 +471,7 @@ Kirigami.ApplicationWindow {
             }
             NavItem {
                 Layout.fillWidth: true
-                label: qsTr("About")
+                label: app.i18n("ui-about")
                 iconName: "help-about-symbolic"
                 active: app.currentPageKey === "about"
                     || app.currentPageKey === "licenses"
@@ -485,7 +490,7 @@ Kirigami.ApplicationWindow {
                 Layout.rightMargin: tokens.spaceXS
                 Layout.bottomMargin: tokens.spaceL
                 horizontalAlignment: Text.AlignHCenter
-                text: "v" + Qt.application.version
+                text: app.i18n("ui-version-prefix").arg(Qt.application.version)
                 font.pixelSize: tokens.textCaption - 1
                 minimumPixelSize: 8
                 fontSizeMode: Text.HorizontalFit
@@ -513,7 +518,7 @@ Kirigami.ApplicationWindow {
                     Controls.Label {
                         id: versionLabel
                         anchors.centerIn: parent
-                        text: "v" + Qt.application.version
+                        text: app.i18n("ui-version-prefix").arg(Qt.application.version)
                         font.pixelSize: tokens.textCaption
                         font.family: tokens.monoFamily
                         opacity: 0.7
@@ -554,7 +559,7 @@ Kirigami.ApplicationWindow {
     Controls.Dialog {
         id: residualJournal
         modal: true
-        title: qsTr("Interrupted replace from a previous run")
+        title: app.i18n("ui-interrupted-replace-from-a-previous-run")
         standardButtons: Controls.Dialog.Discard | Controls.Dialog.Close
         property var entry: ({})
         width: Math.min(app.width * 0.6, 520)
@@ -568,7 +573,7 @@ Kirigami.ApplicationWindow {
             Controls.Label {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
-                text: qsTr("Grexa found a residual replace journal at $XDG_STATE_HOME/grexa/replace-journal.json. The previous run rewrote some files before being interrupted.")
+                text: app.i18n("ui-grexa-found-a-residual-replace-journal-1e9ebe")
             }
             Controls.Label {
                 Layout.fillWidth: true
@@ -580,7 +585,7 @@ Kirigami.ApplicationWindow {
                     if (!residualJournal.entry || !residualJournal.entry.root) return ""
                     const modified = (residualJournal.entry.modified_files || []).length
                     const failed = (residualJournal.entry.failed_files || []).length
-                    return qsTr("root: %1\nterm: %2 → %3\nfiles modified: %4\nfailures: %5")
+                    return app.i18n("ui-residual-journal-summary")
                         .arg(residualJournal.entry.root || "")
                         .arg(residualJournal.entry.search_term || "")
                         .arg(residualJournal.entry.replacement || "")
@@ -593,7 +598,7 @@ Kirigami.ApplicationWindow {
                 wrapMode: Text.WordWrap
                 font.pixelSize: tokens.textCaption + 1
                 opacity: 0.7
-                text: qsTr("Click Discard to remove the journal, or Close to keep it for forensic review. The file is a JSON document you can inspect by hand.")
+                text: app.i18n("ui-click-discard-to-remove-the-journal-b1485d")
             }
         }
     }

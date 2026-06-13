@@ -49,14 +49,14 @@ Kirigami.ScrollablePage {
                                      app.tokens.textPrimary.b, 0.55)
 
     readonly property var features: [
-        { icon: "edit-find-symbolic",        title: qsTr("Fast content search"),
-          body: qsTr("Streams matches as files are scanned — no waiting for the whole tree.") },
-        { icon: "code-context-symbolic",      title: qsTr("Regex builder"),
-          body: qsTr("Test patterns against a sample with the same engine the search uses.") },
-        { icon: "view-list-symbolic",         title: qsTr("Smart filters"),
-          body: qsTr(".gitignore-aware, with per-extension include + per-directory exclude globs.") },
-        { icon: "tools-symbolic",             title: qsTr("Optional AI assist"),
-          body: qsTr("Plug in any OpenAI-compatible endpoint. Keys live in Secret Service.") }
+        { icon: "edit-find-symbolic",        title: app.i18n("ui-fast-content-search"),
+          body: app.i18n("ui-streams-matches-as-files-are-scanned-a42cad") },
+        { icon: "code-context-symbolic",      title: app.i18n("ui-regex-builder"),
+          body: app.i18n("ui-test-patterns-against-a-sample-with-ac6cae") },
+        { icon: "view-list-symbolic",         title: app.i18n("ui-smart-filters"),
+          body: app.i18n("ui-gitignoreaware-with-perextension-include-perdirectory-exclude-0d4b24") },
+        { icon: "tools-symbolic",             title: app.i18n("ui-optional-ai-assist"),
+          body: app.i18n("ui-plug-in-any-openaicompatible-endpoint-keys-931293") }
     ]
 
     ColumnLayout {
@@ -82,14 +82,14 @@ Kirigami.ScrollablePage {
                 spacing: 1
                 Layout.alignment: Qt.AlignVCenter
                 Controls.Label {
-                    text: qsTr("About")
+                    text: app.i18n("ui-about")
                     font.pixelSize: app.tokens.textHeading
                     font.weight: app.tokens.weightBold
                     font.family: app.tokens.sansFamily
                     font.letterSpacing: 0
                 }
                 Controls.Label {
-                    text: qsTr("Built on Rust + Qt 6 / Kirigami via cxx-qt.")
+                    text: app.i18n("ui-built-on-rust-qt-6-kirigami")
                     font.pixelSize: app.tokens.textCaption + 1
                     font.family: app.tokens.sansFamily
                     opacity: 0.6
@@ -150,14 +150,14 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         spacing: app.tokens.spaceXS
                         Controls.Label {
-                            text: qsTr("Grexa")
+                            text: app.i18n("app-name")
                             font.pixelSize: app.tokens.textDisplay
                             font.weight: app.tokens.weightBold
                             font.family: app.tokens.sansFamily
                             font.letterSpacing: 0
                         }
                         Controls.Label {
-                            text: qsTr("Fast Linux file content search — built on the ripgrep core.")
+                            text: app.i18n("ui-fast-linux-file-content-search-built")
                             font.pixelSize: app.tokens.textBody + 1
                             font.family: app.tokens.sansFamily
                             opacity: 0.7
@@ -175,7 +175,7 @@ Kirigami.ScrollablePage {
                                 Controls.Label {
                                     id: versionLabel
                                     anchors.centerIn: parent
-                                    text: qsTr("v%1").arg(Qt.application.version)
+                                    text: app.i18n("ui-version-prefix").arg(Qt.application.version)
                                     font.pixelSize: app.tokens.textCaption + 1
                                     font.weight: app.tokens.weightSemibold
                                     font.family: app.tokens.monoFamily
@@ -192,7 +192,7 @@ Kirigami.ScrollablePage {
                                 Controls.Label {
                                     id: gplLabel
                                     anchors.centerIn: parent
-                                    text: qsTr("GPL v3")
+                                    text: app.i18n("ui-gpl-v3")
                                     font.pixelSize: app.tokens.textCaption + 1
                                     font.family: app.tokens.sansFamily
                                     opacity: 0.85
@@ -208,7 +208,7 @@ Kirigami.ScrollablePage {
                                 Controls.Label {
                                     id: platformLabel
                                     anchors.centerIn: parent
-                                    text: qsTr("Linux · Qt 6")
+                                    text: app.i18n("ui-linux-qt-6")
                                     font.pixelSize: app.tokens.textCaption + 1
                                     font.family: app.tokens.monoFamily
                                     opacity: 0.85
@@ -237,7 +237,7 @@ Kirigami.ScrollablePage {
             // A 2×2 grid of icon-led capability cards. Each card
             // has its own subtle border and an icon avatar.
             Controls.Label {
-                text: qsTr("WHAT'S INSIDE")
+                text: app.i18n("ui-whats-inside")
                 font.pixelSize: 10
                 font.weight: app.tokens.weightSemibold
                 font.letterSpacing: 0
@@ -350,7 +350,7 @@ Kirigami.ScrollablePage {
                     spacing: 2
                     Controls.Label {
                         Layout.fillWidth: true
-                        text: qsTr("Native Linux search app built with Rust, Qt 6, Kirigami, and cxx-qt.")
+                        text: app.i18n("ui-native-linux-search-app-built-with-0ff6f8")
                         font.pixelSize: app.tokens.textBodyEmphasis
                         font.weight: app.tokens.weightSemibold
                         font.family: app.tokens.sansFamily
@@ -359,7 +359,7 @@ Kirigami.ScrollablePage {
                     Controls.Label {
                         Layout.fillWidth: true
                         textFormat: Text.RichText
-                        text: qsTr("<a href='https://github.com/visorcraft/grexa'>github.com/visorcraft/grexa</a>")
+                        text: app.i18n("ui-a-hrefhttpsgithubcomvisorcraftgrexagithubcomvisorcraftgrexaa-90eda6")
                         onLinkActivated: link => Qt.openUrlExternally(link)
                         linkColor: app.tokens.accent
                         font.pixelSize: app.tokens.textBody
@@ -375,7 +375,7 @@ Kirigami.ScrollablePage {
                     anchors.verticalCenter: parent.verticalCenter
                     icon.name: "go-next-symbolic"
                     icon.color: app.tokens.textPrimary
-                    text: qsTr("Visit Grexa")
+                    text: app.i18n("ui-visit-grexa")
                     display: Controls.AbstractButton.TextBesideIcon
                     onClicked: Qt.openUrlExternally("https://github.com/visorcraft/grexa")
                 }
@@ -427,7 +427,7 @@ Kirigami.ScrollablePage {
                     spacing: 2
                     Controls.Label {
                         Layout.fillWidth: true
-                        text: qsTr("Official Linux port of our Grex tool for Windows.")
+                        text: app.i18n("ui-official-linux-port-of-our-grex")
                         font.pixelSize: app.tokens.textBodyEmphasis
                         font.weight: app.tokens.weightSemibold
                         font.family: app.tokens.sansFamily
@@ -436,7 +436,7 @@ Kirigami.ScrollablePage {
                     Controls.Label {
                         Layout.fillWidth: true
                         textFormat: Text.RichText
-                        text: qsTr("<a href='https://github.com/visorcraft/grex'>github.com/visorcraft/grex</a>")
+                        text: app.i18n("ui-a-hrefhttpsgithubcomvisorcraftgrexgithubcomvisorcraftgrexa-0e491d")
                         onLinkActivated: link => Qt.openUrlExternally(link)
                         linkColor: app.tokens.accent
                         font.pixelSize: app.tokens.textBody
@@ -452,7 +452,7 @@ Kirigami.ScrollablePage {
                     anchors.verticalCenter: parent.verticalCenter
                     icon.name: "go-next-symbolic"
                     icon.color: app.tokens.textPrimary
-                    text: qsTr("Visit Grex")
+                    text: app.i18n("ui-visit-grex")
                     display: Controls.AbstractButton.TextBesideIcon
                     onClicked: Qt.openUrlExternally("https://github.com/visorcraft/grex")
                 }
@@ -461,22 +461,22 @@ Kirigami.ScrollablePage {
             // -- Licenses & Credits card --------------------------
             Card {
                 Layout.fillWidth: true
-                title: qsTr("Licenses & Credits")
-                subtitle: qsTr("Every direct + transitive crate, acknowledgments, and full license text is bundled in the built-in licenses view.")
+                title: app.i18n("ui-licenses-credits")
+                subtitle: app.i18n("ui-every-direct-transitive-crate-acknowledgments-and-2f6d3e")
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: app.tokens.spaceM
                     AppFlatButton {
                         icon.name: "view-list-text"
                         icon.color: app.tokens.textPrimary
-                        text: qsTr("Licenses")
+                        text: app.i18n("ui-licenses")
                         display: Controls.AbstractButton.TextBesideIcon
                         onClicked: page.navigateRequested("licenses")
                     }
                     AppFlatButton {
                         icon.name: "help-about-symbolic"
                         icon.color: app.tokens.textPrimary
-                        text: qsTr("Credits")
+                        text: app.i18n("ui-credits")
                         display: Controls.AbstractButton.TextBesideIcon
                         onClicked: page.navigateRequested("credits")
                     }
@@ -490,7 +490,7 @@ Kirigami.ScrollablePage {
                 Layout.topMargin: app.tokens.spaceL
                 Layout.bottomMargin: app.tokens.spaceXL
                 textFormat: Text.RichText
-                text: qsTr("Built by <b>VisorCraft</b>") + "  ·  " + qsTr("Powered by Rust, Qt 6, Kirigami, and cxx-qt")
+                text: app.i18n("ui-built-by-bvisorcraftb") + "  ·  " + app.i18n("ui-powered-by-rust-qt-6-kirigami")
                 font.pixelSize: app.tokens.textCaption + 1
                 font.family: app.tokens.sansFamily
                 opacity: 0.55

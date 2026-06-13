@@ -107,12 +107,12 @@ Kirigami.ScrollablePage {
                     Layout.fillWidth: true
                     spacing: 0
                     Controls.Label {
-                        text: qsTr("Settings")
+                        text: app.i18n("ui-settings")
                         font.pixelSize: app.tokens.textHeading
                         font.weight: app.tokens.weightBold
                     }
                     Controls.Label {
-                        text: qsTr("Auto-saved to ~/.config/grexa/settings.json")
+                        text: app.i18n("ui-autosaved-to-configgrexasettingsjson")
                         font.pixelSize: app.tokens.textCaption
                         opacity: 0.6
                     }
@@ -150,7 +150,7 @@ Kirigami.ScrollablePage {
                         }
                         Controls.Label {
                             id: saveStatusLabel
-                            text: saveStatusPill.failed ? qsTr("Save failed") : qsTr("Saved")
+                            text: saveStatusPill.failed ? app.i18n("ui-save-failed") : app.i18n("ui-saved")
                             font.pixelSize: app.tokens.textCaption
                             font.weight: app.tokens.weightSemibold
                             color: saveStatusPill.failed
@@ -193,9 +193,9 @@ Kirigami.ScrollablePage {
                 AppFlatButton {
                     icon.name: "view-refresh"
                     icon.color: app.tokens.textPrimary
-                    text: qsTr("Reload")
+                    text: app.i18n("ui-reload")
                     display: Controls.AbstractButton.TextBesideIcon
-                    Controls.ToolTip.text: qsTr("Re-read settings.json from disk (useful after editing the file by hand).")
+                    Controls.ToolTip.text: app.i18n("ui-reread-settingsjson-from-disk-useful-after-a0edd0")
                     Controls.ToolTip.visible: hovered
                     onClicked: page.settings.reload()
                 }
@@ -214,22 +214,22 @@ Kirigami.ScrollablePage {
             // -- Appearance
             Card {
                 Layout.fillWidth: true
-                title: qsTr("Appearance")
-                subtitle: qsTr("Theme variant — the GTK/Plasma host palette still drives the chrome; this picks the in-app accent.")
+                title: app.i18n("ui-appearance")
+                subtitle: app.i18n("ui-theme-variant-the-gtkplasma-host-palette-6a5274")
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: app.tokens.spaceM
-                    Controls.Label { text: qsTr("Theme") }
+                    Controls.Label { text: app.i18n("ui-theme") }
                     AppComboBox {
                         Layout.fillWidth: true
-                        Accessible.name: qsTr("Theme")
+                        Accessible.name: app.i18n("ui-theme")
                         model: [
-                            qsTr("Follow system"), qsTr("Light"), qsTr("Dark"),
-                            qsTr("OLED Black"),
-                            qsTr("Gentle Gecko"), qsTr("Black Knight"),
-                            qsTr("Diamond"), qsTr("Dreams"), qsTr("Paranoid"),
-                            qsTr("Red Velvet"), qsTr("Subspace"),
-                            qsTr("Tiefling"), qsTr("Vibes"),
+                            app.i18n("ui-follow-system"), app.i18n("ui-light"), app.i18n("ui-dark"),
+                            "OLED Black",
+                            "Gentle Gecko", "Black Knight",
+                            "Diamond", "Dreams", "Paranoid",
+                            "Red Velvet", "Subspace",
+                            "Tiefling", "Vibes",
                         ]
                         currentIndex: page.themeValues.indexOf(page.settings.theme)
                         onActivated: {
@@ -243,45 +243,45 @@ Kirigami.ScrollablePage {
             // -- Search defaults
             Card {
                 Layout.fillWidth: true
-                title: qsTr("Search defaults")
-                subtitle: qsTr("Applied to every new tab. You can still toggle these per-search in the Search page.")
+                title: app.i18n("ui-search-defaults")
+                subtitle: app.i18n("ui-applied-to-every-new-tab-you-5b6703")
                 GridLayout {
                     columns: 2
                     columnSpacing: app.tokens.spaceL
                     rowSpacing: app.tokens.spaceS
                     Layout.fillWidth: true
                     AppCheckBox {
-                        text: qsTr("Regex by default")
+                        text: app.i18n("ui-regex-by-default")
                         checked: page.settings.regex
                         onToggled: { page.settings.regex = checked; page.commit() }
                     }
                     AppCheckBox {
-                        text: qsTr("Files-mode by default")
+                        text: app.i18n("ui-filesmode-by-default")
                         checked: page.settings.filesSearchMode
                         onToggled: { page.settings.filesSearchMode = checked; page.commit() }
                     }
                     AppCheckBox {
-                        text: qsTr("Respect .gitignore")
+                        text: app.i18n("ui-respect-gitignore")
                         checked: page.settings.respectGitignore
                         onToggled: { page.settings.respectGitignore = checked; page.commit() }
                     }
                     AppCheckBox {
-                        text: qsTr("Case sensitive")
+                        text: app.i18n("ui-case-sensitive")
                         checked: page.settings.caseSensitive
                         onToggled: { page.settings.caseSensitive = checked; page.commit() }
                     }
                     AppCheckBox {
-                        text: qsTr("Include subfolders")
+                        text: app.i18n("ui-include-subfolders")
                         checked: page.settings.includeSubfolders
                         onToggled: { page.settings.includeSubfolders = checked; page.commit() }
                     }
                     AppCheckBox {
-                        text: qsTr("Include hidden")
+                        text: app.i18n("ui-include-hidden")
                         checked: page.settings.includeHidden
                         onToggled: { page.settings.includeHidden = checked; page.commit() }
                     }
                     AppCheckBox {
-                        text: qsTr("Include binary/docs")
+                        text: app.i18n("ui-include-binarydocs")
                         checked: page.settings.includeBinary
                         onToggled: { page.settings.includeBinary = checked; page.commit() }
                     }
@@ -291,19 +291,19 @@ Kirigami.ScrollablePage {
             // -- Filter defaults
             Card {
                 Layout.fillWidth: true
-                title: qsTr("Filter defaults")
-                subtitle: qsTr("Glob patterns and directory excludes that pre-populate every new search.")
+                title: app.i18n("ui-filter-defaults")
+                subtitle: app.i18n("ui-glob-patterns-and-directory-excludes-that-0e7194")
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: app.tokens.spaceS
                     Controls.Label {
-                        text: qsTr("Match files")
+                        text: app.i18n("ui-match-files")
                         font.pixelSize: app.tokens.textCaption
                         opacity: 0.65
                     }
                     AppTextField {
                         Layout.fillWidth: true
-                        Accessible.name: qsTr("Match files")
+                        Accessible.name: app.i18n("ui-match-files")
                         placeholderText: "*.rs|*.toml|-target*"
                         text: page.settings.defaultMatchFiles
                         // Text fields commit on editing-finished (focus
@@ -315,14 +315,14 @@ Kirigami.ScrollablePage {
                         onEditingFinished: page.commit()
                     }
                     Controls.Label {
-                        text: qsTr("Exclude dirs")
+                        text: app.i18n("ui-exclude-dirs")
                         font.pixelSize: app.tokens.textCaption
                         opacity: 0.65
                         Layout.topMargin: app.tokens.spaceS
                     }
                     AppTextField {
                         Layout.fillWidth: true
-                        Accessible.name: qsTr("Exclude dirs")
+                        Accessible.name: app.i18n("ui-exclude-dirs")
                         placeholderText: "node_modules, target, .venv"
                         text: page.settings.defaultExcludeDirs
                         onTextEdited: page.settings.defaultExcludeDirs = text
@@ -334,23 +334,23 @@ Kirigami.ScrollablePage {
             // -- Context preview
             Card {
                 Layout.fillWidth: true
-                title: qsTr("Context preview")
-                subtitle: qsTr("How many lines surround a match when you open the preview dialog.")
+                title: app.i18n("ui-context-preview")
+                subtitle: app.i18n("ui-how-many-lines-surround-a-match-92f6cc")
                 GridLayout {
                     columns: 4
                     columnSpacing: app.tokens.spaceL
                     Layout.fillWidth: true
-                    Controls.Label { text: qsTr("Lines before") }
+                    Controls.Label { text: app.i18n("ui-lines-before") }
                     AppSpinBox {
                         from: 1; to: 20
-                        Accessible.name: qsTr("Lines before")
+                        Accessible.name: app.i18n("ui-lines-before")
                         value: page.settings.contextLinesBefore
                         onValueModified: { page.settings.contextLinesBefore = value; page.commit() }
                     }
-                    Controls.Label { text: qsTr("Lines after") }
+                    Controls.Label { text: app.i18n("ui-lines-after") }
                     AppSpinBox {
                         from: 1; to: 20
-                        Accessible.name: qsTr("Lines after")
+                        Accessible.name: app.i18n("ui-lines-after")
                         value: page.settings.contextLinesAfter
                         onValueModified: { page.settings.contextLinesAfter = value; page.commit() }
                     }
@@ -360,10 +360,10 @@ Kirigami.ScrollablePage {
             // -- Containers
             Card {
                 Layout.fillWidth: true
-                title: qsTr("Containers")
-                subtitle: qsTr("Allow Grexa to search inside running Docker and Podman containers.")
+                title: app.i18n("ui-containers")
+                subtitle: app.i18n("ui-allow-grexa-to-search-inside-running-eb34b5")
                 AppCheckBox {
-                    text: qsTr("Enable container search")
+                    text: app.i18n("ui-enable-container-search")
                     checked: page.settings.enableContainerSearch
                     onToggled: { page.settings.enableContainerSearch = checked; page.commit() }
                 }
@@ -372,14 +372,14 @@ Kirigami.ScrollablePage {
             // -- AI Search
             Card {
                 Layout.fillWidth: true
-                title: qsTr("AI Search")
-                subtitle: qsTr("OpenAI-compatible chat endpoint. API key is stored in Secret Service (KWallet / GNOME Keyring) and never round-trips through QML.")
+                title: app.i18n("ui-ai-search")
+                subtitle: app.i18n("ui-openaicompatible-chat-endpoint-api-key-is-676397")
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: app.tokens.spaceM
 
                     AppCheckBox {
-                        text: qsTr("Enable AI chat panel on the Search page")
+                        text: app.i18n("ui-enable-ai-chat-panel-on-the")
                         checked: page.settings.aiSearchEnabled
                         onToggled: { page.settings.aiSearchEnabled = checked; page.commit() }
                     }
@@ -390,10 +390,10 @@ Kirigami.ScrollablePage {
                         rowSpacing: app.tokens.spaceS
                         Layout.fillWidth: true
 
-                        Controls.Label { text: qsTr("Endpoint") }
+                        Controls.Label { text: app.i18n("ui-endpoint") }
                         AppTextField {
                             Layout.fillWidth: true
-                            Accessible.name: qsTr("Endpoint")
+                            Accessible.name: app.i18n("ui-endpoint")
                             placeholderText: "https://api.openai.com/v1"
                             text: page.settings.aiEndpoint
                             onTextEdited: {
@@ -402,10 +402,10 @@ Kirigami.ScrollablePage {
                             }
                             onEditingFinished: page.commit()
                         }
-                        Controls.Label { text: qsTr("Model") }
+                        Controls.Label { text: app.i18n("ui-model") }
                         AppTextField {
                             Layout.fillWidth: true
-                            Accessible.name: qsTr("Model")
+                            Accessible.name: app.i18n("ui-model")
                             placeholderText: "gpt-4o-mini"
                             text: page.settings.aiModel
                             onTextEdited: {
@@ -414,7 +414,7 @@ Kirigami.ScrollablePage {
                             }
                             onEditingFinished: page.commit()
                         }
-                        Controls.Label { text: qsTr("API key") }
+                        Controls.Label { text: app.i18n("ui-api-key") }
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: app.tokens.spaceS
@@ -422,13 +422,13 @@ Kirigami.ScrollablePage {
                                 id: keyField
                                 Layout.fillWidth: true
                                 echoMode: TextInput.Password
-                                Accessible.name: qsTr("API key")
-                                placeholderText: page.ai.hasApiKey ? qsTr("•••••• (stored)") : qsTr("paste a key…")
+                                Accessible.name: app.i18n("ui-api-key")
+                                placeholderText: page.ai.hasApiKey ? app.i18n("ui-api-key-stored") : app.i18n("ui-paste-a-key")
                             }
                             AppFlatButton {
                                 icon.name: "kt-password-stored"
                                 icon.color: app.tokens.textPrimary
-                                text: qsTr("Save")
+                                text: app.i18n("ui-save")
                                 display: Controls.AbstractButton.TextBesideIcon
                                 enabled: keyField.text.length > 0
                                 onClicked: {
@@ -440,7 +440,7 @@ Kirigami.ScrollablePage {
                             AppFlatButton {
                                 icon.name: "edit-delete"
                                 icon.color: app.tokens.textPrimary
-                                text: qsTr("Clear")
+                                text: app.i18n("ui-clear")
                                 display: Controls.AbstractButton.TextBesideIcon
                                 enabled: page.ai.hasApiKey
                                 onClicked: page.ai.clearApiKey()
@@ -452,8 +452,8 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         Controls.Label {
                             text: page.ai.hasApiKey
-                                ? qsTr("Key stored.")
-                                : qsTr("No key stored.")
+                                ? app.i18n("ui-key-stored")
+                                : app.i18n("ui-no-key-stored")
                             font.pixelSize: app.tokens.textCaption
                             opacity: 0.7
                             Layout.fillWidth: true
@@ -461,7 +461,7 @@ Kirigami.ScrollablePage {
                         AppFlatButton {
                             icon.name: "network-connect"
                             icon.color: app.tokens.textPrimary
-                            text: qsTr("Test endpoint")
+                            text: app.i18n("ui-test-endpoint")
                             display: Controls.AbstractButton.TextBesideIcon
                             enabled: !page.ai.busy && page.settings.aiEndpoint.length > 0
                             onClicked: {
@@ -476,36 +476,36 @@ Kirigami.ScrollablePage {
             // -- Editor
             Card {
                 Layout.fillWidth: true
-                title: qsTr("Editor")
-                subtitle: qsTr("Which editor opens when you choose “Open in editor” from a result row.")
+                title: app.i18n("ui-editor")
+                subtitle: app.i18n("ui-which-editor-opens-when-you-choose-b1c23a")
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: app.tokens.spaceS
                     RowLayout {
                         Layout.fillWidth: true
-                        Controls.Label { text: qsTr("Preset") }
+                        Controls.Label { text: app.i18n("ui-preset") }
                         AppComboBox {
                             Layout.fillWidth: true
-                            Accessible.name: qsTr("Editor preset")
+                            Accessible.name: app.i18n("ui-editor-preset")
                             model: [
-                                qsTr("Kate"), qsTr("KWrite"), qsTr("VS Code"),
-                                qsTr("VSCodium"), qsTr("Sublime Text"),
-                                qsTr("JetBrains IDE"), qsTr("GNOME Text Editor"),
-                                qsTr("Neovim (terminal)"), qsTr("System default (xdg-open)"),
+                                "Kate", "KWrite", "VS Code",
+                                "VSCodium", "Sublime Text",
+                                app.i18n("ui-jetbrains-ide"), "GNOME Text Editor",
+                                app.i18n("ui-neovim-terminal"), app.i18n("ui-system-default-xdgopen"),
                             ]
                             currentIndex: page.settings.editorPreset
                             onActivated: { page.settings.editorPreset = currentIndex; page.commit() }
                         }
                     }
                     Controls.Label {
-                        text: qsTr("Custom command (overrides preset; supports {path} and {line})")
+                        text: app.i18n("ui-custom-command-overrides-preset-supports-path-65d401")
                         font.pixelSize: app.tokens.textCaption
                         opacity: 0.6
                         Layout.topMargin: app.tokens.spaceS
                     }
                     AppTextField {
                         Layout.fillWidth: true
-                        Accessible.name: qsTr("Custom command")
+                        Accessible.name: app.i18n("ui-custom-command")
                         placeholderText: "kate --line {line} {path}"
                         text: page.settings.editorCustomCommand
                         onTextEdited: page.settings.editorCustomCommand = text
@@ -517,18 +517,18 @@ Kirigami.ScrollablePage {
             // -- Replace
             Card {
                 Layout.fillWidth: true
-                title: qsTr("Replace")
-                subtitle: qsTr("Safety + recovery options for the irreversible rewrite flow.")
+                title: app.i18n("ui-replace-2")
+                subtitle: app.i18n("ui-safety-recovery-options-for-the-irreversible")
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: app.tokens.spaceS
                     AppCheckBox {
-                        text: qsTr("Confirm before replacing")
+                        text: app.i18n("ui-confirm-before-replacing")
                         checked: page.settings.replaceConfirm
                         onToggled: { page.settings.replaceConfirm = checked; page.commit() }
                     }
                     AppCheckBox {
-                        text: qsTr("Surface residual journal on startup")
+                        text: app.i18n("ui-surface-residual-journal-on-startup")
                         checked: page.settings.replaceShowJournalOnStartup
                         onToggled: { page.settings.replaceShowJournalOnStartup = checked; page.commit() }
                     }
@@ -538,18 +538,18 @@ Kirigami.ScrollablePage {
             // -- Accessibility
             Card {
                 Layout.fillWidth: true
-                title: qsTr("Accessibility")
-                subtitle: qsTr("Reduced motion disables result-row transitions and busy spinners. High contrast nudges the palette toward higher legibility.")
+                title: app.i18n("ui-accessibility")
+                subtitle: app.i18n("ui-reduced-motion-disables-resultrow-transitions-and-bfd4cf")
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: app.tokens.spaceS
                     AppCheckBox {
-                        text: qsTr("Reduce motion")
+                        text: app.i18n("ui-reduce-motion")
                         checked: page.settings.accessibilityReducedMotion
                         onToggled: { page.settings.accessibilityReducedMotion = checked; page.commit() }
                     }
                     AppCheckBox {
-                        text: qsTr("High contrast")
+                        text: app.i18n("ui-high-contrast")
                         checked: page.settings.accessibilityHighContrast
                         onToggled: { page.settings.accessibilityHighContrast = checked; page.commit() }
                     }
@@ -559,10 +559,10 @@ Kirigami.ScrollablePage {
             // -- Privacy
             Card {
                 Layout.fillWidth: true
-                title: qsTr("Privacy")
-                subtitle: qsTr("Redact filesystem paths from grexa-gui.log and any crash diagnostics generated locally.")
+                title: app.i18n("ui-privacy")
+                subtitle: app.i18n("ui-redact-filesystem-paths-from-grexaguilog-and-eb384e")
                 AppCheckBox {
-                    text: qsTr("Redact paths in diagnostics")
+                    text: app.i18n("ui-redact-paths-in-diagnostics")
                     checked: page.settings.privacyRedactPaths
                     onToggled: { page.settings.privacyRedactPaths = checked; page.commit() }
                 }
@@ -571,19 +571,19 @@ Kirigami.ScrollablePage {
             // -- Diagnostics
             Card {
                 Layout.fillWidth: true
-                title: qsTr("Diagnostics")
-                subtitle: qsTr("Where Grexa writes its logs and how to control verbosity.")
+                title: app.i18n("ui-diagnostics")
+                subtitle: app.i18n("ui-where-grexa-writes-its-logs-and")
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: app.tokens.spaceXS
                     Controls.Label {
-                        text: qsTr("Log: $XDG_STATE_HOME/grexa/grexa-gui.log")
+                        text: app.i18n("ui-log-xdgstatehomegrexagrexaguilog")
                         font.family: app.tokens.monoFamily
                         font.pixelSize: app.tokens.textCaption
                         opacity: 0.7
                     }
                     Controls.Label {
-                        text: qsTr("Filter: GREXA_LOG=info,grexa_core=debug")
+                        text: app.i18n("ui-filter-grexaloginfogrexacoredebug")
                         font.family: app.tokens.monoFamily
                         font.pixelSize: app.tokens.textCaption
                         opacity: 0.7

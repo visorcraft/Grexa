@@ -93,7 +93,7 @@ Item {
                 id: pathField
                 editable: true
                 textRole: "pathText"
-                Accessible.name: qsTr("Search path")
+                Accessible.name: app.i18n("ui-search-path")
                 // Preferred 300 but allow shrinking to a usable
                 // ~140 so a narrow window still shows the term
                 // input and primary action without clipping.
@@ -132,7 +132,7 @@ Item {
                             // because of how `contentItem` is
                             // reparented.
                             visible: pathRow.hovered
-                            Controls.ToolTip.text: qsTr("Forget this path")
+                            Controls.ToolTip.text: app.i18n("ui-forget-this-path")
                             Controls.ToolTip.visible: hovered
                             onClicked: {
                                 app.searchController.removeRecentPath(pathText)
@@ -154,8 +154,8 @@ Item {
                 display: Controls.AbstractButton.IconOnly
                 Layout.preferredWidth: 32
                 Layout.preferredHeight: 32
-                Accessible.name: qsTr("Browse for a folder")
-                Controls.ToolTip.text: qsTr("Browse for a folder")
+                Accessible.name: app.i18n("ui-browse-for-a-folder")
+                Controls.ToolTip.text: app.i18n("ui-browse-for-a-folder")
                 Controls.ToolTip.visible: hovered
                 onClicked: root.browse()
             }
@@ -186,33 +186,33 @@ Item {
                 id: termField
                 Layout.fillWidth: true
                 Layout.leftMargin: app.tokens.spaceS
-                placeholderText: qsTr("Search code, configs, anything…")
+                placeholderText: app.i18n("ui-search-code-configs-anything")
                 font.pixelSize: app.tokens.textBody
                 font.family: app.tokens.sansFamily
                 background: null
                 Keys.onReturnPressed: root.submitted()
-                Accessible.name: qsTr("Search term")
+                Accessible.name: app.i18n("ui-search-term")
             }
 
             // Flag chips
             FlagChip {
                 id: regexChip
                 label: ".*"
-                tooltip: qsTr("Regex")
+                tooltip: app.i18n("ui-regex")
                 active: root.regexEnabled
                 onToggled: root.regexEnabled = !root.regexEnabled
             }
             FlagChip {
                 id: caseChip
                 label: "Aa"
-                tooltip: qsTr("Case-sensitive")
+                tooltip: app.i18n("ui-casesensitive")
                 active: root.caseSensitive
                 onToggled: root.caseSensitive = !root.caseSensitive
             }
             FlagChip {
                 id: wholeWordChip
-                label: qsTr("W")
-                tooltip: qsTr("Whole word")
+                label: "W"
+                tooltip: app.i18n("ui-whole-word")
                 active: root.wholeWordEnabled
                 onToggled: root.wholeWordEnabled = !root.wholeWordEnabled
             }
@@ -235,7 +235,7 @@ Item {
                 id: primaryAction
                 Layout.preferredHeight: 38
                 Layout.alignment: Qt.AlignVCenter
-                Accessible.name: qsTr("Search")
+                Accessible.name: app.i18n("ui-search")
                 leftPadding: app.tokens.spaceL
                 rightPadding: app.tokens.spaceL
                 enabled: !root.busy && pathField.editText.length > 0 && termField.text.length > 0
@@ -249,14 +249,15 @@ Item {
                         color: "white"
                         isMask: true
                         anchors.verticalCenter: parent.verticalCenter
+                        visible: !root.busy || !app.tokens.reducedMotion
                         RotationAnimator on rotation {
-                            running: root.busy
+                            running: root.busy && !app.tokens.reducedMotion
                             from: 0; to: 360; duration: 900
                             loops: Animation.Infinite
                         }
                     }
                     Controls.Label {
-                        text: root.busy ? qsTr("Searching") : qsTr("Search")
+                        text: root.busy ? app.i18n("ui-searching") : app.i18n("ui-search")
                         color: "white"
                         font.weight: app.tokens.weightSemibold
                         font.pixelSize: app.tokens.textBody

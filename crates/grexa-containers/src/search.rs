@@ -682,9 +682,14 @@ mod tests {
     use super::*;
 
     fn fake_container() -> ContainerInfo {
+        // Give every test a distinct container id so the global grep-availability
+        // cache never bleeds across test cases that run in parallel.
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
         ContainerInfo {
             runtime: ContainerRuntimeKind::Podman,
-            id: "abc123".to_string(),
+            id: format!("abc123-{n}"),
             name: "web".to_string(),
             image: "alpine".to_string(),
             status: "Up".to_string(),

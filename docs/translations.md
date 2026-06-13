@@ -125,6 +125,38 @@ app-name = Grexa
   [grex-strings-migration-matrix.md](grex-strings-migration-matrix.md)
   records the mapping for every Grex key.
 
+## Using strings from QML
+
+QML accesses the Fluent bundle through helper functions on the root
+`ApplicationWindow`. Call `app.i18n("key")` for simple messages and
+`app.i18nPlural("key", count)` for plural selectors:
+
+```qml
+import org.kde.kirigami as Kirigami
+
+Kirigami.ApplicationWindow {
+    // exposed by Main.qml
+    function i18n(key) { return searchController.i18n(key); }
+    function i18nPlural(key, n) { return searchController.i18n_plural(key, n); }
+}
+```
+
+In any QML file:
+
+```qml
+Controls.Label {
+    text: app.i18n("ui-search-term")
+}
+
+Controls.Label {
+    text: app.i18nPlural("count-matches", matchModel.count)
+}
+```
+
+Do **not** use `qsTr()` for new strings. The migration of existing
+`qsTr()` calls to Fluent keys is complete, and `scripts/check_locale_sync.py`
+now expects zero `qsTr()` calls in shipped QML.
+
 ## Adding new keys
 
 1. Add the message to `crates/grexa-i18n/locales/en/grexa.ftl`.

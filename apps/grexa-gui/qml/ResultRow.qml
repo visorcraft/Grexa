@@ -53,22 +53,22 @@ Controls.ItemDelegate {
     Controls.Menu {
         id: contextMenu
         Controls.MenuItem {
-            text: qsTr("Preview")
+            text: app.i18n("ui-preview")
             icon.name: "document-preview-symbolic"
             onTriggered: root.openPreview()
         }
         Controls.MenuItem {
-            text: qsTr("Open in editor")
+            text: app.i18n("ui-open-in-editor")
             icon.name: "document-edit"
             onTriggered: app.searchController.openInEditor(root.fullPath, root.line)
         }
         Controls.MenuItem {
-            text: qsTr("Reveal in file manager")
+            text: app.i18n("ui-reveal-in-file-manager")
             icon.name: "system-file-manager"
             onTriggered: app.searchController.revealInFileManager(root.fullPath)
         }
         Controls.MenuItem {
-            text: qsTr("Move to Trash")
+            text: app.i18n("ui-move-to-trash")
             icon.name: "edit-delete-symbolic"
             onTriggered: {
                 var err = app.searchController.moveToTrash(root.fullPath)
@@ -79,27 +79,27 @@ Controls.ItemDelegate {
         }
         Controls.MenuSeparator {}
         Controls.MenuItem {
-            text: qsTr("Copy full path")
+            text: app.i18n("ui-copy-full-path")
             icon.name: "edit-copy-symbolic"
             onTriggered: app.searchController.copyToClipboard(root.fullPath)
         }
         Controls.MenuItem {
-            text: qsTr("Copy file name")
+            text: app.i18n("ui-copy-file-name")
             icon.name: "edit-copy-symbolic"
             onTriggered: app.searchController.copyToClipboard(root.fileName(root.relativePath))
         }
         Controls.MenuItem {
-            text: qsTr("Copy relative path")
+            text: app.i18n("ui-copy-relative-path")
             icon.name: "edit-copy-symbolic"
             onTriggered: app.searchController.copyToClipboard(root.relativePath)
         }
         Controls.MenuItem {
-            text: qsTr("Copy line content")
+            text: app.i18n("ui-copy-line-content")
             icon.name: "edit-copy-symbolic"
             onTriggered: app.searchController.copyToClipboard(root.fullLine())
         }
         Controls.MenuItem {
-            text: qsTr("Copy %1:%2").arg(root.fullPath).arg(root.line)
+            text: app.i18n("ui-copy-12-15141f").arg(root.fullPath).arg(root.line)
             icon.name: "edit-copy-symbolic"
             onTriggered: app.searchController.copyToClipboard(root.fullPath + ":" + root.line)
         }

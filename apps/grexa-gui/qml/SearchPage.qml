@@ -57,7 +57,7 @@ Kirigami.Page {
 
     Component.onCompleted: {
         refreshRecentPaths()
-        tabsModel.setProperty(0, "label", qsTr("Search %1").arg(1))
+        tabsModel.setProperty(0, "label", app.i18n("ui-search-tab").arg(1))
     }
 
     function refreshRecentPaths() {
@@ -185,7 +185,7 @@ Kirigami.Page {
         nextTabId += 1
         tabsModel.append({
             tabId: id,
-            label: qsTr("Search %1").arg(id),
+            label: app.i18n("ui-search-tab").arg(id),
             tabPath: "", tabTerm: "",
             tabRegex: false, tabCase: false,
             tabResultMode: 0, tabWithin: ""
@@ -415,7 +415,7 @@ Kirigami.Page {
                     display: Controls.AbstractButton.IconOnly
                     Layout.preferredWidth: 26
                     Layout.preferredHeight: 26
-                    Controls.ToolTip.text: qsTr("New search tab (Ctrl+T)")
+                    Controls.ToolTip.text: app.i18n("ui-new-search-tab-ctrlt")
                     Controls.ToolTip.visible: hovered
                     onClicked: page.openNewTab()
                 }
@@ -493,7 +493,7 @@ Kirigami.Page {
                     const prevKind = page.controller.targetKind
                     const prevId = page.controller.selectedContainerId
                     targetModel.clear()
-                    targetModel.append({ label: qsTr("Local files"), kind: 0, containerId: "" })
+                    targetModel.append({ label: app.i18n("ui-local-files"), kind: 0, containerId: "" })
                     if (app.settingsController.enableContainerSearch) {
                         if (requestRefresh === true) {
                             page.refreshContainers()
@@ -520,10 +520,10 @@ Kirigami.Page {
                     page.controller.selectedContainerId = ""
                 }
                 function kindLabel(k) {
-                    return k === 1 ? qsTr("Docker")
-                         : k === 2 ? qsTr("Podman rootless")
-                         : k === 3 ? qsTr("Podman rootful")
-                                   : qsTr("Container")
+                    return k === 1 ? app.i18n("ui-docker")
+                         : k === 2 ? app.i18n("ui-podman-rootless")
+                         : k === 3 ? app.i18n("ui-podman-rootful")
+                                   : app.i18n("ui-container")
                 }
                 // Re-list when the user flips the container toggle.
                 Connections {
@@ -540,7 +540,7 @@ Kirigami.Page {
                 Controls.ButtonGroup.group: modeGroup
                 checkable: true
                 checked: page.controller.resultMode === 0
-                text: qsTr("Content")
+                text: app.i18n("ui-content")
                 onClicked: {
                     page.controller.resultMode = 0
                     page.refreshView()
@@ -551,7 +551,7 @@ Kirigami.Page {
                 Controls.ButtonGroup.group: modeGroup
                 checkable: true
                 checked: page.controller.resultMode === 1
-                text: qsTr("Files")
+                text: app.i18n("ui-files")
                 onClicked: {
                     page.controller.resultMode = 1
                     page.refreshView()
@@ -571,7 +571,7 @@ Kirigami.Page {
                 checkable: true
                 icon.name: "view-filter-symbolic"
                 icon.color: app.tokens.textPrimary
-                text: qsTr("Filters")
+                text: app.i18n("ui-filters")
                 display: Controls.AbstractButton.TextBesideIcon
                 onCheckedChanged: checked ? filterDrawer.open() : filterDrawer.close()
             }
@@ -581,7 +581,7 @@ Kirigami.Page {
             AppFlatButton {
                 icon.name: "bookmark-new-symbolic"
                 icon.color: app.tokens.textPrimary
-                text: qsTr("Save profile…")
+                text: app.i18n("ui-save-profile")
                 display: Controls.AbstractButton.TextBesideIcon
                 enabled: searchBar.pathText.length > 0 && searchBar.termText.length > 0
                 onClicked: saveProfileDialog.open()
@@ -593,7 +593,7 @@ Kirigami.Page {
             AppFlatButton {
                 icon.name: "document-save-symbolic"
                 icon.color: app.tokens.textPrimary
-                text: qsTr("Export…")
+                text: app.i18n("ui-export")
                 display: Controls.AbstractButton.TextBesideIcon
                 enabled: page.controller.matchCount > 0 && !page.controller.busy
                 // Toggle the menu — closing on a second click
@@ -604,15 +604,15 @@ Kirigami.Page {
                 Controls.Menu {
                     id: exportMenu
                     Controls.MenuItem {
-                        text: qsTr("Export as CSV…")
+                        text: app.i18n("ui-export-as-csv")
                         onTriggered: { exportSaveDialog.format = 0; exportSaveDialog.open() }
                     }
                     Controls.MenuItem {
-                        text: qsTr("Export as JSON…")
+                        text: app.i18n("ui-export-as-json")
                         onTriggered: { exportSaveDialog.format = 1; exportSaveDialog.open() }
                     }
                     Controls.MenuItem {
-                        text: qsTr("Export as Markdown…")
+                        text: app.i18n("ui-export-as-markdown")
                         onTriggered: { exportSaveDialog.format = 2; exportSaveDialog.open() }
                     }
                 }
@@ -623,7 +623,7 @@ Kirigami.Page {
             AppFlatButton {
                 icon.name: "edit-find-replace-symbolic"
                 icon.color: app.tokens.textPrimary
-                text: qsTr("Replace…")
+                text: app.i18n("ui-replace")
                 display: Controls.AbstractButton.TextBesideIcon
                 enabled: page.controller.targetKind === 0 && page.controller.hasSearched && !page.controller.busy
                 onClicked: replaceDialog.open()
@@ -632,7 +632,7 @@ Kirigami.Page {
             AppFlatButton {
                 icon.name: "process-stop-symbolic"
                 icon.color: app.tokens.textPrimary
-                text: qsTr("Stop")
+                text: app.i18n("ui-stop")
                 display: Controls.AbstractButton.TextBesideIcon
                 enabled: page.controller.busy
                 onClicked: page.controller.cancel()
@@ -640,7 +640,7 @@ Kirigami.Page {
             AppFlatButton {
                 icon.name: "edit-clear-symbolic"
                 icon.color: app.tokens.textPrimary
-                text: qsTr("Clear")
+                text: app.i18n("ui-clear")
                 display: Controls.AbstractButton.TextBesideIcon
                 enabled: !page.controller.busy && page.controller.matchCount > 0
                 onClicked: page.controller.clearResults()
@@ -650,11 +650,11 @@ Kirigami.Page {
                 checkable: true
                 icon.name: "tools-symbolic"
                 icon.color: app.tokens.textPrimary
-                text: qsTr("AI assist")
+                text: app.i18n("ui-ai-assist")
                 display: Controls.AbstractButton.TextBesideIcon
                 enabled: app.settingsController.aiSearchEnabled
                 Controls.ToolTip.visible: hovered && !enabled
-                Controls.ToolTip.text: qsTr("Enable AI in Settings → AI Search to use this panel.")
+                Controls.ToolTip.text: app.i18n("ui-enable-ai-in-settings-ai-search")
                 onCheckedChanged: checked ? aiDrawer.open() : aiDrawer.close()
             }
             // Live status pill — match count + files, with a soft
@@ -685,8 +685,9 @@ Kirigami.Page {
                         radius: 3
                         color: app.tokens.accent
                         Layout.alignment: Qt.AlignVCenter
+                        visible: !page.controller.busy || !app.tokens.reducedMotion
                         SequentialAnimation on opacity {
-                            running: page.controller.busy
+                            running: page.controller.busy && !app.tokens.reducedMotion
                             loops: Animation.Infinite
                             NumberAnimation { from: 1; to: 0.4; duration: 700 }
                             NumberAnimation { from: 0.4; to: 1; duration: 700 }
@@ -701,7 +702,7 @@ Kirigami.Page {
                         text: {
                             const m = page.controller.matchCount
                             const f = page.controller.filesMatched
-                            return qsTr("%n match(es)", "", m) + " · " + qsTr("%n file(s)", "", f)
+                            return app.i18nPlural("count-matches", m) + " · " + app.i18nPlural("count-files", f)
                         }
                         font.pixelSize: app.tokens.textCaption + 1
                         font.weight: app.tokens.weightSemibold
@@ -735,16 +736,16 @@ Kirigami.Page {
             AppTextField {
                 id: withinField
                 Layout.fillWidth: true
-                placeholderText: qsTr("Filter results — substring or regex")
+                placeholderText: app.i18n("ui-filter-results-substring-or-regex")
                 text: page.controller.withinFilter
                 onTextEdited: {
                     page.controller.withinFilter = text
                     page.refreshView()
                 }
-                Accessible.name: qsTr("Filter results")
+                Accessible.name: app.i18n("ui-filter-results")
             }
             AppCheckBox {
-                text: qsTr("regex")
+                text: app.i18n("ui-regex-2")
                 checked: page.controller.withinRegex
                 onToggled: {
                     page.controller.withinRegex = checked
@@ -755,7 +756,7 @@ Kirigami.Page {
                 icon.name: "edit-clear-symbolic"
                 icon.color: app.tokens.textPrimary
                 display: Controls.AbstractButton.IconOnly
-                Controls.ToolTip.text: qsTr("Clear filter")
+                Controls.ToolTip.text: app.i18n("ui-clear-filter")
                 Controls.ToolTip.visible: hovered
                 enabled: page.controller.withinFilter.length > 0
                 onClicked: {
@@ -802,9 +803,9 @@ Kirigami.Page {
 
                 Repeater {
                     model: [
-                        { col: 0, label: qsTr("Path"),  fill: true,  align: Qt.AlignLeft },
-                        { col: 1, label: qsTr("Line"),  fill: false, align: Qt.AlignRight },
-                        { col: 2, label: qsTr("Match"), fill: false, align: Qt.AlignLeft }
+                        { col: 0, label: app.i18n("ui-path"),  fill: true,  align: Qt.AlignLeft },
+                        { col: 1, label: app.i18n("ui-line"),  fill: false, align: Qt.AlignRight },
+                        { col: 2, label: app.i18n("ui-match"), fill: false, align: Qt.AlignLeft }
                     ]
                     delegate: AppFlatButton {
                         Layout.fillWidth: modelData.fill
@@ -854,7 +855,7 @@ Kirigami.Page {
                 keyNavigationEnabled: true
                 keyNavigationWraps: false
                 Accessible.role: Accessible.List
-                Accessible.name: qsTr("Search results")
+                Accessible.name: app.i18n("ui-search-results")
 
                 // Keyboard navigation on a focused row:
                 //   Space  — open the context preview (matches Grex)
@@ -906,16 +907,16 @@ Kirigami.Page {
                 width: parent.width
                 height: parent.height
                 visible: resultList.count === 0 && !page.controller.busy && !page.controller.hasSearched
-                title: qsTr("Search anywhere on your system")
-                explanation: qsTr("Pick a folder, type a term, and we'll stream matches as they appear.")
+                title: app.i18n("ui-search-anywhere-on-your-system")
+                explanation: app.i18n("ui-pick-a-folder-type-a-term-122c6a")
                 // Suggestion chips use tilde paths — `start_search` runs
                 // them through `expand_tilde` before constructing
                 // `SearchOptions`, so `~/code` resolves to $HOME/code
                 // on whichever machine is running the binary.
                 chipsModel: [
-                    { label: qsTr("~/code · TODO"),       path: "~/code",   term: "TODO" },
-                    { label: qsTr("~ · fn .* test"),      path: "~",        term: "fn\\s+\\w+_test" },
-                    { label: qsTr("/etc · password"),     path: "/etc",     term: "password" }
+                    { label: app.i18n("ui-code-todo"),       path: "~/code",   term: "TODO" },
+                    { label: app.i18n("ui-fn-test"),      path: "~",        term: "fn\\s+\\w+_test" },
+                    { label: app.i18n("ui-etc-password"),     path: "/etc",     term: "password" }
                 ]
                 onChipClicked: function(idx, data) {
                     page.applyExample(data.path, data.term)
@@ -929,12 +930,12 @@ Kirigami.Page {
                 visible: resultList.count === 0 && !page.controller.busy && page.controller.hasSearched
                 icon.name: "edit-find-symbolic"
                 icon.color: app.tokens.textPrimary
-                text: qsTr("No matches found")
+                text: app.i18n("ui-no-matches-found")
                 explanation: page.controller.withinFilter.length > 0
-                    ? qsTr("The result filter '%1' hid every row. Clear it to see the raw matches, or widen the search.").arg(page.controller.withinFilter)
-                    : qsTr("Try a shorter term, drop a filter, or pick a broader folder. Hidden files, gitignored paths, and binary content are excluded by default — flip those toggles in the Filters drawer.")
+                    ? app.i18n("ui-the-result-filter-1-hid-every-71d7ee").arg(page.controller.withinFilter)
+                    : app.i18n("ui-try-a-shorter-term-drop-a-b9718c")
                 helpfulAction: Kirigami.Action {
-                    text: qsTr("Open Filters")
+                    text: app.i18n("ui-open-filters")
                     icon.name: "view-filter-symbolic"
                     icon.color: app.tokens.textPrimary
                     onTriggered: filterDrawer.open()
@@ -956,7 +957,7 @@ Kirigami.Page {
                         Layout.alignment: Qt.AlignHCenter
                     }
                     Controls.Label {
-                        text: qsTr("Searching…")
+                        text: app.i18n("ui-searching-2")
                         font.pixelSize: app.tokens.textBody
                         opacity: 0.7
                         Layout.alignment: Qt.AlignHCenter
@@ -1001,9 +1002,9 @@ Kirigami.Page {
                         color: "transparent"
                         border.color: app.tokens.warning
                         border.width: 1
-                        opacity: page.controller.busy ? 0.6 : 0
+                        opacity: page.controller.busy && !app.tokens.reducedMotion ? 0.6 : 0
                         SequentialAnimation on opacity {
-                            running: page.controller.busy
+                            running: page.controller.busy && !app.tokens.reducedMotion
                             loops: Animation.Infinite
                             NumberAnimation { from: 0.6; to: 0; duration: 900 }
                             NumberAnimation { from: 0; to: 0.6; duration: 0 }
@@ -1012,7 +1013,7 @@ Kirigami.Page {
                 }
                 Controls.Label {
                     Layout.fillWidth: true
-                    text: page.controller.statusText.length > 0 ? page.controller.statusText : qsTr("Ready")
+                    text: page.controller.statusText.length > 0 ? page.controller.statusText : app.i18n("ui-ready")
                     font.pixelSize: app.tokens.textCaption + 1
                     font.family: app.tokens.sansFamily
                     opacity: 0.72
@@ -1020,13 +1021,13 @@ Kirigami.Page {
                 }
                 Controls.Label {
                     visible: page.controller.filesScanned > 0
-                    text: qsTr("scanned %1").arg(page.controller.filesScanned)
+                    text: app.i18n("ui-scanned-1-059984").arg(page.controller.filesScanned)
                     font.pixelSize: app.tokens.textCaption
                     opacity: 0.5
                     font.family: app.tokens.monoFamily
                 }
                 Controls.Label {
-                    text: qsTr("recent %1").arg(page.controller.recentPathCount)
+                    text: app.i18n("ui-recent-1-8f02bd").arg(page.controller.recentPathCount)
                     font.pixelSize: app.tokens.textCaption
                     opacity: 0.45
                     font.family: app.tokens.monoFamily
@@ -1055,32 +1056,32 @@ Kirigami.Page {
     Controls.Dialog {
         id: saveProfileDialog
         modal: true
-        title: qsTr("Save search as profile")
+        title: app.i18n("ui-save-search-as-profile")
         standardButtons: Controls.Dialog.Cancel
         contentItem: ColumnLayout {
             spacing: app.tokens.spaceM
             Controls.Label {
-                text: qsTr("Profile name")
+                text: app.i18n("ui-profile-name")
                 font.pixelSize: app.tokens.textCaption
                 opacity: 0.7
             }
             AppTextField {
                 id: profileNameField
                 Layout.fillWidth: true
-                placeholderText: qsTr("e.g. \u201cTODOs in ~/code\u201d")
+                placeholderText: app.i18n("ui-profile-name-example")
                 Keys.onReturnPressed: saveButton.commit()
-                Accessible.name: qsTr("Profile name")
+                Accessible.name: app.i18n("ui-profile-name")
             }
             RowLayout {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true }
                 Controls.Button {
-                    text: qsTr("Cancel")
+                    text: app.i18n("ui-cancel")
                     onClicked: saveProfileDialog.close()
                 }
                 PrimaryButton {
                     id: saveButton
-                    text: qsTr("Save")
+                    text: app.i18n("ui-save")
                     icon.name: "document-save-symbolic"
                     icon.color: app.tokens.textPrimary
                     enabled: profileNameField.text.trim().length > 0
@@ -1108,15 +1109,15 @@ Kirigami.Page {
     // about the file's MIME type when the user picks a directory.
     Dialogs.FileDialog {
         id: exportSaveDialog
-        title: qsTr("Export results")
+        title: app.i18n("ui-export-results")
         fileMode: Dialogs.FileDialog.SaveFile
         property int format: 0
         defaultSuffix: format === 1 ? "json" : format === 2 ? "md" : "csv"
         nameFilters: format === 1
-            ? [qsTr("JSON (*.json)")]
+            ? [app.i18n("ui-json-json")]
             : format === 2
-                ? [qsTr("Markdown (*.md)")]
-                : [qsTr("CSV (*.csv)")]
+                ? [app.i18n("ui-markdown-md")]
+                : [app.i18n("ui-csv-csv")]
         onAccepted: {
             let p = selectedFile.toString()
             p = p.replace(/^file:\/\//, "")
@@ -1128,7 +1129,7 @@ Kirigami.Page {
 
     Dialogs.FolderDialog {
         id: browseDialog
-        title: qsTr("Choose folder")
+        title: app.i18n("ui-choose-folder")
         currentFolder: page.pathToFileUrl(searchBar.pathText)
         onAccepted: {
             // `selectedFolder` is a `url`. Convert to a string and
@@ -1179,7 +1180,7 @@ Kirigami.Page {
                     RowLayout {
                         Layout.fillWidth: true
                         Controls.Label {
-                            text: qsTr("Filters")
+                            text: app.i18n("ui-filters")
                             font.pixelSize: app.tokens.textSubheading
                             font.weight: app.tokens.weightBold
                             Layout.fillWidth: true
@@ -1193,45 +1194,45 @@ Kirigami.Page {
                     }
                     Controls.Label {
                         Layout.fillWidth: true
-                        text: qsTr("Changes apply to the next search and also persist as defaults for new sessions.")
+                        text: app.i18n("ui-changes-apply-to-the-next-search-88d3fc")
                         font.pixelSize: app.tokens.textCaption
                         opacity: 0.65
                         wrapMode: Text.WordWrap
                     }
 
                     AppCheckBox {
-                        text: qsTr("Respect .gitignore")
+                        text: app.i18n("ui-respect-gitignore")
                         checked: app.settingsController.respectGitignore
                         onToggled: { app.settingsController.respectGitignore = checked; app.settingsController.apply() }
                     }
                     AppCheckBox {
-                        text: qsTr("Include hidden files (dotfiles)")
+                        text: app.i18n("ui-include-hidden-files-dotfiles")
                         checked: app.settingsController.includeHidden
                         onToggled: { app.settingsController.includeHidden = checked; app.settingsController.apply() }
                     }
                     AppCheckBox {
-                        text: qsTr("Include binary / extracted docs")
+                        text: app.i18n("ui-include-binary-extracted-docs")
                         checked: app.settingsController.includeBinary
                         onToggled: { app.settingsController.includeBinary = checked; app.settingsController.apply() }
                     }
                     AppCheckBox {
-                        text: qsTr("Include system files")
+                        text: app.i18n("ui-include-system-files")
                         checked: app.settingsController.includeSystemFiles
                         onToggled: { app.settingsController.includeSystemFiles = checked; app.settingsController.apply() }
                     }
                     AppCheckBox {
-                        text: qsTr("Include subfolders (recursive)")
+                        text: app.i18n("ui-include-subfolders-recursive")
                         checked: app.settingsController.includeSubfolders
                         onToggled: { app.settingsController.includeSubfolders = checked; app.settingsController.apply() }
                     }
                     AppCheckBox {
-                        text: qsTr("Follow symbolic links")
+                        text: app.i18n("ui-follow-symbolic-links")
                         checked: app.settingsController.includeSymbolicLinks
                         onToggled: { app.settingsController.includeSymbolicLinks = checked; app.settingsController.apply() }
                     }
 
                     Controls.Label {
-                        text: qsTr("Match file names")
+                        text: app.i18n("ui-match-file-names")
                         font.pixelSize: app.tokens.textCaption
                         opacity: 0.65
                         Layout.topMargin: app.tokens.spaceS
@@ -1247,7 +1248,7 @@ Kirigami.Page {
                     }
 
                     Controls.Label {
-                        text: qsTr("Exclude directories")
+                        text: app.i18n("ui-exclude-directories")
                         font.pixelSize: app.tokens.textCaption
                         opacity: 0.65
                     }
@@ -1273,7 +1274,7 @@ Kirigami.Page {
     Controls.Dialog {
         id: replaceDialog
         modal: true
-        title: qsTr("Replace matches")
+        title: app.i18n("ui-replace-matches")
         standardButtons: Controls.Dialog.Cancel
         width: Math.min(page.width * 0.6, 520)
 
@@ -1296,27 +1297,27 @@ Kirigami.Page {
                 // The irreversible warning only renders when the user
                 // hasn't opted out via Settings → Replace → Confirm.
                 visible: app.settingsController.replaceConfirm
-                text: qsTr("Replace every match in %1 files. The original files are rewritten in place — there is no undo.").arg(page.controller.filesMatched)
+                text: app.i18n("ui-replace-every-match-in-1-files-2617ae").arg(page.controller.filesMatched)
             }
             Controls.Label {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 visible: !app.settingsController.replaceConfirm
-                text: qsTr("Replace every match in %1 files. (Confirmation disabled in Settings.)").arg(page.controller.filesMatched)
+                text: app.i18n("ui-replace-every-match-in-1-files-35a611").arg(page.controller.filesMatched)
                 font.pixelSize: app.tokens.textCaption + 1
                 opacity: 0.75
             }
 
             Controls.Label {
-                text: qsTr("Replacement")
+                text: app.i18n("ui-replacement")
                 font.pixelSize: app.tokens.textCaption
                 opacity: 0.65
             }
             AppTextField {
                 id: replacementField
                 Layout.fillWidth: true
-                placeholderText: qsTr("Replacement text (regex captures: $1, ${name})")
-                Accessible.name: qsTr("Replacement text")
+                placeholderText: app.i18n("ui-replacement-text-regex-captures-1-name-4bb787")
+                Accessible.name: app.i18n("ui-replacement-text")
                 // Enter commits Replace All. Empty replacement is valid:
                 // it deletes each match. Esc closes the dialog (Qt default).
                 Keys.onReturnPressed: function(event) {
@@ -1332,7 +1333,7 @@ Kirigami.Page {
                 wrapMode: Text.WordWrap
                 font.pixelSize: app.tokens.textCaption
                 opacity: 0.6
-                text: qsTr("A journal of rewritten files lives at $XDG_STATE_HOME/grexa/replace-journal.json until grexa exits cleanly.")
+                text: app.i18n("ui-a-journal-of-rewritten-files-lives-52e0cc")
             }
 
             RowLayout {
@@ -1340,11 +1341,11 @@ Kirigami.Page {
                 Layout.topMargin: app.tokens.spaceS
                 Item { Layout.fillWidth: true }
                 Controls.Button {
-                    text: qsTr("Cancel")
+                    text: app.i18n("ui-cancel")
                     onClicked: replaceDialog.close()
                 }
                 PrimaryButton {
-                    text: page.controller.replacing ? qsTr("Replacing…") : qsTr("Replace All")
+                    text: page.controller.replacing ? app.i18n("ui-replacing") : app.i18n("ui-replace-all")
                     icon.name: "edit-find-replace-symbolic"
                     icon.color: app.tokens.textPrimary
                     enabled: !page.controller.replacing
@@ -1358,7 +1359,7 @@ Kirigami.Page {
     Controls.Dialog {
         id: replaceSummaryDialog
         modal: true
-        title: qsTr("Replace complete")
+        title: app.i18n("ui-replace-complete")
         standardButtons: Controls.Dialog.Ok
         Controls.Label {
             // Strip the JSON wrapper and surface the counts as plain
@@ -1373,12 +1374,12 @@ Kirigami.Page {
                     const ms = r.elapsed_ms || 0
                     // Plural-aware via Qt's qsTr overload — translators pick
                     // singular/plural inflection per locale.
-                    const fmTxt = qsTr("%n file(s) modified", "", fm)
-                    const mrTxt = qsTr("%n match(es) replaced", "", mr)
-                    const fcTxt = qsTr("%n failure(s)", "", fc)
+                    const fmTxt = app.i18nPlural("count-files-modified", fm)
+                    const mrTxt = app.i18nPlural("count-matches-replaced", mr)
+                    const fcTxt = app.i18nPlural("count-failures", fc)
                     return fmTxt + " · " + mrTxt + " · " + fcTxt + " · " + ms + " ms"
                 } catch (e) {
-                    return qsTr("Replace finished.")
+                    return app.i18n("ui-replace-finished")
                 }
             }
             wrapMode: Text.WordWrap
@@ -1422,7 +1423,7 @@ Kirigami.Page {
                 RowLayout {
                     Layout.fillWidth: true
                     Controls.Label {
-                        text: qsTr("AI assist")
+                        text: app.i18n("ui-ai-assist")
                         font.pixelSize: app.tokens.textSubheading
                         font.weight: app.tokens.weightBold
                         Layout.fillWidth: true
@@ -1436,7 +1437,7 @@ Kirigami.Page {
                 }
                 Controls.Label {
                     Layout.fillWidth: true
-                    text: qsTr("Ask about the codebase. Your query is sent to the configured endpoint only when the panel is enabled in Settings.")
+                    text: app.i18n("ui-ask-about-the-codebase-your-query-9e7495")
                     font.pixelSize: app.tokens.textCaption
                     opacity: 0.6
                     wrapMode: Text.WordWrap

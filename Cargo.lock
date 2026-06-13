@@ -1228,7 +1228,7 @@ dependencies = [
 
 [[package]]
 name = "grexa"
-version = "1.5.0"
+version = "1.5.2"
 dependencies = [
  "cxx",
  "cxx-qt",
@@ -1250,7 +1250,7 @@ dependencies = [
 
 [[package]]
 name = "grexa-ai"
-version = "1.5.0"
+version = "1.5.2"
 dependencies = [
  "grexa-core",
  "keyring",
@@ -1262,7 +1262,7 @@ dependencies = [
 
 [[package]]
 name = "grexa-cli"
-version = "1.5.0"
+version = "1.5.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1282,7 +1282,7 @@ dependencies = [
 
 [[package]]
 name = "grexa-containers"
-version = "1.5.0"
+version = "1.5.2"
 dependencies = [
  "grexa-core",
  "regex",
@@ -1295,7 +1295,7 @@ dependencies = [
 
 [[package]]
 name = "grexa-core"
-version = "1.5.0"
+version = "1.5.2"
 dependencies = [
  "chardetng",
  "encoding_rs",
@@ -1320,7 +1320,7 @@ dependencies = [
 
 [[package]]
 name = "grexa-i18n"
-version = "1.5.0"
+version = "1.5.2"
 dependencies = [
  "fluent",
  "thiserror 2.0.18",

@@ -117,14 +117,14 @@ Kirigami.ScrollablePage {
                     Layout.fillWidth: true
                     spacing: 1
                     Controls.Label {
-                        text: qsTr("History")
+                        text: app.i18n("ui-history")
                         font.pixelSize: app.tokens.textHeading
                         font.weight: app.tokens.weightBold
                         font.family: app.tokens.sansFamily
                         font.letterSpacing: 0
                     }
                     Controls.Label {
-                        text: qsTr("Every completed search, deduped on the seven-field Grex key.")
+                        text: app.i18n("ui-every-completed-search-deduped-on-the")
                         font.pixelSize: app.tokens.textCaption + 1
                         font.family: app.tokens.sansFamily
                         opacity: 0.6
@@ -133,7 +133,7 @@ Kirigami.ScrollablePage {
                 AppFlatButton {
                     icon.name: "view-refresh"
                     icon.color: app.tokens.textPrimary
-                    text: qsTr("Refresh")
+                    text: app.i18n("ui-refresh")
                     display: Controls.AbstractButton.TextBesideIcon
                     onClicked: page.refresh()
                 }
@@ -158,7 +158,7 @@ Kirigami.ScrollablePage {
             }
             AppTextField {
                 Layout.fillWidth: true
-                placeholderText: qsTr("Filter history by term or path")
+                placeholderText: app.i18n("ui-filter-history-by-term-or-path")
                 text: page.filterText
                 onTextEdited: { page.filterText = text; filterDebounce.restart() }
             }
@@ -181,11 +181,11 @@ Kirigami.ScrollablePage {
             icon.name: "history-symbolic"
             icon.color: app.tokens.textPrimary
             text: page.filterText.length > 0
-                ? qsTr("No history entries match “%1”").arg(page.filterText)
-                : qsTr("No search history yet")
+                ? app.i18n("ui-no-history-entries-match-1-ab0ac1").arg(page.filterText)
+                : app.i18n("ui-no-search-history-yet")
             explanation: page.filterText.length > 0
-                ? qsTr("Try a shorter filter, or clear it to see every saved search.")
-                : qsTr("Run a search from the Search page and it'll land here.")
+                ? app.i18n("ui-try-a-shorter-filter-or-clear")
+                : app.i18n("ui-run-a-search-from-the-search")
         }
 
         // -- List
@@ -226,12 +226,11 @@ Kirigami.ScrollablePage {
                             }
                             Controls.Label {
                                 Layout.fillWidth: true
-                                // Plural form goes through Qt's `qsTr(..., "", n)`
-                                // overload so translators can drive the singular /
-                                // plural inflection per locale instead of inheriting
-                                // English rules from an inline ternary.
-                                text: qsTr("%1 · %2%3%4").arg(model.path)
-                                    .arg(qsTr("%n match(es)", "", model.matches))
+                                // Plural form goes through app.i18nPlural so
+                                // translators drive the singular/plural inflection
+                                // per locale instead of inheriting English rules.
+                                text: app.i18n("ui-1-234-1fba02").arg(model.path)
+                                    .arg(app.i18nPlural("count-matches", model.matches))
                                     .arg(model.regex ? " · regex" : "")
                                     .arg(model.caseSensitive ? " · case" : "")
                                 font.pixelSize: app.tokens.textCaption
@@ -242,7 +241,7 @@ Kirigami.ScrollablePage {
                         AppFlatButton {
                             icon.name: "edit-find-symbolic"
                             icon.color: app.tokens.textPrimary
-                            text: qsTr("Open")
+                            text: app.i18n("ui-open")
                             display: Controls.AbstractButton.TextBesideIcon
                             onClicked: {
                                 const path = model.path
@@ -274,7 +273,7 @@ Kirigami.ScrollablePage {
                             icon.name: "edit-delete-symbolic"
                             icon.color: app.tokens.textPrimary
                             display: Controls.AbstractButton.IconOnly
-                            Controls.ToolTip.text: qsTr("Forget this entry")
+                            Controls.ToolTip.text: app.i18n("ui-forget-this-entry")
                             Controls.ToolTip.visible: hovered
                             onClicked: {
                                 app.searchController.removeHistoryEntry(model.raw)
