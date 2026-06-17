@@ -78,7 +78,6 @@ pub enum ReplaceError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReplaceJournalEntry {
     pub started_unix: u64,
-    pub finished_unix: Option<u64>,
     pub search_term: String,
     pub replacement: String,
     pub root: PathBuf,
@@ -121,7 +120,27 @@ fn unix_now() -> u64 {
         .unwrap_or_default()
 }
 
+// Test-only counter of actual journal writes, used to prove the writer
+// batches flushes instead of rewriting per file. Thread-local so parallel
+// tests stay isolated (mirrors the journal-path override).
+#[cfg(test)]
+thread_local! {
+    static JOURNAL_WRITES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+fn reset_journal_write_count() {
+    JOURNAL_WRITES.with(|cell| cell.set(0));
+}
+
+#[cfg(test)]
+fn journal_write_count() -> usize {
+    JOURNAL_WRITES.with(|cell| cell.get())
+}
+
 fn write_journal(entry: &ReplaceJournalEntry) {
+    #[cfg(test)]
+    JOURNAL_WRITES.with(|cell| cell.set(cell.get() + 1));
     let path = journal_path();
     if let Some(parent) = path.parent()
         && let Err(err) = fs::create_dir_all(parent)
@@ -253,7 +272,6 @@ pub fn replace_with(
     // residual journal at startup via `load_residual_journal`.
     let journal = JournalWriter::new(ReplaceJournalEntry {
         started_unix: unix_now(),
-        finished_unix: None,
         search_term: options.search.search_term.clone(),
         replacement: options.replacement.clone(),
         root: options.search.path.clone(),
@@ -1006,7 +1024,6 @@ mod tests {
 
         let entry = ReplaceJournalEntry {
             started_unix: 1000,
-            finished_unix: None,
             search_term: "TODO".to_string(),
             replacement: "DONE".to_string(),
             root: PathBuf::from("/some/root"),
@@ -1022,7 +1039,6 @@ mod tests {
         assert_eq!(journal.search_term, "TODO");
         assert_eq!(journal.modified_files.len(), 1);
         assert_eq!(journal.failed_files.len(), 1);
-        assert!(journal.finished_unix.is_none());
 
         set_journal_path_override(None);
     }
@@ -1296,20 +1312,28 @@ mod tests {
         let journal_dir = tempdir().unwrap();
         let journal_path = journal_dir.path().join("replace-journal.json");
         set_journal_path_override(Some(journal_path.clone()));
+        reset_journal_write_count();
 
-        // Create more files than the flush interval so we can observe that
-        // the journal is not rewritten for every single file.
-        let file_count = JOURNAL_FLUSH_INTERVAL + 50;
+        // Create more files than the flush interval so per-file flushing
+        // (the old O(N) writes) would be plainly distinguishable from the
+        // batched behavior.
+        let file_count = JOURNAL_FLUSH_INTERVAL * 3 + 7;
         for i in 0..file_count {
             fs::write(dir.path().join(format!("{i}.txt")), "TODO\n").unwrap();
         }
 
         replace_with(&opts(dir.path(), "TODO", "DONE"), &CancelToken::new(), None).unwrap();
 
-        // On clean completion the journal is deleted; the point of the test
-        // is that the implementation uses batched flushes rather than O(N²)
-        // rewrites. We verify indirectly by timing and by checking the
-        // operation completes without leaving a residual journal.
+        // Batched flushing writes the journal once up front, once per
+        // completed flush interval, and once at the end — a small constant,
+        // not one write per file. Per-file flushing would be > file_count.
+        let writes = journal_write_count();
+        let expected_max = file_count / JOURNAL_FLUSH_INTERVAL + 3;
+        assert!(
+            writes <= expected_max,
+            "expected batched flushing (<= {expected_max} writes for {file_count} files), got {writes}"
+        );
+        // On clean completion the journal is deleted.
         assert!(!journal_path.exists(), "journal must be cleaned on success");
 
         set_journal_path_override(None);

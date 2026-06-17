@@ -30,7 +30,7 @@ Status legend:
 | Pseudo-FS guards (`/proc`, `/sys`, `/dev`, `/run`) | ✅ | Same auto-exclusions; user can override with `--include-system`. |
 | Culture-aware comparison (ordinal / culture / invariant / normalization / diacritic) | 🟡 | Modes wired through `SearchOptions`; ICU4X-backed casing ships v1.1 (`docs/grex-culture-comparison-audit.md`). |
 | Streaming + cancellation | ✅ | `CancelToken` + `ProgressEvent`. |
-| Sort + stable tie-breakers | ✅ | `crates/grexa-core/src/sort.rs`. |
+| Sort + stable tie-breakers | ✅ | `qobjects/search.rs::sort_results` (in-place stable sort by column). |
 | Search-within-results | ✅ | `SearchController` within-filter state + QML tab snapshots. |
 | Result export (CSV / JSON / clipboard) | ✅ | CLI emits CSV/JSON; GUI Export menu writes CSV/JSON/Markdown; result-row context menu copies path / filename / line content / path:line. |
 
@@ -153,8 +153,8 @@ Status legend:
 | Grex feature | Status | Implementation |
 | ------------ | ------ | -------------- |
 | Editor argv presets (Kate / VSCode / JetBrains / …) | ✅ | `grexa_core::desktop::open_in_editor_command`. |
-| FileManager1 reveal | ✅ | `grexa_core::desktop::file_manager_show_items_uris` + `reveal_with_xdg_open`. |
-| User path classifier (abstract URLs) | ✅ | `classify_user_path`. |
+| FileManager1 reveal | ✅ | `qobjects/search.rs::reveal_in_file_manager` (D-Bus `org.freedesktop.FileManager1.ShowItems`) with `grexa_core::desktop::reveal_with_xdg_open` fallback. |
+| User path classifier (abstract URLs) | 🟡 | The standalone classifier was removed as unused. The search bar accepts typed/pasted paths and the portal picker returns local `file://` paths; abstract URLs (`smb://`, `sftp://`, …) are not specially classified and currently fail as nonexistent local paths. |
 | KNotifications | ✅ | `notify_desktop` in `qobjects/search.rs` shells `notify-send` (which routes via `org.freedesktop.Notifications` / KNotifications). |
 | Portal file picker | ✅ | `QtQuick.Dialogs.FolderDialog` — Breeze on KDE, XDG desktop portal under Wayland / Flatpak. Recent-path store integrated. |
 | KDE color scheme + accent | 🟡 | Kirigami picks up the user's accent + theme today; full Qt palette swap via `KColorSchemeManager` still needs a cxx-qt-lib binding and is tracked as future GUI work. |

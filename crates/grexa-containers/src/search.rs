@@ -54,6 +54,10 @@ fn default_column() -> usize {
 pub struct ContainerSearchSummary {
     pub hits: Vec<ContainerSearchHit>,
     pub used_mirror: bool,
+    /// True when results were truncated — either the row cap was hit or the
+    /// container grep produced more output than the capture cap. The GUI/CLI
+    /// surface a "narrow your search" hint.
+    pub capped: bool,
     pub elapsed_ms: u128,
 }
 
@@ -106,34 +110,41 @@ pub fn search_container<R: RuntimeOperations>(
     let started = std::time::Instant::now();
     let has_grep = runtime.has_grep(&container.id).unwrap_or(false);
 
-    let (mut hits, used_mirror) = if has_grep && !options.needs_normalization() {
-        (direct_grep(runtime, container, options)?, false)
+    let (mut hits, used_mirror, mut capped) = if has_grep && !options.needs_normalization() {
+        let (hits, output_truncated) = direct_grep(runtime, container, options)?;
+        (hits, false, output_truncated)
     } else {
         if has_grep {
             tracing::debug!(
                 "normalization-affecting options set; using mirror search instead of container grep"
             );
         }
-        (mirror_search(runtime, container, options)?, true)
+        (mirror_search(runtime, container, options)?, true, false)
     };
     let effective_max = options.max_results.unwrap_or(ENGINE_RESULT_CAP);
     if hits.len() > effective_max {
         hits.truncate(effective_max);
+        // A user-supplied max_results truncating is expected; only the internal
+        // ENGINE_RESULT_CAP counts as capped. Output truncation already does.
+        capped = capped || options.max_results.is_none();
     }
 
     Ok(ContainerSearchSummary {
         hits,
         used_mirror,
+        capped,
         elapsed_ms: started.elapsed().as_millis(),
     })
 }
 
-/// Exec `grep` inside the container and parse line-tagged output.
+/// Exec `grep` inside the container and parse line-tagged output. Returns the
+/// hits plus a flag that is true when grep produced more output than the
+/// capture cap, so its output was truncated (and the search is capped).
 fn direct_grep<R: RuntimeOperations>(
     runtime: &R,
     container: &ContainerInfo,
     options: &ContainerSearchOptions,
-) -> Result<Vec<ContainerSearchHit>, RuntimeError> {
+) -> Result<(Vec<ContainerSearchHit>, bool), RuntimeError> {
     let mut argv: Vec<&str> = vec!["grep", "-rnHZ"];
     if options.regex {
         argv.push("-E");
@@ -156,7 +167,9 @@ fn direct_grep<R: RuntimeOperations>(
         &argv,
         std::time::Duration::from_secs(CONTAINER_SEARCH_TIMEOUT_SECS),
     )?;
-    if result.status == 2 && grep_rejected_option(&result.stderr) {
+    // A truncated capture means we killed grep at the cap, so its exit status
+    // is a signal, not a grep error — don't retry or treat it as a failure.
+    if !result.truncated && result.status == 2 && grep_rejected_option(&result.stderr) {
         // BusyBox grep has no -Z; retry with colon-delimited output, which
         // the parser handles via its colon-splitting fallback.
         argv[1] = "-rnH";
@@ -169,10 +182,11 @@ fn direct_grep<R: RuntimeOperations>(
     tracing::debug!(
         elapsed_ms = start.elapsed().as_millis(),
         timeout_secs = CONTAINER_SEARCH_TIMEOUT_SECS,
+        truncated = result.truncated,
         "direct_grep completed"
     );
     // grep exits 1 when nothing matched — that's a successful empty search.
-    if result.status != 0 && result.status != 1 {
+    if !result.truncated && result.status != 0 && result.status != 1 {
         return Err(RuntimeError::Cli {
             cli: PathBuf::from(format!("{:?}", runtime.kind())),
             status: result.status,
@@ -180,8 +194,19 @@ fn direct_grep<R: RuntimeOperations>(
         });
     }
 
-    Ok(parse_grep_output_with_pattern(
-        &String::from_utf8_lossy(&result.stdout),
+    // When truncated, drop the final partial record the cap cut mid-line so
+    // the parser only sees whole grep records.
+    let stdout: &[u8] = if result.truncated {
+        match result.stdout.iter().rposition(|&b| b == b'\n') {
+            Some(last_nl) => &result.stdout[..=last_nl],
+            None => &[],
+        }
+    } else {
+        &result.stdout
+    };
+
+    let hits = parse_grep_output_with_pattern(
+        &String::from_utf8_lossy(stdout),
         runtime.kind(),
         &container.id,
         Some(GrepPattern {
@@ -189,7 +214,8 @@ fn direct_grep<R: RuntimeOperations>(
             regex: options.regex,
             case_sensitive: options.case_sensitive,
         }),
-    ))
+    );
+    Ok((hits, result.truncated))
 }
 
 fn grep_rejected_option(stderr: &[u8]) -> bool {
@@ -836,6 +862,7 @@ mod tests {
             status: 1,
             stdout: Vec::new(),
             stderr: Vec::new(),
+            truncated: false,
         });
         let runtime = cli_runtime(runner);
         let summary = search_container(
@@ -855,6 +882,7 @@ mod tests {
             status: 2,
             stdout: Vec::new(),
             stderr: b"grep: unrecognized option: Z\nBusyBox v1.36.1 multi-call binary.\nUsage: grep ...\n".to_vec(),
+            truncated: false,
         });
         runner.push(CommandResult::success("/etc/hostname:1:my-host\n"));
         let runtime = cli_runtime(runner.clone());
@@ -904,6 +932,7 @@ mod tests {
         opts.max_results = Some(2);
         let summary = search_container(&runtime, &fake_container(), &opts).unwrap();
         assert_eq!(summary.hits.len(), 2);
+        assert!(!summary.capped, "a user-supplied max_results must not set capped");
     }
 
     #[test]
@@ -920,6 +949,28 @@ mod tests {
         let opts = ContainerSearchOptions::new("/etc", "match");
         let summary = search_container(&runtime, &fake_container(), &opts).unwrap();
         assert_eq!(summary.hits.len(), ENGINE_RESULT_CAP);
+        assert!(summary.capped, "hitting the engine cap must set capped");
+    }
+
+    #[test]
+    fn search_container_marks_capped_on_truncated_grep_output() {
+        let runner = MockCommandRunner::default();
+        runner.push(CommandResult::success("/usr/bin/grep\n"));
+        // grep output that was truncated at the runner's capture cap: status
+        // is a kill signal (not 0/1) but `truncated` is set, so direct_grep
+        // must parse what it got and mark the search capped rather than error.
+        runner.push(CommandResult {
+            status: -1,
+            stdout: b"/etc/hostname:1:my-host\n/etc/hosts:5:another host\n".to_vec(),
+            stderr: Vec::new(),
+            truncated: true,
+        });
+        let runtime = cli_runtime(runner);
+
+        let opts = ContainerSearchOptions::new("/etc", "host");
+        let summary = search_container(&runtime, &fake_container(), &opts).unwrap();
+        assert!(summary.capped, "truncated grep output must set capped");
+        assert_eq!(summary.hits.len(), 2);
     }
 
     #[test]

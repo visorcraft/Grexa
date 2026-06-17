@@ -1503,7 +1503,9 @@ fn run_container_search(
         .map_err(|e| format!("container search failed: {e}"))?;
 
     let mut rows = Vec::with_capacity(summary.hits.len().min(MAX_RESULT_ROWS));
-    let mut capped = false;
+    // The engine may already have capped (row cap or grep-output truncation);
+    // the GUI applies its own row cap on top.
+    let mut capped = summary.capped;
     for (idx, hit) in summary.hits.into_iter().enumerate() {
         if idx >= MAX_RESULT_ROWS {
             capped = true;

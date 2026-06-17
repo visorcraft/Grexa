@@ -394,14 +394,14 @@ From `Tests/Services/EncodingDetectionServiceTests.cs`:
    returns UTF-8 low-confidence. Rust port: Rust signatures take `&[u8]`, so
    the equivalent is `detect_from_bytes(&[])`.
 6. `DetectFileEncoding_WithValidFile_ReturnsEncoding` — round-trip via a
-   temp file. Rust port: extend `read_utf8_with_bom_strips_marker` to also
-   call `detect_from_path`.
+   temp file. Rust port: exercised through `read_text`, the file-level
+   BOM → strict-UTF-8 → chardetng cascade. (The standalone `detect_from_path`
+   helper was removed as unused; file callers use `read_text`.)
 7. `DetectFileEncoding_WithNonExistentFile_ReturnsUTF8Fallback` — Grex
    swallows IO errors and reports UTF-8 with `DetectionMethod`
-   `Error reading file: ...`. **Behavior change for Grexa**: `detect_from_path`
-   currently returns the `io::Error`; we should keep that for library callers
-   and add a `detect_from_path_or_default` that mirrors Grex for UI callers.
-   Port the test against that wrapper.
+   `Error reading file: ...`. **Behavior change for Grexa**: `read_text`
+   surfaces the `io::Error` to the caller rather than masking it as a
+   low-confidence UTF-8 result; the GUI/CLI decide how to present the failure.
 8. `DetectEncoding_WithFileNameHint_CanUseHintForDetection` — accepts a file
    name hint without throwing. **Not ported**: the hint stage is `0.1` of the
    weight and is largely cosmetic in Grex; Grexa relies on `chardetng` instead.

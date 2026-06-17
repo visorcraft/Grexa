@@ -128,23 +128,40 @@ impl PatternEngine {
     /// `fancy_regex`'s safety limits, in which case dropping the offending
     /// match is the right thing for a UI that wants to keep going.
     pub fn find_iter(&self, haystack: &str) -> Vec<(usize, usize)> {
-        self.find_iter_with_budget(haystack, Duration::MAX)
+        self.find_iter_with_budget(haystack, Duration::MAX, usize::MAX)
     }
 
-    /// Like [`find_iter`], but stops scanning after `budget` elapsed time.
-    /// The fast engine is linear-time, so the budget is effectively a no-op
-    /// there; the extended engine checks the deadline between match attempts
-    /// so a catastrophic pattern cannot burn CPU indefinitely.
-    pub fn find_iter_with_budget(&self, haystack: &str, budget: Duration) -> Vec<(usize, usize)> {
+    /// Like [`find_iter`], but bounded two ways:
+    /// - collects at most `max_matches` ranges, so a dense line cannot
+    ///   materialize an unbounded match vector (the memory guard), and
+    /// - stops scanning once `budget` elapses (the CPU guard).
+    ///
+    /// The fast engine is linear-time, so the time budget is effectively a
+    /// no-op there; `max_matches` still bounds how many ranges are collected.
+    /// The extended engine additionally checks the deadline between match
+    /// attempts. Note the budget bounds the cost of scanning *many* matches
+    /// across a line — a single catastrophic *backtrack* happens inside one
+    /// match attempt, between which the deadline is never re-checked, so the
+    /// real backstop against that case is `fancy_regex`'s own backtrack limit.
+    pub fn find_iter_with_budget(
+        &self,
+        haystack: &str,
+        budget: Duration,
+        max_matches: usize,
+    ) -> Vec<(usize, usize)> {
         let deadline = Instant::now().checked_add(budget);
         match self {
             PatternEngine::Fast(re) => re
                 .find_iter(haystack)
+                .take(max_matches)
                 .map(|mat| (mat.start(), mat.end()))
                 .collect(),
             PatternEngine::Extended(re) => {
                 let mut matches = Vec::new();
                 for result in re.find_iter(haystack) {
+                    if matches.len() >= max_matches {
+                        break;
+                    }
                     if deadline.is_some_and(|d| Instant::now() >= d) {
                         tracing::warn!(
                             pattern = %re.as_str(),
@@ -295,7 +312,7 @@ mod tests {
         assert!(engine.is_extended());
         let haystack = "a".repeat(10_000);
         let start = Instant::now();
-        let matches = engine.find_iter_with_budget(&haystack, Duration::from_millis(1));
+        let matches = engine.find_iter_with_budget(&haystack, Duration::from_millis(1), usize::MAX);
         let elapsed = start.elapsed();
         assert!(
             elapsed < Duration::from_millis(100),
@@ -304,6 +321,18 @@ mod tests {
         // The line is all 'a's, so the anchored pattern can't match; any
         // returned matches are just from positions scanned before the cutoff.
         assert!(matches.len() < haystack.len() / 2);
+    }
+
+    #[test]
+    fn max_matches_bounds_collection_on_fast_engine() {
+        // The fast engine is linear and never hits the time budget, so
+        // `max_matches` is the only thing that keeps a dense line from
+        // materializing one tuple per character.
+        let engine = PatternEngine::build("a", false).unwrap();
+        assert!(!engine.is_extended());
+        let haystack = "a".repeat(10_000);
+        let matches = engine.find_iter_with_budget(&haystack, Duration::MAX, 100);
+        assert_eq!(matches.len(), 100, "collection must stop at max_matches");
     }
 
     #[test]

@@ -54,6 +54,23 @@ grexa-cli manpage
 Lines are compared up to 2 MiB; content past that point on a single line is
 not matched, and a `warn`-level log is emitted for the affected file.
 
+### Resource bounds
+
+The engine enforces several internal safety limits so a pathological query
+cannot exhaust memory or run unbounded. When a limit is hit during a search,
+`SearchSummary.capped` is set and the GUI/CLI surface a "narrow your search"
+status; the per-line and depth limits are best-effort guards that log instead.
+
+| Limit | Value | Behavior when reached |
+| ----- | ----- | --------------------- |
+| Result rows (no `--max-results`) | 1,000,000 | Truncated; `capped` set. A user-supplied `--max-results` truncates without setting `capped`. |
+| Matches collected per line | 10,000 | Later matches on that line are dropped; a `warn` is logged. |
+| Extended-engine time per line | 100 ms | Scanning of that line stops (catastrophic-backtrack guard; the hard backstop is `fancy_regex`'s own backtrack limit). |
+| Recursive walk depth | 64 | Directories deeper than this are not descended. |
+| Files rewritten per replace | 100,000 | Replace stops early; `ReplaceSummary.capped` set. |
+| Container grep output captured | 10 MiB | The runtime command is killed and the search returns an error. |
+| Container runtime command time | 30 s | The command is killed and returns a timeout error. |
+
 ### Exit codes
 
 | Code | Meaning |

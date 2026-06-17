@@ -230,6 +230,7 @@ pub fn search_with(
     let mut file_encodings: HashMap<PathBuf, DetectedEncoding> = HashMap::new();
     let mut cancelled = false;
     let mut capped = false;
+    let mut depth_capped = false;
     let effective_max = options.max_results.unwrap_or(ENGINE_RESULT_CAP);
 
     for entry in walker.build() {
@@ -264,6 +265,16 @@ pub fn search_with(
         };
 
         if file_type.is_dir() {
+            // A directory yielded at the depth limit is never descended into,
+            // so anything below it is silently skipped. Surface that once
+            // rather than reporting a complete search that wasn't.
+            if !depth_capped && entry.depth() >= MAX_WALK_DEPTH {
+                depth_capped = true;
+                tracing::warn!(
+                    max_depth = MAX_WALK_DEPTH,
+                    "directory tree exceeds the walk-depth limit; deeper directories were not searched"
+                );
+            }
             continue;
         }
 
@@ -323,7 +334,9 @@ pub fn search_with(
                 results.extend(file_results);
                 if results.len() >= effective_max {
                     results.truncate(effective_max);
-                    capped = options.max_results.is_none_or(|m| m < results.len());
+                    // Only the internal ENGINE_RESULT_CAP counts as "capped";
+                    // a user-supplied max_results truncating is expected.
+                    capped = options.max_results.is_none();
                     break;
                 }
             }
@@ -344,7 +357,9 @@ pub fn search_with(
             results.extend(file_results);
             if results.len() >= effective_max {
                 results.truncate(effective_max);
-                capped = options.max_results.is_none_or(|m| m < results.len());
+                // Only the internal ENGINE_RESULT_CAP counts as "capped";
+                // a user-supplied max_results truncating is expected.
+                capped = options.max_results.is_none();
                 break;
             }
         }
@@ -668,73 +683,67 @@ fn find_line_matches(
     normalized_needle: Option<&str>,
     norm_ctx: &NormalizationContext,
 ) -> Vec<(usize, usize)> {
-    if let Some(engine) = regex {
-        let mut matches = engine.find_iter_with_budget(line, REGEX_PER_LINE_BUDGET);
-        if options.whole_word {
-            matches.retain(|&(start, end)| is_whole_word_match(line, start, end));
-        }
-        return cap_matches(line.len(), matches);
-    }
+    // Collect raw matches, bounded near MAX_MATCHES_PER_LINE at the source so
+    // a dense line never materializes an unbounded match vector. We collect one
+    // past the cap so we can tell "exactly the cap" (nothing dropped) from a
+    // genuine overflow, then truncate. `whole_word` filtering (which can only
+    // shrink the list) is applied to the bounded set afterwards — so past the
+    // cap a `whole_word` search reflects only the first MAX_MATCHES_PER_LINE
+    // raw matches, which is acceptable for an explicitly-capped line.
+    let collect_cap = MAX_MATCHES_PER_LINE + 1;
+    let mut matches = if let Some(engine) = regex {
+        engine.find_iter_with_budget(line, REGEX_PER_LINE_BUDGET, collect_cap)
+    } else {
+        let needle = match normalized_needle {
+            Some(n) if !n.is_empty() => n,
+            _ => return Vec::new(),
+        };
 
-    let needle = match normalized_needle {
-        Some(n) => n,
-        None => return Vec::new(),
-    };
-    if needle.is_empty() {
-        return Vec::new();
-    }
+        let identity_mapping = options.case_sensitive
+            && options.diacritic_sensitive
+            && options.unicode_normalization_mode == UnicodeNormalizationMode::None;
 
-    let identity_mapping = options.case_sensitive
-        && options.diacritic_sensitive
-        && options.unicode_normalization_mode == UnicodeNormalizationMode::None;
-
-    if identity_mapping {
         let mut matches = Vec::new();
-        let mut offset = 0;
-        while let Some(index) = line[offset..].find(needle) {
-            let start = offset + index;
-            let end = start + needle.len();
-            matches.push((start, end));
-            offset = end;
-            if matches.len() >= MAX_MATCHES_PER_LINE {
-                break;
+        if identity_mapping {
+            let mut offset = 0;
+            while let Some(index) = line[offset..].find(needle) {
+                let start = offset + index;
+                let end = start + needle.len();
+                matches.push((start, end));
+                offset = end;
+                if matches.len() >= collect_cap {
+                    break;
+                }
+            }
+        } else {
+            let (normalized, mapping) = normalize_with_mapping(line, options, norm_ctx);
+            let mut offset = 0;
+            while let Some(index) = normalized[offset..].find(needle) {
+                let norm_start = offset + index;
+                let norm_end = norm_start + needle.len();
+                matches.push(map_normalized_span(&mapping, norm_start, norm_end));
+                offset = norm_end;
+                if matches.len() >= collect_cap {
+                    break;
+                }
             }
         }
-        if options.whole_word {
-            matches.retain(|&(start, end)| is_whole_word_match(line, start, end));
-        }
-        return cap_matches(line.len(), matches);
-    }
+        matches
+    };
 
-    let (normalized, mapping) = normalize_with_mapping(line, options, norm_ctx);
-
-    let mut matches = Vec::new();
-    let mut offset = 0;
-    while let Some(index) = normalized[offset..].find(needle) {
-        let norm_start = offset + index;
-        let norm_end = norm_start + needle.len();
-        matches.push(map_normalized_span(&mapping, norm_start, norm_end));
-        offset = norm_end;
-        if matches.len() >= MAX_MATCHES_PER_LINE {
-            break;
-        }
+    // Truncating only fires on a genuine overflow (we collected one past the
+    // cap), so the warning is accurate. Compute it before `whole_word` shrinks
+    // the list, since the dropped matches are raw (pre-filter) matches.
+    let cap_reached = matches.len() > MAX_MATCHES_PER_LINE;
+    if cap_reached {
+        matches.truncate(MAX_MATCHES_PER_LINE);
+        tracing::warn!(
+            kept = MAX_MATCHES_PER_LINE,
+            "per-line match count capped; later matches on this line were dropped"
+        );
     }
     if options.whole_word {
         matches.retain(|&(start, end)| is_whole_word_match(line, start, end));
-    }
-    cap_matches(line.len(), matches)
-}
-
-/// Truncate a match list to [`MAX_MATCHES_PER_LINE`] and log once per line.
-/// `line_len` is only used for diagnostics.
-fn cap_matches(_line_len: usize, mut matches: Vec<(usize, usize)>) -> Vec<(usize, usize)> {
-    if matches.len() > MAX_MATCHES_PER_LINE {
-        tracing::warn!(
-            kept = MAX_MATCHES_PER_LINE,
-            total = matches.len(),
-            "per-line match count capped"
-        );
-        matches.truncate(MAX_MATCHES_PER_LINE);
     }
     matches
 }

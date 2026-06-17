@@ -50,6 +50,8 @@ pub enum RuntimeError {
     },
     #[error("runtime CLI for {kind:?} is not installed")]
     CliMissing { kind: ContainerRuntimeKind },
+    #[error("runtime CLI {cli:?} produced more output than the {limit_mib} MiB capture cap")]
+    OutputTooLarge { cli: PathBuf, limit_mib: usize },
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
     #[error("JSON parse error: {0}")]
@@ -114,6 +116,11 @@ pub struct CommandResult {
     pub status: i32,
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
+    /// True when stdout/stderr capture hit the runner's size cap and was
+    /// truncated (the child was then killed). Complete-output callers
+    /// (`invoke`) treat this as an error; the container grep path tolerates
+    /// it and marks the search capped.
+    pub truncated: bool,
 }
 
 impl CommandResult {
@@ -122,6 +129,7 @@ impl CommandResult {
             status: 0,
             stdout: stdout.as_bytes().to_vec(),
             stderr: Vec::new(),
+            truncated: false,
         }
     }
 
@@ -130,6 +138,7 @@ impl CommandResult {
             status,
             stdout: Vec::new(),
             stderr: stderr.as_bytes().to_vec(),
+            truncated: false,
         }
     }
 }
@@ -150,14 +159,18 @@ impl SystemCommandRunner {
     /// historical constant logged by the search path.
     pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
     /// Maximum bytes captured from a child process's stdout or stderr.
-    /// Exceeding this kills the process and returns an error, preventing a
-    /// flood of output (e.g. an unbounded `grep`) from exhausting memory.
+    /// Reaching it truncates the capture, flags the result as `truncated`, and
+    /// kills the child — preventing a flood of output (e.g. a broad `grep`)
+    /// from exhausting memory. Complete-output callers (`invoke`) reject a
+    /// truncated result; the grep path keeps the partial output and marks the
+    /// search capped.
     const MAX_OUTPUT_BYTES: usize = 10 * 1024 * 1024;
 }
 
 impl CommandRunner for SystemCommandRunner {
     fn run(&self, invocation: CommandInvocation, timeout: Duration) -> io::Result<CommandResult> {
         use std::io::Write;
+        use std::os::unix::process::CommandExt;
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::mpsc;
 
@@ -169,7 +182,12 @@ impl CommandRunner for SystemCommandRunner {
                 Stdio::piped()
             })
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .stderr(Stdio::piped())
+            // Put the child in its own process group so a timeout/cap abort can
+            // signal the whole group (`kill(-pid, …)`) and tear down any
+            // grandchildren that inherited the pipes, rather than leaving the
+            // reader threads blocked on an inherited write end.
+            .process_group(0);
 
         let mut child = cmd.spawn()?;
         if !invocation.stdin.is_empty()
@@ -178,96 +196,123 @@ impl CommandRunner for SystemCommandRunner {
             handle.write_all(&invocation.stdin)?;
         }
 
-        let pid = child.id();
+        let pid = child.id() as i32;
         let stdout = child.stdout.take().unwrap();
         let stderr = child.stderr.take().unwrap();
         let cap_exceeded = Arc::new(AtomicBool::new(false));
 
-        let (tx, rx) = mpsc::channel();
-
-        // Spawn the child watcher and the two bounded pipe readers.
-        let tx_status = tx.clone();
-        thread::spawn(move || {
-            let _ = tx_status.send(Either::Left(child.wait()));
-        });
+        // Two reader threads drain the pipes concurrently so a full pipe can
+        // never deadlock the child. We deliberately do NOT spawn a thread that
+        // reaps the child: reaping frees its PID/PGID for reuse, after which a
+        // kill could hit an unrelated process. Instead the `Child` stays here
+        // and we only `wait()` (reap) *after* any kill, so the PID is valid
+        // right up to the moment we signal it.
+        let (tx, rx) = mpsc::channel::<(&'static str, io::Result<Vec<u8>>)>();
 
         let stdout_cap = Arc::clone(&cap_exceeded);
         let tx_stdout = tx.clone();
         thread::spawn(move || {
-            let _ = tx_stdout.send(Either::Right((
-                "stdout",
-                read_limited(stdout, Self::MAX_OUTPUT_BYTES, &stdout_cap),
-            )));
+            let _ = tx_stdout
+                .send(("stdout", read_limited(stdout, Self::MAX_OUTPUT_BYTES, &stdout_cap)));
         });
-
         let stderr_cap = Arc::clone(&cap_exceeded);
         thread::spawn(move || {
-            let _ = tx.send(Either::Right((
-                "stderr",
-                read_limited(stderr, Self::MAX_OUTPUT_BYTES, &stderr_cap),
-            )));
+            let _ = tx.send(("stderr", read_limited(stderr, Self::MAX_OUTPUT_BYTES, &stderr_cap)));
         });
 
         let start = Instant::now();
-        let mut status: Option<std::process::ExitStatus> = None;
         let mut stdout_buf: Option<io::Result<Vec<u8>>> = None;
         let mut stderr_buf: Option<io::Result<Vec<u8>>> = None;
+        let mut timed_out = false;
 
-        while status.is_none() || stdout_buf.is_none() || stderr_buf.is_none() {
+        // Collect both pipes to EOF. Both readers finishing means the child has
+        // closed its stdout/stderr — it has exited, or a capped reader bailed.
+        while stdout_buf.is_none() || stderr_buf.is_none() {
             let remaining = if timeout == Duration::MAX {
                 Duration::from_millis(50)
             } else {
-                let elapsed = start.elapsed();
-                if elapsed >= timeout {
-                    break;
-                }
-                std::cmp::min(Duration::from_millis(50), timeout - elapsed)
-            };
-
-            match rx.recv_timeout(remaining) {
-                Ok(Either::Left(Ok(s))) => status = Some(s),
-                Ok(Either::Left(Err(err))) => {
-                    return Err(err);
-                }
-                Ok(Either::Right(("stdout", buf))) => stdout_buf = Some(buf),
-                Ok(Either::Right(("stderr", buf))) => stderr_buf = Some(buf),
-                Ok(Either::Right((_, _))) => {}
-                Err(mpsc::RecvTimeoutError::Timeout) => {
-                    if cap_exceeded.load(Ordering::SeqCst) {
+                match timeout.checked_sub(start.elapsed()) {
+                    Some(left) if !left.is_zero() => left.min(Duration::from_millis(50)),
+                    _ => {
+                        timed_out = true;
                         break;
                     }
                 }
+            };
+
+            match rx.recv_timeout(remaining) {
+                Ok(("stdout", buf)) => stdout_buf = Some(buf),
+                Ok(("stderr", buf)) => stderr_buf = Some(buf),
+                Ok((_, _)) => {}
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
                 Err(mpsc::RecvTimeoutError::Disconnected) => break,
             }
         }
 
-        // If any required piece is missing (timeout, cap exceeded, or channel
-        // died), kill the child and return a corresponding error.
-        if status.is_none() || stdout_buf.is_none() || stderr_buf.is_none() {
-            // SAFETY: `libc::kill` with a non-negative pid and SIGKILL is
-            // always valid to call; it returns an error for stale pids,
-            // which we ignore.
-            let _ = unsafe { libc::kill(pid as i32, libc::SIGKILL) };
-            // Drain remaining channel messages so the helper threads can exit.
-            while rx.recv_timeout(Duration::from_millis(100)).is_ok() {}
+        let truncated = cap_exceeded.load(Ordering::SeqCst);
 
-            if cap_exceeded.load(Ordering::SeqCst) {
-                return Err(io::Error::other("runtime command output exceeded size limit"));
+        // Terminate the child if it timed out, if the output cap tripped (it is
+        // still producing output we stopped reading), or if a reader vanished.
+        // Otherwise both pipes hit EOF and the process is finishing on its own.
+        // Either way we have NOT reaped yet, so `pid` / its process group is
+        // still valid; the negated PID signals grandchildren too (see
+        // `process_group(0)` above), letting blocked readers reach EOF.
+        let must_kill = timed_out || truncated || stdout_buf.is_none() || stderr_buf.is_none();
+        if must_kill {
+            // SAFETY: `libc::kill` on the still-unreaped child's process group;
+            // errors (e.g. an already-exited group) are ignored.
+            let _ = unsafe { libc::kill(-pid, libc::SIGKILL) };
+        }
+
+        // Reap now — after any kill — so no zombie lingers. On the normal
+        // (`!must_kill`) path the child has closed its pipes and is exiting, so
+        // a plain `wait()` returns promptly. But a process that closes its
+        // pipes yet lingers must not let `wait()` outlive `timeout`, so for a
+        // finite timeout we poll and group-kill at the deadline.
+        let status = if must_kill || timeout == Duration::MAX {
+            child.wait()
+        } else {
+            loop {
+                match child.try_wait() {
+                    Ok(Some(s)) => break Ok(s),
+                    Err(e) => break Err(e),
+                    Ok(None) => {}
+                }
+                if start.elapsed() >= timeout {
+                    timed_out = true;
+                    let _ = unsafe { libc::kill(-pid, libc::SIGKILL) };
+                    break child.wait();
+                }
+                thread::sleep(Duration::from_millis(5));
             }
+        };
+
+        // Drain straggling reader messages so both threads exit and we keep
+        // whatever they read before a kill closed the pipes.
+        loop {
+            match rx.recv_timeout(Duration::from_millis(100)) {
+                Ok(("stdout", buf)) => {
+                    stdout_buf.get_or_insert(buf);
+                }
+                Ok(("stderr", buf)) => {
+                    stderr_buf.get_or_insert(buf);
+                }
+                Ok((_, _)) => {}
+                Err(_) => break,
+            }
+        }
+
+        if timed_out || stdout_buf.is_none() || stderr_buf.is_none() {
             return Err(io::Error::new(io::ErrorKind::TimedOut, "runtime command timed out"));
         }
 
         Ok(CommandResult {
-            status: status.unwrap().code().unwrap_or(-1),
+            status: status?.code().unwrap_or(-1),
             stdout: stdout_buf.unwrap()?,
             stderr: stderr_buf.unwrap()?,
+            truncated,
         })
     }
-}
-
-enum Either<L, R> {
-    Left(L),
-    Right(R),
 }
 
 fn read_limited<R: Read + Send>(
@@ -281,9 +326,17 @@ fn read_limited<R: Read + Send>(
         match reader.read(&mut chunk) {
             Ok(0) => return Ok(buf),
             Ok(n) => {
+                // Strictly-greater: output of *exactly* `max` bytes is complete,
+                // not truncated (the next read returns EOF). Only an overflow
+                // past `max` is truncated.
                 if buf.len() + n > max {
+                    // Keep exactly `max` bytes, flag the truncation, and stop
+                    // reading. The caller decides whether that is an error
+                    // (`invoke`) or a tolerable cap (the grep path).
+                    let take = max - buf.len();
+                    buf.extend_from_slice(&chunk[..take]);
                     cap_flag.store(true, Ordering::SeqCst);
-                    return Err(io::Error::other("runtime command output exceeded size limit"));
+                    return Ok(buf);
                 }
                 buf.extend_from_slice(&chunk[..n]);
             }
@@ -427,6 +480,12 @@ impl<R: CommandRunner> CliRuntime<R> {
             },
             timeout,
         )?;
+        if result.truncated {
+            return Err(RuntimeError::OutputTooLarge {
+                cli: program,
+                limit_mib: SystemCommandRunner::MAX_OUTPUT_BYTES / (1024 * 1024),
+            });
+        }
         if result.status != 0 {
             return Err(RuntimeError::Cli {
                 cli: program,
@@ -761,16 +820,70 @@ mod tests {
     }
 
     #[test]
-    fn system_runner_enforces_output_size_cap() {
+    fn system_runner_enforces_timeout_when_pipes_close_but_process_lingers() {
+        // The child closes stdout+stderr immediately (both readers hit EOF) but
+        // keeps running. The collection loop completes without a kill, so the
+        // reap must still honor the timeout rather than block on `wait()`.
+        let invocation = CommandInvocation {
+            program: PathBuf::from("sh"),
+            args: vec![
+                OsString::from("-c"),
+                OsString::from("exec 1>&- 2>&-; sleep 30"),
+            ],
+            stdin: Vec::new(),
+        };
+        let start = Instant::now();
+        let err = SystemCommandRunner
+            .run(invocation, Duration::from_millis(200))
+            .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+        assert!(
+            start.elapsed() < Duration::from_secs(4),
+            "reap must honor the timeout, took {:?}",
+            start.elapsed()
+        );
+    }
+
+    #[test]
+    fn system_runner_truncates_oversized_output() {
         let invocation = CommandInvocation {
             program: PathBuf::from("cat"),
             args: vec![OsString::from("/dev/zero")],
             stdin: Vec::new(),
         };
-        let err = SystemCommandRunner
+        let result = SystemCommandRunner
             .run(invocation, Duration::from_secs(5))
+            .expect("oversized output is truncated, not an error");
+        assert!(result.truncated, "oversized output must be flagged truncated");
+        assert_eq!(
+            result.stdout.len(),
+            SystemCommandRunner::MAX_OUTPUT_BYTES,
+            "truncated stdout must be exactly the cap"
+        );
+    }
+
+    #[test]
+    fn system_runner_returns_when_grandchild_holds_pipe_after_parent_exits() {
+        // The direct child (`sh`) backgrounds a `sleep` that inherits the
+        // stdout/stderr pipes, then exits 0. The exit status arrives promptly,
+        // but the pipes never reach EOF because the grandchild still holds the
+        // write ends. The watcher has already reaped `sh`, so signalling its
+        // PID would be unsafe (it may be recycled); `run` must NOT do that, and
+        // must still return via the timeout instead of hanging forever.
+        let invocation = CommandInvocation {
+            program: PathBuf::from("sh"),
+            args: vec![OsString::from("-c"), OsString::from("sleep 5 & exit 0")],
+            stdin: Vec::new(),
+        };
+        let start = Instant::now();
+        let err = SystemCommandRunner
+            .run(invocation, Duration::from_millis(200))
             .unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::Other);
-        assert!(err.to_string().contains("size limit"), "expected size-limit error, got {err}");
+        assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+        assert!(
+            start.elapsed() < Duration::from_secs(4),
+            "must time out promptly rather than wait on the grandchild, took {:?}",
+            start.elapsed()
+        );
     }
 }
