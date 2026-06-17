@@ -68,6 +68,20 @@ pub struct RegexBuilderControllerRust {
 const MAX_REGEX_RANGES: usize = 10_000;
 
 impl RegexBuilderControllerRust {
+    /// Bump the evaluate generation and return the new value. Each keystroke
+    /// starts a fresh generation so a slow worker's result can be matched
+    /// against the latest request and discarded if it has been superseded.
+    fn bump_generation(&mut self) -> u64 {
+        self.evaluate_generation = self.evaluate_generation.wrapping_add(1);
+        self.evaluate_generation
+    }
+
+    /// True when `generation` is still the latest one issued — i.e. a worker
+    /// result tagged with it has not been superseded and may be applied.
+    fn is_current_generation(&self, generation: u64) -> bool {
+        self.evaluate_generation == generation
+    }
+
     /// Pure Rust evaluation. Returns `(match_count, error_text)`.
     pub fn evaluate_strings(pattern: &str, sample: &str, case_insensitive: bool) -> (i32, String) {
         if pattern.is_empty() {
@@ -106,8 +120,7 @@ impl ffi::RegexBuilderController {
         let pattern = self.as_ref().rust().pattern.to_string();
         let sample = self.as_ref().rust().sample.to_string();
         let ci = self.as_ref().rust().case_insensitive;
-        let generation = self.as_ref().rust().evaluate_generation.wrapping_add(1);
-        self.as_mut().rust_mut().evaluate_generation = generation;
+        let generation = self.as_mut().rust_mut().bump_generation();
 
         let thread = self.qt_thread();
         std::thread::spawn(move || {
@@ -134,7 +147,7 @@ fn finish_evaluate(
     count: i32,
     err: String,
 ) {
-    if pin.as_ref().rust().evaluate_generation != generation {
+    if !pin.as_ref().rust().is_current_generation(generation) {
         return;
     }
     pin.as_mut().set_match_count(count);
@@ -189,5 +202,37 @@ mod tests {
         let json = RegexBuilderControllerRust::match_ranges_json_str("a", &sample, false);
         let ranges: Vec<(usize, usize)> = serde_json::from_str(&json).unwrap();
         assert_eq!(ranges.len(), MAX_REGEX_RANGES);
+    }
+
+    #[test]
+    fn generation_gating_drops_stale_worker_results() {
+        // Each keystroke bumps the generation; a worker result is applied only
+        // if its generation is still current. This is what stops a slow
+        // evaluation from a previous keystroke from clobbering newer state.
+        let mut state = RegexBuilderControllerRust::default();
+        let first = state.bump_generation();
+        assert!(state.is_current_generation(first));
+
+        // A newer keystroke supersedes the first request.
+        let second = state.bump_generation();
+        assert_ne!(first, second);
+        assert!(
+            !state.is_current_generation(first),
+            "a result from the superseded generation must be dropped"
+        );
+        assert!(
+            state.is_current_generation(second),
+            "the latest generation's result must still apply"
+        );
+    }
+
+    #[test]
+    fn generation_counter_wraps_without_panicking() {
+        let mut state = RegexBuilderControllerRust {
+            evaluate_generation: u64::MAX,
+            ..Default::default()
+        };
+        assert_eq!(state.bump_generation(), 0, "generation must wrap, not panic");
+        assert!(state.is_current_generation(0));
     }
 }

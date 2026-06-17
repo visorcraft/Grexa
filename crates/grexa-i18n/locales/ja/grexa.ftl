@@ -19,6 +19,20 @@ search-status-found = {$files} 件のファイルから {$matches} 件のマッ�
 
 search-status-filtered = {$total} 件中 {$shown} 件のマッチを {$files} 件のファイルで表示中
 
+search-status-found-container = コンテナ内の {$files} 件のファイルから {$matches} 件のマッチを発見しました
+
+search-status-cancelled-found = キャンセルされました — {$files} 件のファイル中 {$matches} 件のマッチ
+
+search-status-capped = {$max} 件のマッチで打ち切りました — 検索を絞り込んでください
+
+search-status-capped-container = {$max} 件のコンテナマッチで打ち切りました — 検索を絞り込んでください
+
+search-status-container-error = コンテナエラー: {$message}
+
+notify-search-complete-title = 検索が完了しました
+
+notify-search-complete-body = {$files} 件のファイル中 {$matches} 件のマッチ (Grexa)
+
 elapsed-subsecond = 1秒未満
 
 elapsed-seconds = {$seconds} 秒

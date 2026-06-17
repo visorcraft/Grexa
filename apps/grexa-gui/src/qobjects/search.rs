@@ -924,10 +924,12 @@ impl ffi::SearchController {
         let files = self.as_ref().rust().files_matched.max(0) as usize;
         self.as_mut().rust_mut().cancel_active_search();
         self.as_mut().set_busy(false);
-        self.as_mut().set_status_text(QString::from(&format!(
-            "Cancelled — {} in {}",
-            plural_count("count-matches", matches),
-            plural_count("count-files", files),
+        self.as_mut().set_status_text(QString::from(&t_status(
+            "search-status-cancelled-found",
+            &[
+                ("matches", (matches as i64).into()),
+                ("files", (files as i64).into()),
+            ],
         )));
         self.as_mut().search_completed(true);
     }
@@ -1568,19 +1570,26 @@ fn finish_container_search(
             };
             pin.as_mut().set_files_matched(unique_files);
             let status = if capped {
-                format!("Capped at {} container matches — narrow your search", MAX_RESULT_ROWS)
+                t_status(
+                    "search-status-capped-container",
+                    &[("max", (MAX_RESULT_ROWS as i64).into())],
+                )
             } else {
-                format!(
-                    "Found {} in container ({})",
-                    plural_count("count-matches", added as usize),
-                    plural_count("count-files", unique_files as usize),
+                t_status(
+                    "search-status-found-container",
+                    &[
+                        ("matches", (added as i64).into()),
+                        ("files", (unique_files as i64).into()),
+                    ],
                 )
             };
             pin.as_mut().set_status_text(QString::from(&status));
         }
         Err(err) => {
-            pin.as_mut()
-                .set_status_text(QString::from(&format!("Container error: {err}")));
+            pin.as_mut().set_status_text(QString::from(&t_status(
+                "search-status-container-error",
+                &[("message", err.into())],
+            )));
         }
     }
     pin.as_mut().rust_mut().cancel_token = None;
@@ -1887,6 +1896,17 @@ fn plural_count(key: &str, n: usize) -> String {
     })
 }
 
+/// Format a Fluent status string with named args via the active bundle.
+/// Falls back to the key name if the catalog is somehow broken — locale
+/// parity is enforced in CI, so this should never surface to users.
+fn t_status(key: &str, args: &[(&'static str, grexa_i18n::Value<'static>)]) -> String {
+    with_workspace(|w| {
+        w.bundle
+            .format(key, args)
+            .unwrap_or_else(|_| key.to_string())
+    })
+}
+
 /// Fire a desktop notification via `notify-send`. Best-effort — fails
 /// silently if the binary isn't installed. We use shell-out instead
 /// of D-Bus directly so the dependency surface stays in user-space
@@ -2093,19 +2113,23 @@ fn finish_search(
             let fc = pin.as_ref().rust().files_matched as usize;
             let capped = gui_capped || summary.capped;
             let status = if cancelled {
-                format!(
-                    "Cancelled — {} in {}",
-                    plural_count("count-matches", mc),
-                    plural_count("count-files", fc),
+                t_status(
+                    "search-status-cancelled-found",
+                    &[
+                        ("matches", (mc as i64).into()),
+                        ("files", (fc as i64).into()),
+                    ],
                 )
             } else if capped {
-                format!("Capped at {} matches — narrow your search", MAX_RESULT_ROWS)
+                t_status("search-status-capped", &[("max", (MAX_RESULT_ROWS as i64).into())])
             } else {
-                format!(
-                    "Found {} in {} in {} ms",
-                    plural_count("count-matches", summary.matches),
-                    plural_count("count-files", summary.files_matched),
-                    summary.elapsed_ms,
+                t_status(
+                    "search-status-found",
+                    &[
+                        ("matches", (summary.matches as i64).into()),
+                        ("files", (summary.files_matched as i64).into()),
+                        ("elapsed", format!("{} ms", summary.elapsed_ms).into()),
+                    ],
                 )
             };
             pin.as_mut().set_status_text(QString::from(&status));
@@ -2115,18 +2139,22 @@ fn finish_search(
             // is probably looking at the window in those cases.
             if !cancelled && summary.elapsed_ms >= 4000 && summary.matches > 0 {
                 notify_desktop(
-                    "Search complete",
-                    &format!(
-                        "{} in {} (Grexa)",
-                        plural_count("count-matches", summary.matches),
-                        plural_count("count-files", summary.files_matched),
+                    &t_status("notify-search-complete-title", &[]),
+                    &t_status(
+                        "notify-search-complete-body",
+                        &[
+                            ("matches", (summary.matches as i64).into()),
+                            ("files", (summary.files_matched as i64).into()),
+                        ],
                     ),
                 );
             }
         }
         Err(err) => {
-            pin.as_mut()
-                .set_status_text(QString::from(&format!("Error: {err}")));
+            pin.as_mut().set_status_text(QString::from(&t_status(
+                "search-status-error",
+                &[("message", err.to_string().into())],
+            )));
         }
     }
     pin.as_mut().rust_mut().cancel_token = None;

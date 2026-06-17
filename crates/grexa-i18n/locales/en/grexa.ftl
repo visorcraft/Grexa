@@ -37,6 +37,38 @@ search-status-found = {$matches ->
 
 search-status-filtered = Showing {$shown} of {$total} matches in {$files} files
 
+search-status-found-container = {$matches ->
+    [one] Found 1 match
+   *[other] Found {$matches} matches
+} in container ({$files ->
+    [one] 1 file
+   *[other] {$files} files
+})
+
+search-status-cancelled-found = Cancelled — {$matches ->
+    [one] 1 match
+   *[other] {$matches} matches
+} in {$files ->
+    [one] 1 file
+   *[other] {$files} files
+}
+
+search-status-capped = Capped at {$max} matches — narrow your search
+
+search-status-capped-container = Capped at {$max} container matches — narrow your search
+
+search-status-container-error = Container error: {$message}
+
+notify-search-complete-title = Search complete
+
+notify-search-complete-body = {$matches ->
+    [one] 1 match
+   *[other] {$matches} matches
+} in {$files ->
+    [one] 1 file
+   *[other] {$files} files
+} (Grexa)
+
 ## Elapsed-time formatting helpers. Used by both search and replace.
 
 elapsed-subsecond = under a second

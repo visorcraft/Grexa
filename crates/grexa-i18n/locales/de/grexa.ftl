@@ -23,6 +23,38 @@ search-status-found = {$matches ->
 
 search-status-filtered = Zeige {$shown} von {$total} Treffern in {$files} Dateien
 
+search-status-found-container = {$matches ->
+    [one] 1 Treffer gefunden
+   *[other] {$matches} Treffer gefunden
+} im Container ({$files ->
+    [one] 1 Datei
+   *[other] {$files} Dateien
+})
+
+search-status-cancelled-found = Abgebrochen — {$matches ->
+    [one] 1 Treffer
+   *[other] {$matches} Treffer
+} in {$files ->
+    [one] 1 Datei
+   *[other] {$files} Dateien
+}
+
+search-status-capped = Bei {$max} Treffern abgeschnitten — Suche eingrenzen
+
+search-status-capped-container = Bei {$max} Container-Treffern abgeschnitten — Suche eingrenzen
+
+search-status-container-error = Container-Fehler: {$message}
+
+notify-search-complete-title = Suche abgeschlossen
+
+notify-search-complete-body = {$matches ->
+    [one] 1 Treffer
+   *[other] {$matches} Treffer
+} in {$files ->
+    [one] 1 Datei
+   *[other] {$files} Dateien
+} (Grexa)
+
 elapsed-subsecond = unter einer Sekunde
 
 elapsed-seconds = {$seconds ->
