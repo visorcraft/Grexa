@@ -1,5 +1,5 @@
 Name:           grexa
-Version:        1.5.3
+Version:        1.5.4
 Release:        1%{?dist}
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 
@@ -89,6 +89,13 @@ command -v appstream-util >/dev/null && \
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Wed Jun 17 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.5.4-1
+- Harden the container command runner: per-command timeout and output-size cap
+  with reliable process-group cleanup; large container searches report capped
+  results instead of failing.
+- Tighten search/replace resource bounds and surface walk-depth truncation.
+- Localize the remaining search status and notification messages.
+
 * Sat Jun 13 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.5.3-1
 - Skip the read-only-directory replace failure test when running as root,
   so CI passes in containerized release builds.

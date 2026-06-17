@@ -75,6 +75,16 @@
   </supports>
 
   <releases>
+    <release version="1.5.4" date="2026-06-17">
+      <description>
+        <p>Reliability and localization patch.</p>
+        <ul>
+          <li>Hardened container search: per-command timeout and output-size limits with reliable process cleanup; large container searches report results as capped instead of failing.</li>
+          <li>Tighter search and replace resource bounds keep very large runs responsive.</li>
+          <li>Search status and notification messages are now fully localized.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.5.3" date="2026-06-13">
       <description>
         <p>Patch release.</p>
