@@ -130,6 +130,11 @@ impl ffi::AiController {
         let model = self.as_ref().rust().model.to_string();
         let api_key = load_api_key(&endpoint).ok().flatten();
 
+        if self.as_ref().rust().busy {
+            self.as_mut()
+                .set_last_error(QString::from("A request is already in progress."));
+            return;
+        }
         self.as_mut().set_busy(true);
         self.as_mut().set_last_error(QString::default());
 
@@ -195,6 +200,11 @@ impl ffi::AiController {
             return;
         }
         let api_key = load_api_key(&endpoint).ok().flatten();
+        if self.as_ref().rust().busy {
+            self.as_mut()
+                .set_last_error(QString::from("A request is already in progress."));
+            return;
+        }
         self.as_mut().set_busy(true);
         self.as_mut().set_last_error(QString::default());
 

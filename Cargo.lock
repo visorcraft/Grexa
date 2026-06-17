@@ -1285,6 +1285,7 @@ name = "grexa-containers"
 version = "1.5.3"
 dependencies = [
  "grexa-core",
+ "libc",
  "regex",
  "serde",
  "serde_json",

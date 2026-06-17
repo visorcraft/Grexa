@@ -231,7 +231,6 @@ fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
         .with_writer(std::io::stderr);
 
     let paths = AppPaths::from_env();
-    let log_path = paths.state_dir.join("grexa-gui.log");
 
     // Read the privacy toggle from the persisted settings. When
     // `privacy_redact_paths` is true, every line written to the log
@@ -246,23 +245,30 @@ fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
     let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
 
     let (file_layer, guard) = match std::fs::create_dir_all(&paths.state_dir) {
-        Ok(()) => match std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&log_path)
-        {
-            Ok(file) => {
-                let writer = RedactingWriter::new(file, redact, home);
-                let (writer, guard) = tracing_appender::non_blocking(writer);
-                let layer = tracing_subscriber::fmt::layer()
-                    .with_writer(writer)
-                    .with_target(true)
-                    .with_ansi(false)
-                    .with_level(true);
-                (Some(layer), Some(guard))
+        Ok(()) => {
+            // Rolling appender: rotate daily and keep at most two files
+            // (today + one archive). Prevents the log from growing without
+            // bound during long sessions or debug-level tracing.
+            let appender = tracing_appender::rolling::RollingFileAppender::builder()
+                .rotation(tracing_appender::rolling::Rotation::DAILY)
+                .filename_prefix("grexa-gui")
+                .filename_suffix("log")
+                .max_log_files(2)
+                .build(&paths.state_dir);
+            match appender {
+                Ok(appender) => {
+                    let writer = RedactingWriter::new(appender, redact, home);
+                    let (writer, guard) = tracing_appender::non_blocking(writer);
+                    let layer = tracing_subscriber::fmt::layer()
+                        .with_writer(writer)
+                        .with_target(true)
+                        .with_ansi(false)
+                        .with_level(true);
+                    (Some(layer), Some(guard))
+                }
+                Err(_) => (None, None),
             }
-            Err(_) => (None, None),
-        },
+        }
         Err(_) => (None, None),
     };
 
@@ -574,13 +580,13 @@ fn desktop_exec_token(path: &str) -> String {
 /// down. Partial writes that split `$HOME` across two `write()`
 /// calls are still redacted because `tracing-appender` buffers a
 /// full event before flushing.
-struct RedactingWriter {
-    inner: std::fs::File,
+struct RedactingWriter<W: std::io::Write> {
+    inner: W,
     pattern: Option<Vec<u8>>,
 }
 
-impl RedactingWriter {
-    fn new(inner: std::fs::File, redact: bool, home: Option<std::path::PathBuf>) -> Self {
+impl<W: std::io::Write> RedactingWriter<W> {
+    fn new(inner: W, redact: bool, home: Option<std::path::PathBuf>) -> Self {
         let pattern = if redact {
             home.and_then(|h| {
                 let s = h.to_string_lossy().into_owned();
@@ -597,7 +603,7 @@ impl RedactingWriter {
     }
 }
 
-impl std::io::Write for RedactingWriter {
+impl<W: std::io::Write> std::io::Write for RedactingWriter<W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         match &self.pattern {
             Some(pat) if !pat.is_empty() => {

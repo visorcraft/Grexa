@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::{DirEntry, WalkBuilder};
@@ -13,7 +13,7 @@ use thiserror::Error;
 use unicode_normalization::UnicodeNormalization;
 
 use crate::cancel::CancelToken;
-use crate::constants::file_exceeds_hard_cap;
+use crate::constants::{ENGINE_RESULT_CAP, file_exceeds_hard_cap};
 use crate::documents::extract_text;
 use crate::encoding::{DetectedEncoding, read_text};
 use crate::models::{
@@ -70,6 +70,21 @@ const MATCH_PREVIEW_MAX_CHARS: usize = 400;
 /// multi-megabyte minified line (common in generated JS/CSS) does not hold
 /// the search thread for seconds while the regex engine scans it.
 const MAX_COMPARE_LINE_BYTES: usize = 2 * 1024 * 1024;
+
+/// Maximum number of matches collected from a single line. A line of
+/// repeated characters matched by `.` can produce millions of tuples; this
+/// cap keeps memory per line bounded and lets cancellation/paging kick in.
+const MAX_MATCHES_PER_LINE: usize = 10_000;
+
+/// Time budget for the extended regex engine on a single line. The fast
+/// engine is linear, but fancy-regex can explode on catastrophic patterns;
+/// aborting the line after this duration keeps the worker responsive.
+const REGEX_PER_LINE_BUDGET: Duration = Duration::from_millis(100);
+
+/// Maximum directory depth when recursive search is enabled. Prevents
+/// runaway traversal through symlinked cycles or extremely deep trees while
+/// still allowing normal nested project directories.
+const MAX_WALK_DEPTH: usize = 64;
 
 static BINARY_EXTENSIONS: &[&str] = &[
     "exe", "dll", "obj", "bin", "zip", "tar", "gz", "7z", "rar", "png", "jpg", "jpeg", "gif",
@@ -151,6 +166,7 @@ pub fn search_with(
             skipped_files: 0,
             elapsed_ms: started.elapsed().as_millis(),
             cancelled: false,
+            capped: false,
         });
     }
 
@@ -201,7 +217,9 @@ pub fn search_with(
         .follow_links(options.include_symlinks)
         .same_file_system(false);
 
-    if !options.include_subfolders {
+    if options.include_subfolders {
+        walker.max_depth(Some(MAX_WALK_DEPTH));
+    } else {
         walker.max_depth(Some(1));
     }
 
@@ -211,6 +229,8 @@ pub fn search_with(
     let mut matched_files = HashSet::new();
     let mut file_encodings: HashMap<PathBuf, DetectedEncoding> = HashMap::new();
     let mut cancelled = false;
+    let mut capped = false;
+    let effective_max = options.max_results.unwrap_or(ENGINE_RESULT_CAP);
 
     for entry in walker.build() {
         if cancel.is_cancelled() {
@@ -301,6 +321,11 @@ pub fn search_with(
                     }
                 }
                 results.extend(file_results);
+                if results.len() >= effective_max {
+                    results.truncate(effective_max);
+                    capped = options.max_results.is_none_or(|m| m < results.len());
+                    break;
+                }
             }
             break;
         }
@@ -317,10 +342,9 @@ pub fn search_with(
                 }
             }
             results.extend(file_results);
-            if let Some(max) = options.max_results
-                && results.len() >= max
-            {
-                results.truncate(max);
+            if results.len() >= effective_max {
+                results.truncate(effective_max);
+                capped = options.max_results.is_none_or(|m| m < results.len());
                 break;
             }
         }
@@ -351,6 +375,7 @@ pub fn search_with(
         skipped_files,
         elapsed_ms,
         cancelled,
+        capped,
     })
 }
 
@@ -644,11 +669,11 @@ fn find_line_matches(
     norm_ctx: &NormalizationContext,
 ) -> Vec<(usize, usize)> {
     if let Some(engine) = regex {
-        let mut matches = engine.find_iter(line);
+        let mut matches = engine.find_iter_with_budget(line, REGEX_PER_LINE_BUDGET);
         if options.whole_word {
             matches.retain(|&(start, end)| is_whole_word_match(line, start, end));
         }
-        return matches;
+        return cap_matches(line.len(), matches);
     }
 
     let needle = match normalized_needle {
@@ -671,11 +696,14 @@ fn find_line_matches(
             let end = start + needle.len();
             matches.push((start, end));
             offset = end;
+            if matches.len() >= MAX_MATCHES_PER_LINE {
+                break;
+            }
         }
         if options.whole_word {
             matches.retain(|&(start, end)| is_whole_word_match(line, start, end));
         }
-        return matches;
+        return cap_matches(line.len(), matches);
     }
 
     let (normalized, mapping) = normalize_with_mapping(line, options, norm_ctx);
@@ -687,9 +715,26 @@ fn find_line_matches(
         let norm_end = norm_start + needle.len();
         matches.push(map_normalized_span(&mapping, norm_start, norm_end));
         offset = norm_end;
+        if matches.len() >= MAX_MATCHES_PER_LINE {
+            break;
+        }
     }
     if options.whole_word {
         matches.retain(|&(start, end)| is_whole_word_match(line, start, end));
+    }
+    cap_matches(line.len(), matches)
+}
+
+/// Truncate a match list to [`MAX_MATCHES_PER_LINE`] and log once per line.
+/// `line_len` is only used for diagnostics.
+fn cap_matches(_line_len: usize, mut matches: Vec<(usize, usize)>) -> Vec<(usize, usize)> {
+    if matches.len() > MAX_MATCHES_PER_LINE {
+        tracing::warn!(
+            kept = MAX_MATCHES_PER_LINE,
+            total = matches.len(),
+            "per-line match count capped"
+        );
+        matches.truncate(MAX_MATCHES_PER_LINE);
     }
     matches
 }
@@ -1712,5 +1757,74 @@ mod tests {
     fn exclude_dir_filter_empty_never_matches() {
         let filter = ExcludeDirFilter::parse("").unwrap();
         assert!(!filter.matches(Path::new("/any/path"), Path::new("/any")));
+    }
+
+    #[test]
+    fn max_results_truncates_and_does_not_set_capped_flag() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), "match one\nmatch two\nmatch three\n").unwrap();
+
+        let mut options = SearchOptions::new(dir.path(), "match");
+        options.max_results = Some(2);
+
+        let summary = search(&options).unwrap();
+        assert_eq!(summary.results.len(), 2);
+        assert!(!summary.capped, "user-supplied max_results should not set capped");
+    }
+
+    #[test]
+    fn capped_flag_false_on_normal_search() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), "one two three\n").unwrap();
+
+        let options = SearchOptions::new(dir.path(), "two");
+        let summary = search(&options).unwrap();
+        assert_eq!(summary.results.len(), 1);
+        assert!(!summary.capped);
+    }
+
+    #[test]
+    fn per_line_match_count_is_capped() {
+        let dir = tempdir().unwrap();
+        // A line of 100k 'a's matched by regex '.' would yield 100k tuples
+        // without the cap.
+        fs::write(dir.path().join("dense.txt"), "a".repeat(100_000)).unwrap();
+
+        let mut options = SearchOptions::new(dir.path(), ".");
+        options.regex = true;
+
+        let summary = search(&options).unwrap();
+        assert_eq!(summary.results.len(), 1);
+        assert_eq!(
+            summary.results[0].match_count, MAX_MATCHES_PER_LINE,
+            "per-line matches must be capped"
+        );
+    }
+
+    #[test]
+    fn max_depth_limits_deep_directory_recursion() {
+        let dir = tempdir().unwrap();
+        let root = dir.path().join("root");
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("shallow.txt"), "TODO\n").unwrap();
+
+        // Build a directory chain deeper than MAX_WALK_DEPTH and put a file
+        // at the bottom. The walker should find the shallow file but stop
+        // before descending into the very deep branch.
+        let mut deepest = root.clone();
+        for i in 0..(MAX_WALK_DEPTH + 5) {
+            deepest = deepest.join(format!("d{i}"));
+            fs::create_dir(&deepest).unwrap();
+        }
+        fs::write(deepest.join("deep.txt"), "TODO\n").unwrap();
+
+        let options = SearchOptions::new(&root, "TODO");
+
+        // Without a depth limit this could exhaust stack or spend unbounded
+        // time in very deep trees. With the cap it should complete promptly.
+        let summary = search(&options).unwrap();
+        assert_eq!(summary.files_scanned, 1);
+        assert_eq!(summary.matches, 1);
+        assert_eq!(summary.results[0].file_name, "shallow.txt");
     }
 }

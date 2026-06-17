@@ -55,6 +55,11 @@ fn expand_tilde(path: &str) -> String {
 /// preview widths.
 const BATCH_SIZE: usize = 64;
 
+/// Maximum number of result rows the GUI will keep in memory for the
+/// active tab. Searches that exceed this cap stop adding rows but keep
+/// scanning so file/match counters remain accurate.
+const MAX_RESULT_ROWS: usize = 1_000_000;
+
 /// Snapshot of one tab's result buffer plus the qproperty-shaped
 /// state the tab depends on. Created on tab-switch-away and
 /// restored on tab-switch-back via the QML tab bar.
@@ -98,18 +103,27 @@ pub struct ResultRow {
     pub preview_before: String,
     pub preview_match: String,
     pub preview_after: String,
+    /// Cached concatenation of the preview fragments for within-filter
+    /// testing. Built once at row creation to avoid per-test allocation
+    /// during streaming and view rebuilds.
+    pub preview_line: String,
 }
 
 impl From<&SearchResult> for ResultRow {
     fn from(r: &SearchResult) -> Self {
+        let preview_before = r.match_preview_before.clone();
+        let preview_match = r.match_preview_match.clone();
+        let preview_after = r.match_preview_after.clone();
+        let preview_line = format!("{preview_before}{preview_match}{preview_after}");
         Self {
             full_path: r.full_path.clone(),
             relative_path: r.relative_path.clone(),
             line: r.line_number as u32,
             column: r.column_number as u32,
-            preview_before: r.match_preview_before.clone(),
-            preview_match: r.match_preview_match.clone(),
-            preview_after: r.match_preview_after.clone(),
+            preview_before,
+            preview_match,
+            preview_after,
+            preview_line,
         }
     }
 }
@@ -245,11 +259,6 @@ pub mod ffi {
         /// human-readable error message.
         #[qinvokable]
         fn move_to_trash(self: &SearchController, path: &QString) -> QString;
-
-        /// Best-effort attempt to bring the Grexa window to the
-        /// foreground using `wmctrl`.
-        #[qinvokable]
-        fn raise_window(self: &SearchController);
 
         // ---- Container search dispatch --------------------------
 
@@ -654,16 +663,8 @@ impl SearchControllerRust {
     fn row_passes_within(&self, row: &ResultRow, ctx: &WithinContext) -> bool {
         match ctx {
             WithinContext::PassAll => true,
-            WithinContext::Literal(needle) => {
-                let line =
-                    format!("{}{}{}", row.preview_before, row.preview_match, row.preview_after);
-                line.to_lowercase().contains(needle)
-            }
-            WithinContext::Regex(re) => {
-                let line =
-                    format!("{}{}{}", row.preview_before, row.preview_match, row.preview_after);
-                re.is_match(&line)
-            }
+            WithinContext::Literal(needle) => row.preview_line.to_lowercase().contains(needle),
+            WithinContext::Regex(re) => re.is_match(&row.preview_line),
             WithinContext::InvalidRegex => false,
         }
     }
@@ -861,6 +862,8 @@ impl ffi::SearchController {
             let mut batch: Vec<ResultRow> = Vec::with_capacity(BATCH_SIZE);
             let mut files_scanned: u32 = 0;
             let mut files_matched: u32 = 0;
+            let mut rows_emitted: usize = 0;
+            let mut gui_capped = false;
 
             let outcome = {
                 let emit_batch = |events: &mut Vec<ResultRow>, scanned: u32, matched: u32| {
@@ -879,6 +882,11 @@ impl ffi::SearchController {
 
                 let mut sink = |event: ProgressEvent| match event {
                     ProgressEvent::Match(r) => {
+                        if rows_emitted >= MAX_RESULT_ROWS {
+                            gui_capped = true;
+                            return;
+                        }
+                        rows_emitted += 1;
                         batch.push(ResultRow::from(&r));
                         if batch.len() >= BATCH_SIZE {
                             emit_batch(&mut batch, files_scanned, files_matched);
@@ -901,7 +909,7 @@ impl ffi::SearchController {
 
             let cancelled = cancel.is_cancelled();
             if let Err(err) = thread.queue(move |pin| {
-                finish_search(pin, generation, outcome, cancelled, &path_str);
+                finish_search(pin, generation, outcome, cancelled, gui_capped, &path_str);
             }) {
                 tracing::debug!("finish_search queue failed: {err}");
             }
@@ -1061,10 +1069,6 @@ impl ffi::SearchController {
             Ok(()) => QString::from(""),
             Err(err) => QString::from(err.to_string()),
         }
-    }
-
-    fn raise_window(&self) {
-        raise_grexa_window();
     }
 
     fn refresh_containers(self: Pin<&mut Self>) {
@@ -1464,7 +1468,7 @@ fn run_container_search(
     target_kind: i32,
     container_id: &str,
     options: grexa_containers::ContainerSearchOptions,
-) -> Result<Vec<ResultRow>, String> {
+) -> Result<(Vec<ResultRow>, bool), String> {
     use grexa_containers::{
         ContainerRuntimeKind, LiveProbe, detect_runtimes,
         runtime::{CliRuntime, RuntimeOperations, SystemCommandRunner},
@@ -1488,7 +1492,7 @@ fn run_container_search(
 
     let cli = CliRuntime::new(runtime, SystemCommandRunner);
     let containers = cli
-        .list_containers()
+        .list_containers_timeout(grexa_containers::runtime::SystemCommandRunner::DEFAULT_TIMEOUT)
         .map_err(|e| format!("list_containers failed: {e}"))?;
     let info = containers
         .into_iter()
@@ -1498,34 +1502,43 @@ fn run_container_search(
     let summary = search_container(&cli, &info, &options)
         .map_err(|e| format!("container search failed: {e}"))?;
 
-    let mut rows = Vec::with_capacity(summary.hits.len());
-    for hit in summary.hits {
+    let mut rows = Vec::with_capacity(summary.hits.len().min(MAX_RESULT_ROWS));
+    let mut capped = false;
+    for (idx, hit) in summary.hits.into_iter().enumerate() {
+        if idx >= MAX_RESULT_ROWS {
+            capped = true;
+            break;
+        }
         let path_buf = std::path::PathBuf::from(&hit.container_path);
+        let preview_before = String::new();
+        let preview_after = String::new();
+        let preview_line = format!("{preview_before}{}{preview_after}", hit.line_content);
         rows.push(ResultRow {
             full_path: path_buf.clone(),
             relative_path: path_buf,
             line: hit.line_number as u32,
             column: hit.column_number as u32,
-            preview_before: String::new(),
+            preview_before,
             preview_match: hit.line_content,
-            preview_after: String::new(),
+            preview_after,
+            preview_line,
         });
     }
     let _ = grexa_containers::prune_mirrors(3600);
-    Ok(rows)
+    Ok((rows, capped))
 }
 
 fn finish_container_search(
     mut pin: Pin<&mut ffi::SearchController>,
     generation: u64,
-    outcome: Result<Vec<ResultRow>, String>,
+    outcome: Result<(Vec<ResultRow>, bool), String>,
 ) {
     if pin.as_ref().rust().active_generation != generation {
         return;
     }
     pin.as_mut().set_busy(false);
     match outcome {
-        Ok(rows) => {
+        Ok((rows, capped)) => {
             let added = rows.len() as i32;
             // Reset model + reinstall the rows in one go.
             let parent = QModelIndex::default();
@@ -1552,11 +1565,16 @@ fn finish_container_search(
                 seen.len() as i32
             };
             pin.as_mut().set_files_matched(unique_files);
-            pin.as_mut().set_status_text(QString::from(&format!(
-                "Found {} in container ({})",
-                plural_count("count-matches", added as usize),
-                plural_count("count-files", unique_files as usize),
-            )));
+            let status = if capped {
+                format!("Capped at {} container matches — narrow your search", MAX_RESULT_ROWS)
+            } else {
+                format!(
+                    "Found {} in container ({})",
+                    plural_count("count-matches", added as usize),
+                    plural_count("count-files", unique_files as usize),
+                )
+            };
+            pin.as_mut().set_status_text(QString::from(&status));
         }
         Err(err) => {
             pin.as_mut()
@@ -1578,11 +1596,12 @@ fn finish_replace(
             // by hand. The QML side reads `files_modified` +
             // `matches_replaced` + `cancelled` to render the dialog.
             let json = format!(
-                "{{\"files_modified\":{},\"files_unchanged\":{},\"matches_replaced\":{},\"cancelled\":{},\"elapsed_ms\":{},\"failure_count\":{}}}",
+                "{{\"files_modified\":{},\"files_unchanged\":{},\"matches_replaced\":{},\"cancelled\":{},\"capped\":{},\"elapsed_ms\":{},\"failure_count\":{}}}",
                 summary.files_modified,
                 summary.files_unchanged,
                 summary.matches_replaced,
                 summary.cancelled,
+                summary.capped,
                 summary.elapsed_ms,
                 summary.failures.len()
             );
@@ -1879,16 +1898,6 @@ fn notify_desktop(summary: &str, body: &str) {
         .spawn();
 }
 
-/// Best-effort attempt to bring the Grexa window to the foreground.
-/// Tries `wmctrl` first (widely available on X11/Wayland), then gives
-/// up silently. Used when a second instance detects the first is
-/// already running and wants to bring it to the user's attention.
-fn raise_grexa_window() {
-    let _ = std::process::Command::new("wmctrl")
-        .args(["-a", "Grexa"])
-        .status();
-}
-
 /// Push `text` to the system clipboard. Uses `wl-copy` (Wayland) when
 /// `$WAYLAND_DISPLAY` is set; falls back to `xclip -selection clipboard`
 /// otherwise. Both are commonly available on KDE/GNOME hosts and ship
@@ -1951,7 +1960,11 @@ fn build_containers_json() -> String {
             continue;
         }
         let cli = CliRuntime::new(runtime, SystemCommandRunner);
-        let listed = cli.list_containers().unwrap_or_default();
+        let listed = cli
+            .list_containers_timeout(
+                grexa_containers::runtime::SystemCommandRunner::DEFAULT_TIMEOUT,
+            )
+            .unwrap_or_default();
         for c in listed {
             container_descs.push(json!({
                 "kind": kind,
@@ -2017,6 +2030,7 @@ fn finish_search(
     generation: u64,
     outcome: Result<grexa_core::SearchSummary, grexa_core::SearchError>,
     cancelled: bool,
+    gui_capped: bool,
     path_str: &str,
 ) {
     // Same generation gate as `push_rows`: ignore late finishes
@@ -2075,12 +2089,15 @@ fn finish_search(
             }
             let mc = pin.as_ref().rust().match_count as usize;
             let fc = pin.as_ref().rust().files_matched as usize;
+            let capped = gui_capped || summary.capped;
             let status = if cancelled {
                 format!(
                     "Cancelled — {} in {}",
                     plural_count("count-matches", mc),
                     plural_count("count-files", fc),
                 )
+            } else if capped {
+                format!("Capped at {} matches — narrow your search", MAX_RESULT_ROWS)
             } else {
                 format!(
                     "Found {} in {} in {} ms",
@@ -2167,6 +2184,7 @@ mod tests {
             preview_before: String::new(),
             preview_match: "TODO".into(),
             preview_after: String::new(),
+            preview_line: "TODO".into(),
         }];
         let range = state.append_batch(batch).unwrap();
         assert_eq!(range, (0, 0));
@@ -2184,6 +2202,7 @@ mod tests {
             preview_before: "before ".into(),
             preview_match: "MATCH".into(),
             preview_after: " after".into(),
+            preview_line: "before MATCH after".into(),
         }]);
         assert_eq!(state.row_data(0, role::PATH).as_deref(), Some("/a"));
         assert_eq!(state.row_data(0, role::LINE).as_deref(), Some("7"));
@@ -2213,6 +2232,7 @@ mod tests {
             preview_before: String::new(),
             preview_match: "m".into(),
             preview_after: String::new(),
+            preview_line: "m".into(),
         };
         assert_eq!(state.append_batch(vec![row.clone(); 3]), Some((0, 2)));
         assert_eq!(state.append_batch(vec![row.clone(); 2]), Some((3, 4)));
@@ -2252,6 +2272,7 @@ mod tests {
             preview_before: String::new(),
             preview_match: "TODO".into(),
             preview_after: String::new(),
+            preview_line: "TODO".into(),
         }]);
 
         state.clear_search_state();
@@ -2267,14 +2288,19 @@ mod tests {
     }
 
     fn row(path: &str, preview: &str) -> ResultRow {
+        let preview_before = String::new();
+        let preview_match = preview.into();
+        let preview_after = String::new();
+        let preview_line = format!("{preview_before}{preview_match}{preview_after}");
         ResultRow {
             full_path: PathBuf::from(path),
             relative_path: PathBuf::from(path.trim_start_matches('/')),
             line: 1,
             column: 1,
-            preview_before: String::new(),
-            preview_match: preview.into(),
-            preview_after: String::new(),
+            preview_before,
+            preview_match,
+            preview_after,
+            preview_line,
         }
     }
 
@@ -2448,6 +2474,7 @@ mod tests {
             preview_before: String::new(),
             preview_match: "=HYPERLINK(\"https://example.invalid\",\"TODO\")".into(),
             preview_after: String::new(),
+            preview_line: "=HYPERLINK(\"https://example.invalid\",\"TODO\")".into(),
         };
         let rows = vec![&row];
 

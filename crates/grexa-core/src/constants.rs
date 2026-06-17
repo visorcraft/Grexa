@@ -10,6 +10,11 @@
 /// the cap are rejected rather than scanned or rewritten.
 pub const MAX_SEARCH_FILE_BYTES: u64 = 512 * 1024 * 1024;
 
+/// Internal ceiling on the number of individual match rows returned by a
+/// single search when the caller does not supply a `max_results` value.
+/// Keeps memory usage and downstream GUI rendering bounded on broad queries.
+pub const ENGINE_RESULT_CAP: usize = 1_000_000;
+
 /// `true` when a file of `len` bytes exceeds the hard in-memory read cap. The
 /// cap itself is allowed; only strictly larger files are rejected.
 pub fn file_exceeds_hard_cap(len: u64) -> bool {

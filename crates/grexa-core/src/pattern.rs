@@ -21,6 +21,8 @@
 //! See `docs/grex-culture-comparison-audit.md` for the cases that need the
 //! extended engine.
 
+use std::time::{Duration, Instant};
+
 use thiserror::Error;
 
 use crate::models::RegexEngine;
@@ -126,16 +128,36 @@ impl PatternEngine {
     /// `fancy_regex`'s safety limits, in which case dropping the offending
     /// match is the right thing for a UI that wants to keep going.
     pub fn find_iter(&self, haystack: &str) -> Vec<(usize, usize)> {
+        self.find_iter_with_budget(haystack, Duration::MAX)
+    }
+
+    /// Like [`find_iter`], but stops scanning after `budget` elapsed time.
+    /// The fast engine is linear-time, so the budget is effectively a no-op
+    /// there; the extended engine checks the deadline between match attempts
+    /// so a catastrophic pattern cannot burn CPU indefinitely.
+    pub fn find_iter_with_budget(&self, haystack: &str, budget: Duration) -> Vec<(usize, usize)> {
+        let deadline = Instant::now().checked_add(budget);
         match self {
             PatternEngine::Fast(re) => re
                 .find_iter(haystack)
                 .map(|mat| (mat.start(), mat.end()))
                 .collect(),
-            PatternEngine::Extended(re) => re
-                .find_iter(haystack)
-                .filter_map(Result::ok)
-                .map(|mat| (mat.start(), mat.end()))
-                .collect(),
+            PatternEngine::Extended(re) => {
+                let mut matches = Vec::new();
+                for result in re.find_iter(haystack) {
+                    if deadline.is_some_and(|d| Instant::now() >= d) {
+                        tracing::warn!(
+                            pattern = %re.as_str(),
+                            "regex per-line budget exhausted; truncating matches"
+                        );
+                        break;
+                    }
+                    if let Ok(mat) = result {
+                        matches.push((mat.start(), mat.end()));
+                    }
+                }
+                matches
+            }
         }
     }
 
@@ -260,6 +282,28 @@ mod tests {
         assert!(engine.is_extended());
         let haystack = format!("{}!", "a".repeat(60));
         assert!(engine.find_iter(&haystack).is_empty());
+    }
+
+    #[test]
+    fn extended_engine_budget_truncates_catastrophic_pattern() {
+        // `(a+)+\1$` uses a backreference, so it forces the fancy-regex
+        // engine. Against a long non-matching line it used to scan every
+        // position with a large backtrack budget. With a tight per-line
+        // budget the call must return quickly and yield only the matches
+        // found before the deadline.
+        let engine = PatternEngine::build(r"(a+)+\1$", false).unwrap();
+        assert!(engine.is_extended());
+        let haystack = "a".repeat(10_000);
+        let start = Instant::now();
+        let matches = engine.find_iter_with_budget(&haystack, Duration::from_millis(1));
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed < Duration::from_millis(100),
+            "budget should abort quickly, took {elapsed:?}"
+        );
+        // The line is all 'a's, so the anchored pattern can't match; any
+        // returned matches are just from positions scanned before the cutoff.
+        assert!(matches.len() < haystack.len() / 2);
     }
 
     #[test]

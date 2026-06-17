@@ -2,17 +2,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use std::fs;
-use std::io::{self, Read};
+use std::io;
 use std::path::Path;
 
 use chardetng::{EncodingDetector, Iso2022JpDetection, Utf8Detection};
 use encoding_rs::{Encoding, UTF_8, UTF_16BE, UTF_16LE};
 use serde::{Deserialize, Serialize};
-
-/// How many bytes to peek for BOM detection. Four is enough for every BOM
-/// Grexa knows about (UTF-32 LE/BE need the full four; everything else fits
-/// in two or three bytes).
-const BOM_PEEK: usize = 4;
 
 /// How many bytes to feed `chardetng` when BOM detection returns plain UTF-8
 /// but the file isn't actually valid UTF-8. 64 KiB is the upper bound the
@@ -77,16 +72,6 @@ impl DetectedEncoding {
             DetectedEncoding::Heuristic(name) => Encoding::for_label(name.as_bytes()),
         }
     }
-}
-
-/// Detect encoding by peeking at the first bytes of `path`. Always returns
-/// some encoding so the caller can proceed; bytes that don't match any BOM
-/// default to [`DetectedEncoding::Utf8`].
-pub fn detect_from_path(path: &Path) -> io::Result<DetectedEncoding> {
-    let mut file = fs::File::open(path)?;
-    let mut buf = [0u8; BOM_PEEK];
-    let read = file.read(&mut buf)?;
-    Ok(detect_from_bytes(&buf[..read]))
 }
 
 /// Detect encoding from a byte prefix. BOM-driven only; unrecognized prefixes

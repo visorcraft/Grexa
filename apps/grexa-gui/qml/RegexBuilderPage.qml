@@ -49,12 +49,24 @@ Kirigami.Page {
     property var controller: app.regexController
     property int activePreset: -1
 
+    // Debounce pattern/sample edits so the regex engine doesn't re-run on
+    // every keystroke for large samples.
+    Timer {
+        id: evaluateDebounce
+        interval: 150
+        onTriggered: page.evaluate()
+    }
+
     function evaluate() {
         controller.pattern = patternField.text
         controller.sample = sampleArea.text
         controller.caseInsensitive = caseInsensitive.checked
         controller.evaluate()
-        refreshHighlight()
+    }
+
+    Connections {
+        target: page.controller
+        function onMatchCountChanged() { page.refreshHighlight() }
     }
 
     function refreshHighlight() {
@@ -280,7 +292,7 @@ Kirigami.Page {
                     placeholderText: app.i18n("ui-regex-builder-placeholder")
                     font.family: app.tokens.monoFamily
                     Accessible.name: app.i18n("ui-regex-pattern")
-                    onTextChanged: page.evaluate()
+                    onTextChanged: evaluateDebounce.restart()
                 }
                 Controls.ToolButton {
                     id: caseInsensitive
@@ -289,7 +301,7 @@ Kirigami.Page {
                     font.family: app.tokens.monoFamily
                     Controls.ToolTip.text: app.i18n("ui-caseinsensitive")
                     Controls.ToolTip.visible: hovered
-                    onToggled: page.evaluate()
+                    onToggled: evaluateDebounce.restart()
                 }
             }
         }
@@ -366,7 +378,7 @@ Kirigami.Page {
                             wrapMode: TextEdit.Wrap
                             background: null
                             Accessible.name: app.i18n("ui-test-string")
-                            onTextChanged: page.evaluate()
+                            onTextChanged: evaluateDebounce.restart()
                         }
                     }
                     // Read-only highlight overlay: when a pattern is

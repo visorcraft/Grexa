@@ -4,13 +4,13 @@
 //! `RegexBuilderController` — drives the Regex Builder page.
 //!
 //! Wraps [`grexa_core::PatternEngine`]. Recomputes match-count + error
-//! state whenever the pattern or sample text changes. All work is
-//! synchronous and cheap (single regex compile + scan over the sample
-//! string), so no threading.
+//! state whenever the pattern or sample text changes. Compilation and
+//! scanning run on a worker thread so the UI stays responsive; results
+//! are queued back to the Qt thread via [`cxx_qt::Threading`].
 
 use std::pin::Pin;
 
-use cxx_qt::CxxQtType;
+use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use grexa_core::PatternEngine;
 use serde_json;
@@ -46,6 +46,8 @@ pub mod ffi {
         #[qinvokable]
         fn match_ranges_json(self: &RegexBuilderController) -> QString;
     }
+
+    impl cxx_qt::Threading for RegexBuilderController {}
 }
 
 #[derive(Default)]
@@ -55,7 +57,15 @@ pub struct RegexBuilderControllerRust {
     case_insensitive: bool,
     match_count: i32,
     error: QString,
+    /// Monotonic generation counter so late worker results from a previous
+    /// keystroke don't overwrite the current state.
+    evaluate_generation: u64,
 }
+
+/// Maximum number of match ranges the regex builder will serialize for the
+/// highlight overlay. Past this cap the badge still shows the true count, but
+/// the side-panel list and highlight are truncated to keep the GUI responsive.
+const MAX_REGEX_RANGES: usize = 10_000;
 
 impl RegexBuilderControllerRust {
     /// Pure Rust evaluation. Returns `(match_count, error_text)`.
@@ -74,6 +84,8 @@ impl RegexBuilderControllerRust {
 
     /// JSON-encoded `[[start, end], ...]` pairs of byte offsets in
     /// `sample`. Returns `"[]"` when the pattern is empty or invalid.
+    /// Truncates to [`MAX_REGEX_RANGES`] so a pathological regex against a
+    /// huge sample doesn't serialize megabytes of JSON.
     pub fn match_ranges_json_str(pattern: &str, sample: &str, case_insensitive: bool) -> String {
         if pattern.is_empty() {
             return "[]".into();
@@ -81,6 +93,7 @@ impl RegexBuilderControllerRust {
         match PatternEngine::build(pattern, case_insensitive) {
             Ok(engine) => {
                 let ranges = engine.find_iter(sample);
+                let ranges: Vec<_> = ranges.into_iter().take(MAX_REGEX_RANGES).collect();
                 serde_json::to_string(&ranges).unwrap_or_else(|_| "[]".into())
             }
             Err(_) => "[]".into(),
@@ -93,9 +106,16 @@ impl ffi::RegexBuilderController {
         let pattern = self.as_ref().rust().pattern.to_string();
         let sample = self.as_ref().rust().sample.to_string();
         let ci = self.as_ref().rust().case_insensitive;
-        let (count, err) = RegexBuilderControllerRust::evaluate_strings(&pattern, &sample, ci);
-        self.as_mut().set_match_count(count);
-        self.as_mut().set_error(QString::from(&err));
+        let generation = self.as_ref().rust().evaluate_generation.wrapping_add(1);
+        self.as_mut().rust_mut().evaluate_generation = generation;
+
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            let (count, err) = RegexBuilderControllerRust::evaluate_strings(&pattern, &sample, ci);
+            let _ = thread.queue(move |pin| {
+                finish_evaluate(pin, generation, count, err);
+            });
+        });
     }
 
     fn match_ranges_json(&self) -> QString {
@@ -106,6 +126,19 @@ impl ffi::RegexBuilderController {
             r.case_insensitive,
         ))
     }
+}
+
+fn finish_evaluate(
+    mut pin: Pin<&mut ffi::RegexBuilderController>,
+    generation: u64,
+    count: i32,
+    err: String,
+) {
+    if pin.as_ref().rust().evaluate_generation != generation {
+        return;
+    }
+    pin.as_mut().set_match_count(count);
+    pin.as_mut().set_error(QString::from(&err));
 }
 
 #[cfg(test)]
@@ -148,5 +181,13 @@ mod tests {
     fn match_ranges_json_returns_empty_array_on_error() {
         let json = RegexBuilderControllerRust::match_ranges_json_str("(", "irrelevant", false);
         assert_eq!(json, "[]");
+    }
+
+    #[test]
+    fn match_ranges_json_caps_ranges() {
+        let sample = "a ".repeat(MAX_REGEX_RANGES + 100);
+        let json = RegexBuilderControllerRust::match_ranges_json_str("a", &sample, false);
+        let ranges: Vec<(usize, usize)> = serde_json::from_str(&json).unwrap();
+        assert_eq!(ranges.len(), MAX_REGEX_RANGES);
     }
 }

@@ -27,9 +27,13 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io;
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -133,16 +137,29 @@ impl CommandResult {
 /// Trait for executing CLI commands. Production uses
 /// [`SystemCommandRunner`]; tests use [`MockCommandRunner`].
 pub trait CommandRunner: Send + Sync {
-    fn run(&self, invocation: CommandInvocation) -> io::Result<CommandResult>;
+    /// Run `invocation`, killing the child if it runs longer than `timeout`.
+    /// Pass `Duration::MAX` to wait indefinitely (used by tests).
+    fn run(&self, invocation: CommandInvocation, timeout: Duration) -> io::Result<CommandResult>;
 }
 
-/// Real-process runner.
+/// Real-process runner with timeout enforcement.
 pub struct SystemCommandRunner;
 
+impl SystemCommandRunner {
+    /// Default timeout for container runtime operations. Mirrors the
+    /// historical constant logged by the search path.
+    pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+    /// Maximum bytes captured from a child process's stdout or stderr.
+    /// Exceeding this kills the process and returns an error, preventing a
+    /// flood of output (e.g. an unbounded `grep`) from exhausting memory.
+    const MAX_OUTPUT_BYTES: usize = 10 * 1024 * 1024;
+}
+
 impl CommandRunner for SystemCommandRunner {
-    fn run(&self, invocation: CommandInvocation) -> io::Result<CommandResult> {
+    fn run(&self, invocation: CommandInvocation, timeout: Duration) -> io::Result<CommandResult> {
         use std::io::Write;
-        use std::process::Stdio;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::mpsc;
 
         let mut cmd = Command::new(&invocation.program);
         cmd.args(&invocation.args)
@@ -160,16 +177,118 @@ impl CommandRunner for SystemCommandRunner {
         {
             handle.write_all(&invocation.stdin)?;
         }
-        let Output {
-            status,
-            stdout,
-            stderr,
-        } = child.wait_with_output()?;
+
+        let pid = child.id();
+        let stdout = child.stdout.take().unwrap();
+        let stderr = child.stderr.take().unwrap();
+        let cap_exceeded = Arc::new(AtomicBool::new(false));
+
+        let (tx, rx) = mpsc::channel();
+
+        // Spawn the child watcher and the two bounded pipe readers.
+        let tx_status = tx.clone();
+        thread::spawn(move || {
+            let _ = tx_status.send(Either::Left(child.wait()));
+        });
+
+        let stdout_cap = Arc::clone(&cap_exceeded);
+        let tx_stdout = tx.clone();
+        thread::spawn(move || {
+            let _ = tx_stdout.send(Either::Right((
+                "stdout",
+                read_limited(stdout, Self::MAX_OUTPUT_BYTES, &stdout_cap),
+            )));
+        });
+
+        let stderr_cap = Arc::clone(&cap_exceeded);
+        thread::spawn(move || {
+            let _ = tx.send(Either::Right((
+                "stderr",
+                read_limited(stderr, Self::MAX_OUTPUT_BYTES, &stderr_cap),
+            )));
+        });
+
+        let start = Instant::now();
+        let mut status: Option<std::process::ExitStatus> = None;
+        let mut stdout_buf: Option<io::Result<Vec<u8>>> = None;
+        let mut stderr_buf: Option<io::Result<Vec<u8>>> = None;
+
+        while status.is_none() || stdout_buf.is_none() || stderr_buf.is_none() {
+            let remaining = if timeout == Duration::MAX {
+                Duration::from_millis(50)
+            } else {
+                let elapsed = start.elapsed();
+                if elapsed >= timeout {
+                    break;
+                }
+                std::cmp::min(Duration::from_millis(50), timeout - elapsed)
+            };
+
+            match rx.recv_timeout(remaining) {
+                Ok(Either::Left(Ok(s))) => status = Some(s),
+                Ok(Either::Left(Err(err))) => {
+                    return Err(err);
+                }
+                Ok(Either::Right(("stdout", buf))) => stdout_buf = Some(buf),
+                Ok(Either::Right(("stderr", buf))) => stderr_buf = Some(buf),
+                Ok(Either::Right((_, _))) => {}
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    if cap_exceeded.load(Ordering::SeqCst) {
+                        break;
+                    }
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+        }
+
+        // If any required piece is missing (timeout, cap exceeded, or channel
+        // died), kill the child and return a corresponding error.
+        if status.is_none() || stdout_buf.is_none() || stderr_buf.is_none() {
+            // SAFETY: `libc::kill` with a non-negative pid and SIGKILL is
+            // always valid to call; it returns an error for stale pids,
+            // which we ignore.
+            let _ = unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+            // Drain remaining channel messages so the helper threads can exit.
+            while rx.recv_timeout(Duration::from_millis(100)).is_ok() {}
+
+            if cap_exceeded.load(Ordering::SeqCst) {
+                return Err(io::Error::other("runtime command output exceeded size limit"));
+            }
+            return Err(io::Error::new(io::ErrorKind::TimedOut, "runtime command timed out"));
+        }
+
         Ok(CommandResult {
-            status: status.code().unwrap_or(-1),
-            stdout,
-            stderr,
+            status: status.unwrap().code().unwrap_or(-1),
+            stdout: stdout_buf.unwrap()?,
+            stderr: stderr_buf.unwrap()?,
         })
+    }
+}
+
+enum Either<L, R> {
+    Left(L),
+    Right(R),
+}
+
+fn read_limited<R: Read + Send>(
+    mut reader: R,
+    max: usize,
+    cap_flag: &AtomicBool,
+) -> io::Result<Vec<u8>> {
+    let mut buf = Vec::with_capacity(1024.min(max));
+    let mut chunk = [0u8; 8192];
+    loop {
+        match reader.read(&mut chunk) {
+            Ok(0) => return Ok(buf),
+            Ok(n) => {
+                if buf.len() + n > max {
+                    cap_flag.store(true, Ordering::SeqCst);
+                    return Err(io::Error::other("runtime command output exceeded size limit"));
+                }
+                buf.extend_from_slice(&chunk[..n]);
+            }
+            Err(err) => return Err(err),
+        }
     }
 }
 
@@ -196,7 +315,7 @@ impl MockCommandRunner {
 }
 
 impl CommandRunner for MockCommandRunner {
-    fn run(&self, invocation: CommandInvocation) -> io::Result<CommandResult> {
+    fn run(&self, invocation: CommandInvocation, _timeout: Duration) -> io::Result<CommandResult> {
         let mut state = self.inner.lock().unwrap();
         state.invocations.push(invocation.clone());
         if state.canned.is_empty() {
@@ -228,6 +347,11 @@ pub fn clear_grep_availability_cache() {
 pub trait RuntimeOperations {
     fn kind(&self) -> ContainerRuntimeKind;
     fn list_containers(&self) -> Result<Vec<ContainerInfo>, RuntimeError>;
+    /// Like `list_containers`, but aborts after `timeout`.
+    fn list_containers_timeout(
+        &self,
+        timeout: Duration,
+    ) -> Result<Vec<ContainerInfo>, RuntimeError>;
     /// Run `argv` inside the named container and return the captured stdout.
     /// `argv` is an argv array, not a shell line — backends pass it directly
     /// to `exec` so quoting bugs around spaces / colons / globs / newlines
@@ -236,6 +360,13 @@ pub trait RuntimeOperations {
         &self,
         container_id: &str,
         argv: &[&str],
+    ) -> Result<CommandResult, RuntimeError>;
+    /// Like `exec_capture`, but aborts after `timeout`.
+    fn exec_capture_timeout(
+        &self,
+        container_id: &str,
+        argv: &[&str],
+        timeout: Duration,
     ) -> Result<CommandResult, RuntimeError>;
     /// Probe whether `grep` is callable inside the container.
     fn has_grep(&self, container_id: &str) -> Result<bool, RuntimeError>;
@@ -282,13 +413,20 @@ impl<R: CommandRunner> CliRuntime<R> {
             })
     }
 
-    fn invoke(&self, args: Vec<OsString>) -> Result<CommandResult, RuntimeError> {
+    fn invoke(
+        &self,
+        args: Vec<OsString>,
+        timeout: Duration,
+    ) -> Result<CommandResult, RuntimeError> {
         let program = self.cli_path()?;
-        let result = self.runner.run(CommandInvocation {
-            program: program.clone(),
-            args: args.clone(),
-            stdin: Vec::new(),
-        })?;
+        let result = self.runner.run(
+            CommandInvocation {
+                program: program.clone(),
+                args: args.clone(),
+                stdin: Vec::new(),
+            },
+            timeout,
+        )?;
         if result.status != 0 {
             return Err(RuntimeError::Cli {
                 cli: program,
@@ -306,12 +444,19 @@ impl<R: CommandRunner> RuntimeOperations for CliRuntime<R> {
     }
 
     fn list_containers(&self) -> Result<Vec<ContainerInfo>, RuntimeError> {
+        self.list_containers_timeout(Duration::MAX)
+    }
+
+    fn list_containers_timeout(
+        &self,
+        timeout: Duration,
+    ) -> Result<Vec<ContainerInfo>, RuntimeError> {
         let args = vec![
             OsString::from("ps"),
             OsString::from("--all"),
             OsString::from("--format=json"),
         ];
-        let result = self.invoke(args)?;
+        let result = self.invoke(args, timeout)?;
         let stdout = String::from_utf8_lossy(&result.stdout);
 
         // Docker emits one JSON object per line. Podman emits a JSON array.
@@ -348,6 +493,15 @@ impl<R: CommandRunner> RuntimeOperations for CliRuntime<R> {
         container_id: &str,
         argv: &[&str],
     ) -> Result<CommandResult, RuntimeError> {
+        self.exec_capture_timeout(container_id, argv, Duration::MAX)
+    }
+
+    fn exec_capture_timeout(
+        &self,
+        container_id: &str,
+        argv: &[&str],
+        timeout: Duration,
+    ) -> Result<CommandResult, RuntimeError> {
         // `--` terminates option parsing so an untrusted container id (e.g.
         // `--user=root`, podman `--privileged`) can never be interpreted as a
         // flag to `exec`.
@@ -362,11 +516,14 @@ impl<R: CommandRunner> RuntimeOperations for CliRuntime<R> {
         // exec is allowed to return non-zero — e.g. grep with no matches
         // exits 1. We surface the raw result.
         let program = self.cli_path()?;
-        let result = self.runner.run(CommandInvocation {
-            program,
-            args,
-            stdin: Vec::new(),
-        })?;
+        let result = self.runner.run(
+            CommandInvocation {
+                program,
+                args,
+                stdin: Vec::new(),
+            },
+            timeout,
+        )?;
         Ok(result)
     }
 
@@ -381,7 +538,11 @@ impl<R: CommandRunner> RuntimeOperations for CliRuntime<R> {
         // `which grep` is universally available across Linux containers.
         // Distroless containers may lack `which`; fall back to a probe via
         // exec returning a non-127 status.
-        let result = self.exec_capture(container_id, &["which", "grep"])?;
+        let result = self.exec_capture_timeout(
+            container_id,
+            &["which", "grep"],
+            SystemCommandRunner::DEFAULT_TIMEOUT,
+        )?;
         let has = result.status == 0 && !result.stdout.is_empty();
 
         if let Ok(mut cache) = grep_availability_cache().lock() {
@@ -409,7 +570,7 @@ impl<R: CommandRunner> RuntimeOperations for CliRuntime<R> {
             OsString::from(format!("{container_id}:{path}")),
             target.clone().into_os_string(),
         ];
-        self.invoke(args)?;
+        self.invoke(args, SystemCommandRunner::DEFAULT_TIMEOUT)?;
         Ok(target)
     }
 
@@ -425,7 +586,7 @@ impl<R: CommandRunner> RuntimeOperations for CliRuntime<R> {
             local_path.as_os_str().to_os_string(),
             OsString::from(format!("{container_id}:{container_path}")),
         ];
-        self.invoke(args)?;
+        self.invoke(args, SystemCommandRunner::DEFAULT_TIMEOUT)?;
         Ok(())
     }
 }
@@ -584,5 +745,32 @@ mod tests {
                 dir.path().join("hostname").into_os_string(),
             ]
         );
+    }
+
+    #[test]
+    fn system_runner_enforces_timeout() {
+        let invocation = CommandInvocation {
+            program: PathBuf::from("sleep"),
+            args: vec![OsString::from("10")],
+            stdin: Vec::new(),
+        };
+        let err = SystemCommandRunner
+            .run(invocation, Duration::from_millis(50))
+            .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+    }
+
+    #[test]
+    fn system_runner_enforces_output_size_cap() {
+        let invocation = CommandInvocation {
+            program: PathBuf::from("cat"),
+            args: vec![OsString::from("/dev/zero")],
+            stdin: Vec::new(),
+        };
+        let err = SystemCommandRunner
+            .run(invocation, Duration::from_secs(5))
+            .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::Other);
+        assert!(err.to_string().contains("size limit"), "expected size-limit error, got {err}");
     }
 }

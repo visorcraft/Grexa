@@ -1,12 +1,14 @@
 // SPDX-FileCopyrightText: 2026 VisorCraft LLC
 // SPDX-License-Identifier: GPL-3.0-only
 
+use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::constants::{MAX_SEARCH_FILE_BYTES, file_exceeds_hard_cap};
 use crate::encoding::{DetectedEncoding, read_text};
 
 /// Bounds matching Grex's settings clamp: 1 to 20 lines on each side.
@@ -46,6 +48,8 @@ pub enum PreviewError {
     NotFound(PathBuf),
     #[error("permission denied: {0}")]
     PermissionDenied(PathBuf),
+    #[error("file exceeds the {max_size_mib} MiB preview cap")]
+    TooLarge { max_size_mib: u64 },
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
 }
@@ -67,6 +71,17 @@ pub fn context_preview(
 
     let lines_before = lines_before.clamp(MIN_CONTEXT_LINES, MAX_CONTEXT_LINES) as usize;
     let lines_after = lines_after.clamp(MIN_CONTEXT_LINES, MAX_CONTEXT_LINES) as usize;
+
+    let metadata = fs::metadata(path).map_err(|err| match err.kind() {
+        io::ErrorKind::NotFound => PreviewError::NotFound(path.to_path_buf()),
+        io::ErrorKind::PermissionDenied => PreviewError::PermissionDenied(path.to_path_buf()),
+        _ => PreviewError::Io(err),
+    })?;
+    if file_exceeds_hard_cap(metadata.len()) {
+        return Err(PreviewError::TooLarge {
+            max_size_mib: MAX_SEARCH_FILE_BYTES / (1024 * 1024),
+        });
+    }
 
     let (text, encoding) = read_text(path).map_err(|err| match err.kind() {
         io::ErrorKind::NotFound => PreviewError::NotFound(path.to_path_buf()),
@@ -227,6 +242,22 @@ mod tests {
         let numbers: Vec<_> = result.lines.iter().map(|l| l.line_number).collect();
         assert_eq!(numbers.first(), Some(&30));
         assert_eq!(numbers.last(), Some(&70));
+    }
+
+    #[test]
+    fn rejects_oversized_file() {
+        use std::fs::File;
+
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("huge.txt");
+        let file = File::create(&path).unwrap();
+        file.set_len(MAX_SEARCH_FILE_BYTES + 1).unwrap();
+
+        let err = context_preview(&path, 1, 1, 1).unwrap_err();
+        assert!(
+            matches!(err, PreviewError::TooLarge { .. }),
+            "expected TooLarge error, got {err:?}"
+        );
     }
 
     #[test]

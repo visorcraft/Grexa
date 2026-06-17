@@ -162,6 +162,10 @@ pub struct SearchSummary {
     pub elapsed_ms: u128,
     #[serde(default)]
     pub cancelled: bool,
+    /// True when the search hit the internal result cap. GUI/CLI should
+    /// tell the user to narrow the query.
+    #[serde(default)]
+    pub capped: bool,
 }
 
 impl SearchSummary {

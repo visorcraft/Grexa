@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 grexa-core = { version = "1.5.3", path = "../grexa-core" }
+libc = "0.2"
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true

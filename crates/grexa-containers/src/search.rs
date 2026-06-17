@@ -19,7 +19,9 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use grexa_core::{AppPaths, ContextPreviewResult, SearchOptions, context_preview, search};
+use grexa_core::{
+    AppPaths, ContextPreviewResult, ENGINE_RESULT_CAP, SearchOptions, context_preview, search,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::runtime::{RuntimeError, RuntimeOperations};
@@ -114,8 +116,9 @@ pub fn search_container<R: RuntimeOperations>(
         }
         (mirror_search(runtime, container, options)?, true)
     };
-    if let Some(max) = options.max_results {
-        hits.truncate(max);
+    let effective_max = options.max_results.unwrap_or(ENGINE_RESULT_CAP);
+    if hits.len() > effective_max {
+        hits.truncate(effective_max);
     }
 
     Ok(ContainerSearchSummary {
@@ -148,12 +151,20 @@ fn direct_grep<R: RuntimeOperations>(
     argv.push(&options.container_path);
 
     let start = std::time::Instant::now();
-    let mut result = runtime.exec_capture(&container.id, &argv)?;
+    let mut result = runtime.exec_capture_timeout(
+        &container.id,
+        &argv,
+        std::time::Duration::from_secs(CONTAINER_SEARCH_TIMEOUT_SECS),
+    )?;
     if result.status == 2 && grep_rejected_option(&result.stderr) {
         // BusyBox grep has no -Z; retry with colon-delimited output, which
         // the parser handles via its colon-splitting fallback.
         argv[1] = "-rnH";
-        result = runtime.exec_capture(&container.id, &argv)?;
+        result = runtime.exec_capture_timeout(
+            &container.id,
+            &argv,
+            std::time::Duration::from_secs(CONTAINER_SEARCH_TIMEOUT_SECS),
+        )?;
     }
     tracing::debug!(
         elapsed_ms = start.elapsed().as_millis(),
@@ -893,6 +904,22 @@ mod tests {
         opts.max_results = Some(2);
         let summary = search_container(&runtime, &fake_container(), &opts).unwrap();
         assert_eq!(summary.hits.len(), 2);
+    }
+
+    #[test]
+    fn search_container_applies_default_result_cap() {
+        let runner = MockCommandRunner::default();
+        runner.push(CommandResult::success("/usr/bin/grep\n"));
+        let mut stdout = String::new();
+        for i in 0..(ENGINE_RESULT_CAP + 5) {
+            stdout.push_str(&format!("/etc/file{i}.txt:1:match\n"));
+        }
+        runner.push(CommandResult::success(&stdout));
+        let runtime = cli_runtime(runner);
+
+        let opts = ContainerSearchOptions::new("/etc", "match");
+        let summary = search_container(&runtime, &fake_container(), &opts).unwrap();
+        assert_eq!(summary.hits.len(), ENGINE_RESULT_CAP);
     }
 
     #[test]

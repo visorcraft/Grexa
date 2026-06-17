@@ -253,6 +253,14 @@ Kirigami.Page {
     // `rows` → `visible` and emits a model reset.
     function refreshView() { page.controller.refreshView() }
 
+    // Debounce the within-filter so typing doesn't rebuild the visible
+    // model on every keystroke when the result set is large.
+    Timer {
+        id: withinDebounce
+        interval: 200
+        onTriggered: page.refreshView()
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -740,7 +748,7 @@ Kirigami.Page {
                 text: page.controller.withinFilter
                 onTextEdited: {
                     page.controller.withinFilter = text
-                    page.refreshView()
+                    withinDebounce.restart()
                 }
                 Accessible.name: app.i18n("ui-filter-results")
             }

@@ -150,50 +150,6 @@ pub fn open_in_editor_command(
     }
 }
 
-/// Classify a path string the user pasted into the search bar so the GUI
-/// can surface a useful message before launching a search. Unsupported
-/// abstract URLs are flagged with the scheme that would need mounting.
-pub fn classify_user_path(input: &str) -> UserPathKind {
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        return UserPathKind::Empty;
-    }
-    for scheme in &[
-        "smb://", "fish://", "mtp://", "ftp://", "sftp://", "obex://",
-    ] {
-        if let Some(stripped) = trimmed.strip_prefix(scheme) {
-            return UserPathKind::AbstractUrl {
-                scheme: scheme.trim_end_matches("://").to_string(),
-                rest: stripped.to_string(),
-            };
-        }
-    }
-    if trimmed.starts_with("file://") {
-        return UserPathKind::FileUri(trimmed.trim_start_matches("file://").to_string());
-    }
-    if trimmed.starts_with('/') {
-        return UserPathKind::Absolute(trimmed.to_string());
-    }
-    UserPathKind::Relative(trimmed.to_string())
-}
-
-/// Result of [`classify_user_path`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum UserPathKind {
-    Empty,
-    Absolute(String),
-    Relative(String),
-    FileUri(String),
-    /// An abstract scheme that doesn't map directly to a Linux filesystem
-    /// path — the user must mount it (KIO FUSE / gvfs / cifs / sshfs) and
-    /// then browse the mounted path. The GUI shows
-    /// `t("error-abstract-url-needs-mount", {scheme})`.
-    AbstractUrl {
-        scheme: String,
-        rest: String,
-    },
-}
-
 /// `xdg-open` fallback for "reveal in file manager" — opens the parent
 /// directory. Callers should prefer the
 /// `org.freedesktop.FileManager1.ShowItems` D-Bus call when available; this
@@ -204,31 +160,6 @@ pub fn reveal_with_xdg_open(path: &Path) -> Vec<OsString> {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
     vec!["xdg-open".into(), parent.into_os_string()]
-}
-
-/// Build the D-Bus argument for FileManager1.ShowItems. Returns the `file://`
-/// URI list that the dbus call would pass.
-pub fn file_manager_show_items_uris(paths: &[&Path]) -> Vec<String> {
-    paths.iter().map(|path| path_to_file_uri(path)).collect()
-}
-
-fn path_to_file_uri(path: &Path) -> String {
-    // file:// URI: percent-encode non-ASCII and reserved chars. We use a
-    // minimal encoder that covers spaces and characters the FileManager1 spec
-    // explicitly lists as reserved.
-    let s = path.to_string_lossy();
-    let mut out = String::from("file://");
-    for ch in s.chars() {
-        match ch {
-            '/' | 'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => out.push(ch),
-            _ => {
-                for byte in ch.to_string().as_bytes() {
-                    out.push_str(&format!("%{byte:02X}"));
-                }
-            }
-        }
-    }
-    out
 }
 
 #[cfg(test)]
@@ -294,39 +225,6 @@ mod tests {
     fn reveal_with_xdg_open_defaults_to_cwd_when_no_parent() {
         let argv = reveal_with_xdg_open(&PathBuf::from("loose-file"));
         assert_eq!(into_strings(argv), vec!["xdg-open", ""]);
-    }
-
-    #[test]
-    fn classify_path_detects_abstract_schemes() {
-        assert_eq!(classify_user_path(""), UserPathKind::Empty);
-        match classify_user_path("smb://server/share/dir") {
-            UserPathKind::AbstractUrl { scheme, rest } => {
-                assert_eq!(scheme, "smb");
-                assert_eq!(rest, "server/share/dir");
-            }
-            other => panic!("expected AbstractUrl, got {other:?}"),
-        }
-        match classify_user_path("/home/me/code") {
-            UserPathKind::Absolute(p) => assert_eq!(p, "/home/me/code"),
-            other => panic!("expected Absolute, got {other:?}"),
-        }
-        match classify_user_path("relative/path") {
-            UserPathKind::Relative(p) => assert_eq!(p, "relative/path"),
-            other => panic!("expected Relative, got {other:?}"),
-        }
-        match classify_user_path("file:///home/me/file.txt") {
-            UserPathKind::FileUri(p) => assert_eq!(p, "/home/me/file.txt"),
-            other => panic!("expected FileUri, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn file_manager_uri_encodes_spaces_and_unicode() {
-        let uris = file_manager_show_items_uris(&[Path::new("/tmp/space file.rs")]);
-        assert_eq!(uris, vec!["file:///tmp/space%20file.rs".to_string()]);
-
-        let uris = file_manager_show_items_uris(&[Path::new("/tmp/测试.txt")]);
-        assert!(uris[0].starts_with("file:///tmp/%E6"));
     }
 
     #[test]
