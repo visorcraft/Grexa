@@ -49,7 +49,7 @@ pub mod ffi {
             collection: &QString,
             view_name: &QString,
             group_by: &QString,
-        ) -> bool;
+        );
 
         #[qsignal]
         fn record_paths_ready(self: Pin<&mut DbController>);
@@ -206,34 +206,46 @@ impl ffi::DbController {
         collection: &QString,
         view_name: &QString,
         group_by: &QString,
-    ) -> bool {
-        let rust = self.rust();
-        let Some(db) = &rust.db else {
-            return false;
+    ) {
+        let (db_path, coll_name, view, group) = {
+            let qself = self.as_ref();
+            let rust = qself.rust();
+            let Some(db) = &rust.db else {
+                return;
+            };
+            (
+                db.root().to_path_buf(),
+                collection.to_string(),
+                view_name.to_string(),
+                group_by.to_string(),
+            )
         };
-        let coll_name = collection.to_string();
-        let Ok(coll) = db.collection(&coll_name) else {
-            return false;
-        };
-        let view = view_name.to_string();
-        let group = group_by.to_string();
-        let group_opt = if group.is_empty() {
-            None
-        } else {
-            Some(group.as_str())
-        };
-        let query = coll.query();
-        match db.materialize_view(&view, query, group_opt) {
-            Ok(()) => {
-                self.as_mut()
-                    .set_status_message(QString::from("View materialized"));
-                true
-            }
-            Err(e) => {
-                self.as_mut()
-                    .set_status_message(QString::from(&format!("Materialize error: {e}")));
-                false
-            }
-        }
+
+        self.as_mut().set_busy(true);
+        let thread = self.qt_thread();
+
+        std::thread::spawn(move || {
+            let result = (|| {
+                let db = grexa_db::Db::open(&db_path).map_err(|e| e.to_string())?;
+                let coll = db.collection(&coll_name).map_err(|e| e.to_string())?;
+                let group_opt = if group.is_empty() {
+                    None
+                } else {
+                    Some(group.as_str())
+                };
+                db.materialize_view(&view, coll.query(), group_opt)
+                    .map_err(|e| e.to_string())
+            })();
+
+            let msg = match &result {
+                Ok(()) => "View materialized".to_string(),
+                Err(e) => format!("Materialize error: {e}"),
+            };
+
+            let _ = thread.queue(move |mut pin| {
+                pin.as_mut().set_status_message(QString::from(&msg));
+                pin.as_mut().set_busy(false);
+            });
+        });
     }
 }

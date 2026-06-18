@@ -189,6 +189,44 @@ fn migrate_from_json(data_dir: &Path, store: &RecentPathsDb) {
     }
 }
 
+fn migrate_history_from_json(data_dir: &Path, store: &SearchHistoryDb) {
+    let json_path = data_dir.join("search_history.json");
+    if !json_path.exists() {
+        return;
+    }
+    if !store.load().unwrap_or_default().is_empty() {
+        return;
+    }
+    if let Ok(content) = fs::read_to_string(&json_path)
+        && let Ok(searches) = serde_json::from_str::<Vec<crate::storage::RecentSearch>>(&content)
+    {
+        tracing::info!("Migrating {} searches from search_history.json", searches.len());
+        for search in searches {
+            let _ = store.add(search);
+        }
+        let _ = fs::rename(&json_path, data_dir.join("search_history.json.bak"));
+    }
+}
+
+fn migrate_profiles_from_json(data_dir: &Path, store: &SearchProfilesDb) {
+    let json_path = data_dir.join("search_profiles.json");
+    if !json_path.exists() {
+        return;
+    }
+    if !store.load().unwrap_or_default().is_empty() {
+        return;
+    }
+    if let Ok(content) = fs::read_to_string(&json_path)
+        && let Ok(profiles) = serde_json::from_str::<Vec<crate::storage::SearchProfile>>(&content)
+    {
+        tracing::info!("Migrating {} profiles from search_profiles.json", profiles.len());
+        for profile in profiles {
+            let _ = store.upsert(profile);
+        }
+        let _ = fs::rename(&json_path, data_dir.join("search_profiles.json.bak"));
+    }
+}
+
 const HISTORY_SCHEMA: &str = "---\ncollection: search_history\nfields:\n  - { name: key, type: string, required: true }\n  - { name: timestamp, type: integer }\n  - { name: data, type: string }\n---\n\n# Search history\n";
 
 pub struct SearchHistoryDb {
@@ -210,7 +248,9 @@ impl SearchHistoryDb {
             let _ = fs::create_dir_all(&fallback);
             grexa_db::Db::open(&fallback).expect("grexa-db must open in /tmp")
         });
-        Self { db }
+        let store = Self { db };
+        migrate_history_from_json(&paths.data_dir, &store);
+        store
     }
 
     pub fn load(&self) -> Result<Vec<crate::storage::RecentSearch>, DbStoreError> {
@@ -341,7 +381,9 @@ impl SearchProfilesDb {
             let _ = fs::create_dir_all(&fallback);
             grexa_db::Db::open(&fallback).expect("grexa-db must open in /tmp")
         });
-        Self { db }
+        let store = Self { db };
+        migrate_profiles_from_json(&paths.data_dir, &store);
+        store
     }
 
     pub fn load(&self) -> Result<Vec<crate::storage::SearchProfile>, DbStoreError> {
@@ -533,5 +575,130 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = RecentPathsDb::open(dir.path()).unwrap();
         assert!(store.load().unwrap().is_empty());
+    }
+
+    fn make_search(term: &str) -> crate::storage::RecentSearch {
+        crate::storage::RecentSearch {
+            search_term: term.into(),
+            search_path: PathBuf::from("/home/user"),
+            match_file_names: "*.rs".into(),
+            exclude_dirs: String::new(),
+            regex_search: false,
+            regex_engine: "auto".into(),
+            files_search: false,
+            search_case_sensitive: true,
+            whole_word: false,
+            respect_gitignore: true,
+            include_subfolders: true,
+            include_hidden_items: false,
+            include_binary_files: false,
+            timestamp_unix: 12345,
+            result_count: 42,
+        }
+    }
+
+    #[test]
+    fn search_history_round_trip() {
+        let dir = TempDir::new().unwrap();
+        let paths = crate::storage::AppPaths::under(dir.path());
+        let store = SearchHistoryDb::new(&paths);
+        store.add(make_search("test query")).unwrap();
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].search_term, "test query");
+        assert_eq!(loaded[0].result_count, 42);
+    }
+
+    #[test]
+    fn search_history_dedup_by_key() {
+        let dir = TempDir::new().unwrap();
+        let paths = crate::storage::AppPaths::under(dir.path());
+        let store = SearchHistoryDb::new(&paths);
+        store.add(make_search("same")).unwrap();
+        store.add(make_search("same")).unwrap();
+        assert_eq!(store.load().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn search_history_remove_by_key() {
+        let dir = TempDir::new().unwrap();
+        let paths = crate::storage::AppPaths::under(dir.path());
+        let store = SearchHistoryDb::new(&paths);
+        store.add(make_search("alpha")).unwrap();
+        store.add(make_search("beta")).unwrap();
+        store.remove_by_key(&make_search("alpha").key()).unwrap();
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].search_term, "beta");
+    }
+
+    #[test]
+    fn search_history_clear() {
+        let dir = TempDir::new().unwrap();
+        let paths = crate::storage::AppPaths::under(dir.path());
+        let store = SearchHistoryDb::new(&paths);
+        store.add(make_search("a")).unwrap();
+        store.clear().unwrap();
+        assert!(store.load().unwrap().is_empty());
+    }
+
+    fn make_profile(name: &str) -> crate::storage::SearchProfile {
+        crate::storage::SearchProfile {
+            name: name.into(),
+            search_options: crate::models::SearchOptions::new("/test", "query"),
+            files_search: false,
+            created_unix: 12345,
+            updated_unix: 67890,
+        }
+    }
+
+    #[test]
+    fn search_profiles_round_trip() {
+        let dir = TempDir::new().unwrap();
+        let paths = crate::storage::AppPaths::under(dir.path());
+        let store = SearchProfilesDb::new(&paths);
+        store.upsert(make_profile("work")).unwrap();
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].name, "work");
+        assert_eq!(loaded[0].updated_unix, 67890);
+    }
+
+    #[test]
+    fn search_profiles_exists_case_insensitive() {
+        let dir = TempDir::new().unwrap();
+        let paths = crate::storage::AppPaths::under(dir.path());
+        let store = SearchProfilesDb::new(&paths);
+        store.upsert(make_profile("MyProfile")).unwrap();
+        assert!(store.exists("myprofile").unwrap());
+        assert!(store.exists("MYPROFILE").unwrap());
+        assert!(!store.exists("other").unwrap());
+    }
+
+    #[test]
+    fn search_profiles_upsert_updates() {
+        let dir = TempDir::new().unwrap();
+        let paths = crate::storage::AppPaths::under(dir.path());
+        let store = SearchProfilesDb::new(&paths);
+        store.upsert(make_profile("test")).unwrap();
+        let mut updated = make_profile("test");
+        updated.updated_unix = 99999;
+        store.upsert(updated).unwrap();
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].updated_unix, 99999);
+    }
+
+    #[test]
+    fn search_profiles_remove() {
+        let dir = TempDir::new().unwrap();
+        let paths = crate::storage::AppPaths::under(dir.path());
+        let store = SearchProfilesDb::new(&paths);
+        store.upsert(make_profile("a")).unwrap();
+        store.upsert(make_profile("b")).unwrap();
+        store.remove("a").unwrap();
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].name, "b");
     }
 }
