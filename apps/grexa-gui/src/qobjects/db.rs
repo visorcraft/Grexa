@@ -28,6 +28,7 @@ pub mod ffi {
         #[qproperty(QString, status_message)]
         #[qproperty(QString, record_paths_result)]
         #[qproperty(QString, validate_result)]
+        #[qproperty(QString, query_result)]
         #[qproperty(bool, busy)]
         type DbController = super::DbControllerRust;
 
@@ -51,11 +52,33 @@ pub mod ffi {
             group_by: &QString,
         );
 
+        #[qinvokable]
+        fn schema_json(self: Pin<&mut DbController>, collection: &QString) -> QString;
+
+        #[qinvokable]
+        fn query_records(self: Pin<&mut DbController>, collection: &QString, filter_json: &QString);
+
+        #[qinvokable]
+        fn list_views(self: Pin<&mut DbController>) -> QString;
+
+        #[qinvokable]
+        fn record_frontmatter(
+            self: Pin<&mut DbController>,
+            collection: &QString,
+            record_path: &QString,
+        ) -> QString;
+
+        #[qinvokable]
+        fn delete_view(self: Pin<&mut DbController>, view_name: &QString) -> bool;
+
         #[qsignal]
         fn record_paths_ready(self: Pin<&mut DbController>);
 
         #[qsignal]
         fn validate_ready(self: Pin<&mut DbController>);
+
+        #[qsignal]
+        fn query_ready(self: Pin<&mut DbController>);
     }
 
     impl cxx_qt::Threading for DbController {}
@@ -68,6 +91,7 @@ pub struct DbControllerRust {
     status_message: QString,
     record_paths_result: QString,
     validate_result: QString,
+    query_result: QString,
     busy: bool,
     db: Option<grexa_db::Db>,
 }
@@ -247,5 +271,171 @@ impl ffi::DbController {
                 pin.as_mut().set_busy(false);
             });
         });
+    }
+
+    fn schema_json(self: Pin<&mut Self>, collection: &QString) -> QString {
+        let rust = self.rust();
+        let Some(db) = &rust.db else {
+            return QString::from("[]");
+        };
+        match db.collection(&collection.to_string()) {
+            Ok(coll) => {
+                let fields: Vec<serde_json::Value> = coll
+                    .schema()
+                    .fields
+                    .iter()
+                    .map(|f| {
+                        serde_json::json!({
+                            "name": f.name,
+                            "type": f.field_type.to_string(),
+                            "required": f.required,
+                        })
+                    })
+                    .collect();
+                QString::from(&serde_json::to_string(&fields).unwrap_or_else(|_| "[]".into()))
+            }
+            Err(_) => QString::from("[]"),
+        }
+    }
+
+    fn query_records(mut self: Pin<&mut Self>, collection: &QString, filter_json: &QString) {
+        let (db_path, coll_name, filters_raw) = {
+            let qself = self.as_ref();
+            let rust = qself.rust();
+            let Some(db) = &rust.db else {
+                return;
+            };
+            (db.root().to_path_buf(), collection.to_string(), filter_json.to_string())
+        };
+
+        self.as_mut().set_busy(true);
+        let thread = self.qt_thread();
+
+        std::thread::spawn(move || {
+            let result = (|| {
+                let db = grexa_db::Db::open(&db_path).map_err(|e| e.to_string())?;
+                let coll = db.collection(&coll_name).map_err(|e| e.to_string())?;
+                let parsed: Vec<(String, String, String)> =
+                    serde_json::from_str(&filters_raw).unwrap_or_default();
+                let mut query = coll.query();
+                for (field, op, value) in &parsed {
+                    query = apply_query_filter(query, field, op, value);
+                }
+                let mut paths = Vec::new();
+                for r in query.take(500) {
+                    match r {
+                        Ok(r) => paths.push(r.path().to_string()),
+                        Err(e) => tracing::warn!("query record: {e}"),
+                    }
+                }
+                Ok::<String, String>(paths.join("\n"))
+            })();
+
+            let output = result.unwrap_or_default();
+            let _ = thread.queue(move |mut pin| {
+                pin.as_mut().set_query_result(QString::from(&output));
+                pin.as_mut().set_busy(false);
+                pin.as_mut().query_ready();
+            });
+        });
+    }
+
+    fn list_views(self: Pin<&mut Self>) -> QString {
+        let rust = self.rust();
+        let Some(db) = &rust.db else {
+            return QString::from("");
+        };
+        let views_dir = db.root().join("views");
+        let mut names = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&views_dir) {
+            for entry in entries.flatten() {
+                if entry.file_type().map(|t| t.is_symlink()).unwrap_or(false)
+                    && let Some(name) = entry.file_name().to_str()
+                    && !name.starts_with('.')
+                {
+                    names.push(name.to_string());
+                }
+            }
+        }
+        names.sort();
+        QString::from(&names.join("\n"))
+    }
+
+    fn record_frontmatter(
+        self: Pin<&mut Self>,
+        collection: &QString,
+        record_path: &QString,
+    ) -> QString {
+        let rust = self.rust();
+        let Some(db) = &rust.db else {
+            return QString::from("{}");
+        };
+        match db.collection(&collection.to_string()) {
+            Ok(coll) => match coll.record(&record_path.to_string()) {
+                Ok(record) => QString::from(&record.frontmatter_json()),
+                Err(_) => QString::from("{}"),
+            },
+            Err(_) => QString::from("{}"),
+        }
+    }
+
+    fn delete_view(mut self: Pin<&mut Self>, view_name: &QString) -> bool {
+        let rust = self.rust();
+        let Some(db) = &rust.db else {
+            return false;
+        };
+        let view_path = db.root().join("views").join(view_name.to_string());
+        match std::fs::remove_file(&view_path) {
+            Ok(()) => {
+                self.as_mut()
+                    .set_status_message(QString::from("View deleted"));
+                true
+            }
+            Err(e) => {
+                self.as_mut()
+                    .set_status_message(QString::from(&format!("Delete error: {e}")));
+                false
+            }
+        }
+    }
+}
+
+fn apply_query_filter<'a>(
+    query: grexa_db::Query<'a>,
+    field: &str,
+    op: &str,
+    value: &str,
+) -> grexa_db::Query<'a> {
+    let builder = query.filter(field);
+    if let Ok(i) = value.parse::<i64>() {
+        return match op {
+            "ne" => builder.ne(i),
+            "lt" => builder.lt(i),
+            "le" => builder.le(i),
+            "gt" => builder.gt(i),
+            "ge" => builder.ge(i),
+            "contains" => builder.contains(i),
+            _ => builder.eq(i),
+        };
+    }
+    if let Ok(f) = value.parse::<f64>() {
+        return match op {
+            "ne" => builder.ne(f),
+            "lt" => builder.lt(f),
+            "le" => builder.le(f),
+            "gt" => builder.gt(f),
+            "ge" => builder.ge(f),
+            "contains" => builder.contains(f),
+            _ => builder.eq(f),
+        };
+    }
+    match op {
+        "ne" => builder.ne(value),
+        "lt" => builder.lt(value),
+        "le" => builder.le(value),
+        "gt" => builder.gt(value),
+        "ge" => builder.ge(value),
+        "contains" => builder.contains(value),
+        _ => builder.eq(value),
     }
 }

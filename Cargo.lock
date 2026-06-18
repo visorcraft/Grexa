@@ -1267,6 +1267,7 @@ dependencies = [
 name = "grexa-db"
 version = "1.6.0"
 dependencies = [
+ "serde_json",
  "serde_yaml_ng",
  "tempfile",
  "thiserror 2.0.18",

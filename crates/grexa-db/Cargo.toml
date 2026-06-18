@@ -10,6 +10,7 @@ keywords = ["database", "flat-file", "markdown", "yaml", "embedded"]
 categories = ["database-implementations", "filesystem"]
 
 [dependencies]
+serde_json.workspace = true
 serde_yaml.workspace = true
 thiserror.workspace = true
 

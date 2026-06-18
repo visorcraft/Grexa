@@ -37,6 +37,7 @@ fn main() {
                 "qml/HistoryPage.qml",
                 "qml/ProfilesPage.qml",
                 "qml/DatabasePage.qml",
+                "qml/RecordCard.qml",
                 "qml/DesignTokens.qml",
                 "qml/NavItem.qml",
                 "qml/ResultRow.qml",

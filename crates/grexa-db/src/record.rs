@@ -61,6 +61,11 @@ impl Record {
     pub fn field(&self, name: &str) -> Option<&Value> {
         self.frontmatter.get(name)
     }
+
+    /// Serialize the entire frontmatter to a JSON string.
+    pub fn frontmatter_json(&self) -> String {
+        serde_json::to_string(&self.frontmatter).unwrap_or_else(|_| "{}".into())
+    }
 }
 
 impl fmt::Debug for Record {
