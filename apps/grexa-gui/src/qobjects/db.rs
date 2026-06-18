@@ -60,7 +60,18 @@ pub struct DbControllerRust {
 
 impl ffi::DbController {
     fn open_db(mut self: Pin<&mut Self>, path: &QString) -> bool {
-        let path_str = path.to_string();
+        let path_str = {
+            let s = path.to_string();
+            if s.starts_with("~") {
+                if let Some(home) = std::env::var_os("HOME") {
+                    format!("{}{}", home.to_string_lossy(), &s[1..])
+                } else {
+                    s
+                }
+            } else {
+                s
+            }
+        };
         match grexa_db::Db::open(&path_str) {
             Ok(db) => {
                 self.as_mut().set_db_path(QString::from(&path_str));
@@ -71,6 +82,7 @@ impl ffi::DbController {
                 true
             }
             Err(e) => {
+                tracing::warn!("DbController: failed to open `{path_str}`: {e}");
                 self.as_mut()
                     .set_status_message(QString::from(&format!("Error: {e}")));
                 false
@@ -81,8 +93,9 @@ impl ffi::DbController {
     fn collection_names(self: Pin<&mut Self>) -> QString {
         let rust = self.rust();
         if let Some(db) = &rust.db {
-            if let Ok(names) = db.collections() {
-                return QString::from(&names.join("\n"));
+            match db.collections() {
+                Ok(names) => return QString::from(&names.join("\n")),
+                Err(e) => tracing::warn!("DbController: collections() failed: {e}"),
             }
         }
         QString::from("")
@@ -91,12 +104,18 @@ impl ffi::DbController {
     fn record_paths(self: Pin<&mut Self>, collection: &QString) -> QString {
         let rust = self.rust();
         if let Some(db) = &rust.db {
-            if let Ok(coll) = db.collection(&collection.to_string()) {
-                let paths: Vec<String> = coll
-                    .records()
-                    .filter_map(|r| r.ok().map(|r| r.path().to_string()))
-                    .collect();
-                return QString::from(&paths.join("\n"));
+            match db.collection(&collection.to_string()) {
+                Ok(coll) => {
+                    let mut paths: Vec<String> = Vec::new();
+                    for result in coll.records().take(500) {
+                        match result {
+                            Ok(r) => paths.push(r.path().to_string()),
+                            Err(e) => tracing::warn!("DbController: record read failed: {e}"),
+                        }
+                    }
+                    return QString::from(&paths.join("\n"));
+                }
+                Err(e) => tracing::warn!("DbController: collection open failed: {e}"),
             }
         }
         QString::from("")

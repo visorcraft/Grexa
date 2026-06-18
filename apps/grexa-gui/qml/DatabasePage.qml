@@ -93,10 +93,10 @@ Kirigami.ScrollablePage {
             model: page.records
             visible: page.selectedCollection !== ""
 
-            delegate: Kirigami.BasicListItem {
+            delegate: Controls.ItemDelegate {
                 Layout.fillWidth: true
                 text: modelData
-                icon: "document"
+                icon.name: "document"
             }
         }
 
