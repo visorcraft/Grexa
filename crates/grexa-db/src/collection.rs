@@ -62,8 +62,9 @@ impl Collection {
 
     /// Read a single record by its collection-relative path.
     ///
-    /// The path is validated against traversal attacks: absolute paths,
-    /// `..` components, backslashes, and symlinks are rejected.
+    /// Security: absolute paths, `..` components, backslashes, leaf-component
+    /// symlinks, and any path that resolves outside the collection root
+    /// (including via symlinked intermediate directories) are rejected.
     pub fn record(&self, relative_path: &str) -> Result<Record, RecordError> {
         validate_relative_path(relative_path)?;
         let full = self.root.join(relative_path);
