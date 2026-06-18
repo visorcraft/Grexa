@@ -27,6 +27,7 @@ pub mod frontmatter;
 pub mod query;
 pub mod record;
 pub mod schema;
+pub mod validation;
 pub mod view;
 
 pub use collection::{Collection, CollectionError, RecordIter};
@@ -35,6 +36,7 @@ pub use frontmatter::{FrontmatterError, Split, split};
 pub use query::{FilterBuilder, IntoValue, OrderBuilder, Query};
 pub use record::{Record, RecordError};
 pub use schema::{FieldDef, FieldType, Schema, SchemaError};
+pub use validation::ValidationError;
 pub use view::MaterializeError;
 
 #[cfg(test)]

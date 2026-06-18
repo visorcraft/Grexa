@@ -1270,6 +1270,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "grexa-db-cli"
+version = "1.6.0"
+dependencies = [
+ "clap",
+ "grexa-db",
+ "tempfile",
+]
+
+[[package]]
 name = "grexa-i18n"
 version = "1.6.0"
 dependencies = [

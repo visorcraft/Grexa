@@ -119,6 +119,22 @@ impl Db {
         let _guard = self.view_lock.lock().unwrap();
         crate::view::materialize(&self.root, view_name, query, group_by)
     }
+
+    /// Validate all collections. Returns `(collection_name, errors)` for
+    /// each collection that has at least one validation error.
+    pub fn validate_all(
+        &self,
+    ) -> Result<Vec<(String, Vec<crate::validation::ValidationError>)>, DbError> {
+        let mut all = Vec::new();
+        for name in self.collections()? {
+            let coll = self.collection(&name)?;
+            let errors = coll.validate_all();
+            if !errors.is_empty() {
+                all.push((name, errors));
+            }
+        }
+        Ok(all)
+    }
 }
 
 #[cfg(test)]

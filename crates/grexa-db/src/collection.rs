@@ -111,6 +111,28 @@ impl Collection {
     pub fn query(&self) -> crate::query::Query<'_> {
         crate::query::Query::new(self)
     }
+
+    /// Validate a single record against this collection's schema.
+    pub fn validate_record(&self, record: &Record) -> Vec<crate::validation::ValidationError> {
+        crate::validation::validate_record(record, &self.schema.fields)
+    }
+
+    /// Validate all records against this collection's schema. Returns a
+    /// flat list of errors across all records.
+    pub fn validate_all(&self) -> Vec<crate::validation::ValidationError> {
+        let mut errors = Vec::new();
+        for result in self.records() {
+            match result {
+                Ok(record) => errors.extend(self.validate_record(&record)),
+                Err(e) => errors.push(crate::validation::ValidationError {
+                    record_path: "?".into(),
+                    field: "?".into(),
+                    message: format!("failed to read record: {e}"),
+                }),
+            }
+        }
+        errors
+    }
 }
 
 /// Lazy iterator over records in a collection.
