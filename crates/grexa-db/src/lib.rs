@@ -21,6 +21,18 @@
 /// own release line.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+pub mod collection;
+pub mod db;
+pub mod frontmatter;
+pub mod record;
+pub mod schema;
+
+pub use collection::{Collection, CollectionError, RecordIter};
+pub use db::{Db, DbError};
+pub use frontmatter::{FrontmatterError, Split, split};
+pub use record::{Record, RecordError};
+pub use schema::{FieldDef, FieldType, Schema, SchemaError};
+
 #[cfg(test)]
 mod tests {
     use super::*;
