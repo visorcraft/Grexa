@@ -1168,7 +1168,7 @@ dependencies = [
 
 [[package]]
 name = "grexa"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "cxx",
  "cxx-qt",
@@ -1191,7 +1191,7 @@ dependencies = [
 
 [[package]]
 name = "grexa-ai"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "grexa-core",
  "keyring-core",
@@ -1204,7 +1204,7 @@ dependencies = [
 
 [[package]]
 name = "grexa-cli"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1224,7 +1224,7 @@ dependencies = [
 
 [[package]]
 name = "grexa-containers"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "grexa-core",
  "libc",
@@ -1238,7 +1238,7 @@ dependencies = [
 
 [[package]]
 name = "grexa-core"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "chardetng",
  "encoding_rs",
@@ -1265,7 +1265,7 @@ dependencies = [
 
 [[package]]
 name = "grexa-db"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "serde_json",
  "serde_yaml_ng",
@@ -1275,7 +1275,7 @@ dependencies = [
 
 [[package]]
 name = "grexa-db-cli"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "clap",
  "grexa-db",
@@ -1284,7 +1284,7 @@ dependencies = [
 
 [[package]]
 name = "grexa-i18n"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "fluent",
  "thiserror 2.0.18",

@@ -7,7 +7,7 @@ license = "Apache-2.0"
 repository.workspace = true
 
 [dependencies]
-grexa-db = { version = "1.6.0", path = "../grexa-db" }
+grexa-db = { version = "1.7.0", path = "../grexa-db" }
 clap.workspace = true
 
 [dev-dependencies]

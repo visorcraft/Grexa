@@ -1,7 +1,6 @@
 # grexa-db Implementation Plan
 
-Status: **Phase 0–1 + 3 complete. Phase 2 partially complete. Future items
-deferred.**
+Status: **Phase 0–3 complete. Future items deferred.**
 
 ## Related documents
 
@@ -37,53 +36,45 @@ Commits: `9c9daaf` → `22c0bcf`
 
 Commits: `28d11ca` → `ce7536f`
 
-## Phase 2 — GUI Integration ⚠️ Partially complete
+## Phase 2 — GUI Integration ✅
 
-### Done ✅
+### Initial integration
 
 | Deliverable | Commit | What |
 |-------------|--------|------|
 | `DbController` qobject | `c969fd1` | cxx-qt bridge; openDb, collectionNames, recordPaths, validate, materializeView |
-| Threading | `e406a5c` | All 3 methods async via `qt_thread().queue()` |
+| Threading | `e406a5c` | record_paths / validate / query / materialize async via `qt_thread().queue()` |
 | `DatabasePage.qml` | `c969fd1` | Collection list, record list, validate, materialize |
 | Navigation | `c969fd1` | Wired into Main.qml sidebar |
 | Review fixes | `df03c7e` | `ItemDelegate` (KF6), `tracing::warn`, row cap |
 
-### Not done ❌
+### Completed Phase 2 features (`f849b5c`)
 
-| Deliverable | What it is | Where it goes |
-|-------------|------------|---------------|
-| **Schema browser page** | Browse a collection's schema.md — show field names, types, required flags, ranges in a readable table. | `qml/DatabasePage.qml` — expand when a collection is selected |
-| **Structured-filter sidebar** | Let the user build a query visually: pick a field from the schema, pick an operator (eq/ge/contains), type a value, see filtered results live. | `qml/DatabasePage.qml` — `Controls.Drawer` or inline `ColumnLayout` above the record list |
-| **Saved-views navigator** | List existing materialized views (symlinks under `views/`); allow re-materializing or deleting. | `qml/DatabasePage.qml` — a section below materialize, or a separate sub-page |
-| **Card/result-grid mode** | Show records as cards with title/tags/rating from frontmatter instead of a flat filename list. | `qml/DatabasePage.qml` — replace the `Repeater` of `ItemDelegate` with a `GridView` or card `Delegate` |
+| Deliverable | Invokable(s) added | What |
+|-------------|--------------------|------|
+| **Schema browser page** | `schema_json` | Returns a JSON array of `{name, type, required}` from `Collection::schema()`; QML renders a field table. |
+| **Structured-filter sidebar** | `query_records` | Takes a JSON array of `[field, op, value]`, builds a typed `Query` with chained `.filter()` calls, returns matching paths (async, capped at 500). |
+| **Saved-views navigator** | `list_views`, `delete_view` | Lists published view symlinks under `views/`; delete removes a view symlink. |
+| **Card/result-grid mode** | `record_frontmatter` | `RecordCard.qml` shows title/tags/rating via on-demand `Record::frontmatter_json()` expansion. |
 
-### Implementation notes for completing Phase 2
+### Post-review hardening (working tree — pending commit)
 
-All four items are **QML-only changes** — no new Rust code needed. The
-`DbController` already exposes everything:
+Two correctness/security findings from the final peer review, fixed:
 
-- **Schema browser**: `dbController` doesn't expose schema fields yet. Add a
-  `#[qinvokable] fn schema_json(collection: &QString) -> QString` to
-  `apps/grexa-gui/src/qobjects/db.rs` that returns a JSON array of
-  `{name, type, required, range}` from `Collection::schema()`. Parse in QML
-  with `JSON.parse()`.
+- **`delete_view` path-traversal sink** — the invokable joined an
+  unsanitized `view_name` onto `views/`, so an absolute or `..` argument
+  escaped the directory (arbitrary-file deletion). Now gated on
+  `is_safe_view_name()` (rejects separators, dotfiles, traversal) **and**
+  requires the target to actually be a symlink. (`apps/grexa-gui/src/qobjects/db.rs`)
+- **`schema_json` omits `range`** — the original note specified
+  `{name, type, required, range}`; the shipped invokable dropped `range`.
+  Now emits `"range": [min, max]` for numeric fields with a range, else
+  `null`. (`apps/grexa-gui/src/qobjects/db.rs`)
 
-- **Structured-filter sidebar**: Add `#[qinvokable] fn query_records(collection:
-  &QString, filterJson: &QString) -> QString` that takes a JSON array of
-  `{field, op, value}` objects, builds a `Query` with chained `.filter()`
-  calls, and returns newline-separated paths. The QML sidebar collects
-  filter rows and calls this on each change.
-
-- **Saved-views navigator**: Read `views/` directory in QML via a new
-  `#[qinvokable] fn list_views() -> QString` that returns the symlink names
-  under `db_root/views/`. Add a delete button that removes the symlink.
-
-- **Card mode**: The record paths are already available via
-  `recordPathsResult`. To show frontmatter fields, add `#[qinvokable] fn
-  record_frontmatter(collection: &QString, recordPath: &QString) -> QString`
-  that returns the parsed frontmatter as JSON. QML renders cards from the
-  parsed fields.
+> **Note:** the new GUI reads (`schema_json`, `list_views`,
+> `record_frontmatter`) run synchronously on the UI thread, unlike the four
+> threaded methods. Acceptable for single small reads; revisit if card mode
+> fans out many `record_frontmatter` calls.
 
 ## Phase 3 — Dogfooding + Publish ✅
 
@@ -119,17 +110,23 @@ and were **never part of the committed roadmap**:
 
 ## Test counts
 
+Measured via `cargo test --workspace` (counts include the post-review
+hardening tests: `ref_wrong_collection_rejected`, `ref_existence_diagnostics`,
+`view_name_safety`).
+
 | Suite | Tests |
 |-------|-------|
-| grexa-db | 121 |
-| grexa-db-cli | 0 (integration tested via smoke tests) |
-| grexa-core (db module) | 20 |
+| grexa-db | 121 unit + 1 doctest |
+| grexa-db-cli | 0 (integration tested via CLI smoke tests) |
+| grexa-core (db module) | 16 |
 | grexa-core (frontmatter — deleted) | 0 |
-| **Total** | **544** |
+| **Total (workspace, passing)** | **547** |
 
 ## Commit history
 
 ```
+(working tree, uncommitted) Post-review hardening: delete_view path guard, ref<T> collection + existence/escape diagnostics (Severity::{Error,Warning})
+f849b5c Complete Phase 2: schema browser, structured filters, view navigator, record cards
 26e6d19 Cut over-engineering: dead frontmatter module, is_optional, VERSION test, as_f64 dedup
 1fe9ce8 Complete final polish: thread materialize_view, migrations, round-trip tests
 d0f882e Fix CRITICAL: serde_yaml serialization instead of hand-formatted YAML

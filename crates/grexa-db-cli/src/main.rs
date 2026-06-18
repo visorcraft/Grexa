@@ -12,7 +12,7 @@
 //! - `query <collection> [--filter field:op:value]... [--order-by field]` — query with filters
 
 use clap::{Parser, Subcommand};
-use grexa_db::{Db, IntoValue};
+use grexa_db::{Db, IntoValue, Severity};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -120,29 +120,34 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Command::Validate { collection } => {
-            let total_errors = if let Some(name) = collection {
-                let coll = db.collection(name)?;
-                let errors = coll.validate_all();
-                let count = errors.len();
-                for e in &errors {
-                    println!("{name}/{}: {}: {}", e.record_path, e.field, e.message);
-                }
-                count
+            let reports = if let Some(name) = collection {
+                vec![(name.clone(), db.collection(name)?.validate_all())]
             } else {
-                let reports = db.validate_all()?;
-                let mut total = 0;
-                for (coll_name, errors) in &reports {
-                    for e in errors {
-                        println!("{coll_name}/{}: {}: {}", e.record_path, e.field, e.message);
-                        total += 1;
-                    }
-                }
-                total
+                db.validate_all()?
             };
-            if total_errors == 0 {
-                eprintln!("all records valid");
+            // Warnings (e.g. dangling refs) are diagnostic, not failures —
+            // only hard errors flip the exit code.
+            let mut error_count = 0;
+            let mut warning_count = 0;
+            for (coll_name, errors) in &reports {
+                for e in errors {
+                    let tag = match e.severity {
+                        Severity::Error => {
+                            error_count += 1;
+                            "error"
+                        }
+                        Severity::Warning => {
+                            warning_count += 1;
+                            "warning"
+                        }
+                    };
+                    println!("{coll_name}/{}: {}: [{tag}] {}", e.record_path, e.field, e.message);
+                }
+            }
+            if error_count == 0 {
+                eprintln!("all records valid ({warning_count} warning(s))");
             } else {
-                return Err(format!("{total_errors} validation error(s)").into());
+                return Err(format!("{error_count} error(s), {warning_count} warning(s)").into());
             }
         }
 

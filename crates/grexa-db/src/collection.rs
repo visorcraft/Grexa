@@ -112,9 +112,25 @@ impl Collection {
         crate::query::Query::new(self)
     }
 
-    /// Validate a single record against this collection's schema.
+    /// Canonical database root: the parent of the (canonical) collection
+    /// directory. `ref<T>` values are DB-root-relative, so they resolve
+    /// against this. Falls back to the collection root only in the
+    /// degenerate case where the collection is a filesystem root.
+    fn db_root_canonical(&self) -> &Path {
+        self.root_canonical.parent().unwrap_or(&self.root_canonical)
+    }
+
+    /// Validate a single record against this collection's schema. Includes
+    /// `ref<T>` resolution diagnostics (dangling = warning, escape = error)
+    /// in addition to the pure structural/type checks.
     pub fn validate_record(&self, record: &Record) -> Vec<crate::validation::ValidationError> {
-        crate::validation::validate_record(record, &self.schema.fields)
+        let mut errors = crate::validation::validate_record(record, &self.schema.fields);
+        errors.extend(crate::validation::resolve_refs(
+            record,
+            &self.schema.fields,
+            self.db_root_canonical(),
+        ));
+        errors
     }
 
     /// Validate all records against this collection's schema. Returns a
@@ -133,6 +149,7 @@ impl Collection {
                         record_path: path,
                         field: "-".into(),
                         message: format!("read error: {e}"),
+                        severity: crate::validation::Severity::Error,
                     });
                 }
             }
