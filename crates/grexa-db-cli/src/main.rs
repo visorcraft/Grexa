@@ -9,10 +9,10 @@
 //! - `collections` — list all collections
 //! - `records <collection>` — list record paths
 //! - `validate [collection]` — validate records against schema
-//! - `materialize <collection> <view-name> [--group-by <field>]` — materialize a view
+//! - `query <collection> [--filter field:op:value]... [--order-by field]` — query with filters
 
 use clap::{Parser, Subcommand};
-use grexa_db::Db;
+use grexa_db::{Db, IntoValue};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -32,6 +32,16 @@ enum Command {
     Collections,
     /// List record paths in a collection.
     Records { collection: String },
+    /// Query records with filters. Example: --filter rating:ge:4 --filter tags:contains:rust
+    Query {
+        collection: String,
+        #[arg(long, value_name = "FIELD:OP:VALUE")]
+        filter: Vec<String>,
+        #[arg(long)]
+        order_by: Option<String>,
+        #[arg(long, default_value = "asc")]
+        direction: String,
+    },
     /// Validate records against their schema.
     Validate { collection: Option<String> },
     /// Materialize a query result as a directory of symlinks.
@@ -68,6 +78,36 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
             let coll = db.collection(collection)?;
             let mut count = 0;
             for result in coll.records() {
+                let record = result?;
+                println!("{}", record.path());
+                count += 1;
+            }
+            eprintln!("{count} records");
+        }
+
+        Command::Query {
+            collection,
+            filter,
+            order_by,
+            direction,
+        } => {
+            let coll = db.collection(collection)?;
+            let mut query = coll.query();
+            for f in filter {
+                let parts: Vec<&str> = f.splitn(3, ':').collect();
+                if parts.len() == 3 {
+                    query = apply_filter(query, parts[0], parts[1], parts[2]);
+                }
+            }
+            if let Some(field) = order_by {
+                query = if direction == "desc" {
+                    query.order_by(field).desc()
+                } else {
+                    query.order_by(field).asc()
+                };
+            }
+            let mut count = 0;
+            for result in query {
                 let record = result?;
                 println!("{}", record.path());
                 count += 1;
@@ -115,4 +155,40 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+fn apply_filter<'a>(
+    query: grexa_db::Query<'a>,
+    field: &str,
+    op: &str,
+    value: &str,
+) -> grexa_db::Query<'a> {
+    let builder = query.filter(field);
+    if let Ok(i) = value.parse::<i64>() {
+        return apply_op(builder, op, i);
+    }
+    if let Ok(f) = value.parse::<f64>() {
+        return apply_op(builder, op, f);
+    }
+    if let Ok(b) = value.parse::<bool>() {
+        return apply_op(builder, op, b);
+    }
+    apply_op(builder, op, value)
+}
+
+fn apply_op<'a, V: IntoValue>(
+    builder: grexa_db::FilterBuilder<'a>,
+    op: &str,
+    value: V,
+) -> grexa_db::Query<'a> {
+    match op {
+        "eq" => builder.eq(value),
+        "ne" => builder.ne(value),
+        "lt" => builder.lt(value),
+        "le" => builder.le(value),
+        "gt" => builder.gt(value),
+        "ge" => builder.ge(value),
+        "contains" => builder.contains(value),
+        _ => builder.eq(value),
+    }
 }

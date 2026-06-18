@@ -48,6 +48,8 @@ pub mod ffi {
             group_by: &QString,
         ) -> bool;
     }
+
+    impl cxx_qt::Threading for DbController {}
 }
 
 #[derive(Default)]
@@ -157,7 +159,11 @@ impl ffi::DbController {
         };
         let view = view_name.to_string();
         let group = group_by.to_string();
-        let group_opt = if group.is_empty() { None } else { Some(group.as_str()) };
+        let group_opt = if group.is_empty() {
+            None
+        } else {
+            Some(group.as_str())
+        };
         let query = coll.query();
         let result = db.materialize_view(&view, query, group_opt);
         match result {

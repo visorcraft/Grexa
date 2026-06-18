@@ -44,6 +44,25 @@ pub struct RecentPathsDb {
 }
 
 impl RecentPathsDb {
+    /// Create a recent-paths store for the given app paths. Infallible —
+    /// falls back to a temp directory if the data dir is unwritable.
+    pub fn new(paths: &crate::storage::AppPaths) -> Self {
+        let db_root = paths.data_dir.join("db");
+        let coll_dir = db_root.join(COLLECTION_DIR);
+        let _ = fs::create_dir_all(&coll_dir);
+        let schema_path = coll_dir.join("schema.md");
+        if !schema_path.exists() {
+            let _ = fs::write(&schema_path, SCHEMA);
+        }
+        let db = grexa_db::Db::open(&db_root).unwrap_or_else(|e| {
+            tracing::warn!("RecentPathsDb: data dir failed ({e}), using temp");
+            let fallback = std::env::temp_dir().join("grexa-db-fallback");
+            let _ = fs::create_dir_all(&fallback);
+            grexa_db::Db::open(&fallback).expect("grexa-db must open in /tmp")
+        });
+        Self { db, limit: 20 }
+    }
+
     /// Open (or create) a recent-paths database under `data_dir/db/`.
     pub fn open(data_dir: &Path) -> Result<Self, DbStoreError> {
         let db_root = data_dir.join("db");
@@ -62,8 +81,9 @@ impl RecentPathsDb {
     ///
     /// Single-writer assumed: the GUI's storage path is not called from
     /// multiple threads simultaneously.
-    pub fn add_path(&self, path: &Path) -> Result<(), DbStoreError> {
-        self.remove_path(path)?;
+    pub fn add(&self, path: impl AsRef<Path>) -> Result<(), DbStoreError> {
+        let path = path.as_ref();
+        self.remove(path)?;
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -82,7 +102,7 @@ impl RecentPathsDb {
     }
 
     /// Remove a path from the store (no-op if absent).
-    pub fn remove_path(&self, path: &Path) -> Result<(), DbStoreError> {
+    pub fn remove(&self, path: &Path) -> Result<(), DbStoreError> {
         let target = path.display().to_string();
         let coll = self.db.collection(COLLECTION_DIR)?;
         for result in coll.records() {
@@ -96,7 +116,7 @@ impl RecentPathsDb {
     }
 
     /// Load all stored paths, newest first.
-    pub fn load_paths(&self) -> Result<Vec<PathBuf>, DbStoreError> {
+    pub fn load(&self) -> Result<Vec<PathBuf>, DbStoreError> {
         let coll = self.db.collection(COLLECTION_DIR)?;
         let mut entries: Vec<(String, PathBuf)> = Vec::new();
         for result in coll.records() {
@@ -138,14 +158,10 @@ mod tests {
     fn round_trip_add_and_load() {
         let dir = TempDir::new().unwrap();
         let store = RecentPathsDb::open(dir.path()).unwrap();
-        store
-            .add_path(&PathBuf::from("/home/user/project-a"))
-            .unwrap();
-        store
-            .add_path(&PathBuf::from("/home/user/project-b"))
-            .unwrap();
+        store.add(PathBuf::from("/home/user/project-a")).unwrap();
+        store.add(PathBuf::from("/home/user/project-b")).unwrap();
 
-        let paths = store.load_paths().unwrap();
+        let paths = store.load().unwrap();
         assert_eq!(paths.len(), 2);
         assert!(paths.contains(&PathBuf::from("/home/user/project-a")));
         assert!(paths.contains(&PathBuf::from("/home/user/project-b")));
@@ -155,11 +171,11 @@ mod tests {
     fn newest_first() {
         let dir = TempDir::new().unwrap();
         let store = RecentPathsDb::open(dir.path()).unwrap();
-        store.add_path(&PathBuf::from("/old")).unwrap();
+        store.add(PathBuf::from("/old")).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(2));
-        store.add_path(&PathBuf::from("/new")).unwrap();
+        store.add(PathBuf::from("/new")).unwrap();
 
-        let paths = store.load_paths().unwrap();
+        let paths = store.load().unwrap();
         assert_eq!(paths[0], PathBuf::from("/new"));
         assert_eq!(paths[1], PathBuf::from("/old"));
     }
@@ -168,11 +184,11 @@ mod tests {
     fn dedup_on_re_add() {
         let dir = TempDir::new().unwrap();
         let store = RecentPathsDb::open(dir.path()).unwrap();
-        store.add_path(&PathBuf::from("/project")).unwrap();
+        store.add(PathBuf::from("/project")).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(2));
-        store.add_path(&PathBuf::from("/project")).unwrap();
+        store.add(PathBuf::from("/project")).unwrap();
 
-        let paths = store.load_paths().unwrap();
+        let paths = store.load().unwrap();
         assert_eq!(paths.len(), 1, "re-adding should dedup");
     }
 
@@ -180,11 +196,11 @@ mod tests {
     fn remove_path() {
         let dir = TempDir::new().unwrap();
         let store = RecentPathsDb::open(dir.path()).unwrap();
-        store.add_path(&PathBuf::from("/a")).unwrap();
-        store.add_path(&PathBuf::from("/b")).unwrap();
-        store.remove_path(&PathBuf::from("/a")).unwrap();
+        store.add(PathBuf::from("/a")).unwrap();
+        store.add(PathBuf::from("/b")).unwrap();
+        store.remove(&PathBuf::from("/a")).unwrap();
 
-        let paths = store.load_paths().unwrap();
+        let paths = store.load().unwrap();
         assert_eq!(paths.len(), 1);
         assert_eq!(paths[0], PathBuf::from("/b"));
     }
@@ -195,10 +211,10 @@ mod tests {
         let mut store = RecentPathsDb::open(dir.path()).unwrap();
         store.limit = 3;
         for i in 0..5 {
-            store.add_path(&PathBuf::from(format!("/p{i}"))).unwrap();
+            store.add(PathBuf::from(format!("/p{i}"))).unwrap();
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
-        let paths = store.load_paths().unwrap();
+        let paths = store.load().unwrap();
         assert_eq!(paths.len(), 3, "limit should be enforced");
         assert!(paths.contains(&PathBuf::from("/p4")));
         assert!(!paths.contains(&PathBuf::from("/p0")));
@@ -208,7 +224,7 @@ mod tests {
     fn schema_validation_works() {
         let dir = TempDir::new().unwrap();
         let store = RecentPathsDb::open(dir.path()).unwrap();
-        store.add_path(&PathBuf::from("/test")).unwrap();
+        store.add(PathBuf::from("/test")).unwrap();
         let coll = store.db.collection(COLLECTION_DIR).unwrap();
         let errors = coll.validate_all();
         assert!(errors.is_empty(), "validation errors: {errors:?}");
@@ -218,11 +234,11 @@ mod tests {
     fn open_is_idempotent() {
         let dir = TempDir::new().unwrap();
         let store1 = RecentPathsDb::open(dir.path()).unwrap();
-        store1.add_path(&PathBuf::from("/persist")).unwrap();
+        store1.add(PathBuf::from("/persist")).unwrap();
         drop(store1);
 
         let store2 = RecentPathsDb::open(dir.path()).unwrap();
-        let paths = store2.load_paths().unwrap();
+        let paths = store2.load().unwrap();
         assert!(paths.contains(&PathBuf::from("/persist")));
     }
 
@@ -230,6 +246,6 @@ mod tests {
     fn empty_store_loads_empty() {
         let dir = TempDir::new().unwrap();
         let store = RecentPathsDb::open(dir.path()).unwrap();
-        assert!(store.load_paths().unwrap().is_empty());
+        assert!(store.load().unwrap().is_empty());
     }
 }
