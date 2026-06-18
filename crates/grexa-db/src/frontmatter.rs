@@ -57,7 +57,7 @@ pub fn split(content: &str) -> Result<Split<'_>, FrontmatterError> {
     let Some(rest) = rest else {
         return Ok(Split {
             frontmatter: None,
-            body: stripped,
+            body: content,
         });
     };
 
@@ -211,5 +211,13 @@ mod tests {
         let fm = result.frontmatter.expect("frontmatter");
         let tags = fm["tags"].as_sequence().expect("should be a sequence");
         assert!(tags.is_empty());
+    }
+
+    #[test]
+    fn bom_preserved_when_no_frontmatter() {
+        let content = "\u{feff}just body with bom\n";
+        let result = split(content).unwrap();
+        assert!(result.frontmatter.is_none());
+        assert_eq!(result.body, "\u{feff}just body with bom\n");
     }
 }

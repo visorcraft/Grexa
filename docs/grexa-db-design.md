@@ -42,6 +42,11 @@ over plain-text data they refuse to lock into a binary format.
    stale views are normal, observable states (see "Path semantics").
 7. **No automatic schema migrations.** A separate `validate` command flags
    violations; nothing is rewritten automatically.
+8. **No schema enforcement in Phase 0.** Schemas are parsed and accessible
+   via `Collection::schema()`, but record fields are NOT validated against
+   them at read time. `validate_all()` and typed field access are Phase 1.
+   Phase 0 schemas are descriptive (used by view materialization for
+   grouping) but not prescriptive.
 8. **No tag lifecycle operations.** No tag rename, no tag delete, no tag
    registry. Tags are plain `array<string>` values; editing them is an
    editor operation, not an engine operation.
@@ -64,7 +69,7 @@ my-db/                         ← Db root (any directory)
     .generations/              ← versioned view content
       gen-a3f1b2/              ← one generation (the actual dir tree)
         transformers/
-          2024-transformers.md -> ../../../../../notes/2024-transformers.md
+          2024-transformers.md -> ../../../../notes/2024-transformers.md
       gen-9c4e7d/              ← previous generation (pending GC)
     notes-by-tag -> .generations/gen-a3f1b2   ← symlink (atomic swap target)
   .grexa-db.lock               ← cross-process lock file (flock)
@@ -204,19 +209,21 @@ db.materialize_view(
 
 ### Streaming vs buffering (honest semantics)
 
-Peer review finding #6: the original spec claimed iterators "avoid loading
-100k records" but immediately used `order_by().collect()`, which is
-impossible without buffering. The API now distinguishes:
+Filter-only queries read record *content* lazily (O(1) per record body).
+File paths are collected eagerly during the directory walk (O(n) in path
+count) — this is the path-list phase, not the content phase. `order_by`
+forces full materialization of matching records before yielding.
 
-- **Streaming operators (O(1) memory):** `filter`, field access, `map`.
-  Yield records one at a time; suitable for scanning huge collections.
-- **Buffering operators (O(n) memory):** `order_by`, `distinct`, grouped
+- **Filter-only (lazy content reads):** `filter`, field access. Paths are
+  collected up front; file *content* is read one at a time as the iterator
+  advances.
+- **Buffering operators (O(n) memory):** `order_by`, grouped
   `materialize_view`, and joins. These materialize the full matching set
   before yielding. A query with `order_by` over 100k matching records will
   buffer 100k records — that's inherent to sorting.
 - **Future (Phase 1+):** optional external-sort for `order_by` on very
-  large result sets, and on-disk indexes that make `order_by` streaming
-  for indexed fields.
+  large result sets, lazy directory walking, and on-disk indexes that make
+  `order_by` streaming for indexed fields.
 
 ## View materialization semantics
 

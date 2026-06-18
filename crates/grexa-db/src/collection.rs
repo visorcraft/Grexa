@@ -6,7 +6,6 @@
 
 use crate::record::{Record, RecordError};
 use crate::schema::Schema;
-use std::ffi::OsStr;
 use std::fs;
 use std::iter::FusedIterator;
 use std::path::{Path, PathBuf};
@@ -46,13 +45,22 @@ impl Collection {
         &self.schema.collection
     }
 
+    /// The on-disk root directory of this collection.
+    pub(crate) fn root(&self) -> &Path {
+        &self.root
+    }
+
     /// The parsed schema.
     pub fn schema(&self) -> &Schema {
         &self.schema
     }
 
     /// Read a single record by its collection-relative path.
+    ///
+    /// The path is validated against traversal attacks: absolute paths,
+    /// `..` components, and backslashes are rejected.
     pub fn record(&self, relative_path: &str) -> Result<Record, RecordError> {
+        validate_relative_path(relative_path)?;
         let full = self.root.join(relative_path);
         let content = fs::read_to_string(&full).map_err(|e| RecordError::ReadFile {
             path: relative_path.to_string(),
@@ -65,8 +73,8 @@ impl Collection {
     ///
     /// File paths are collected eagerly (directory walk); file *content* is
     /// read lazily as the iterator advances. Files named `schema.md`,
-    /// hidden files, and common noise directories (`node_modules`,
-    /// `target`, `.git`, `__pycache__`) are skipped.
+    /// hidden files, symlinks, and common noise directories
+    /// (`node_modules`, `target`, `__pycache__`) are skipped.
     pub fn records(&self) -> RecordIter<'_> {
         let paths = collect_record_paths(&self.root);
         RecordIter {
@@ -108,6 +116,18 @@ impl Iterator for RecordIter<'_> {
 
 impl FusedIterator for RecordIter<'_> {}
 
+fn validate_relative_path(path: &str) -> Result<(), RecordError> {
+    if path.is_empty() || path.starts_with('/') || path.contains('\\') {
+        return Err(RecordError::InvalidPath(path.to_string()));
+    }
+    for component in path.split('/') {
+        if component == ".." {
+            return Err(RecordError::InvalidPath(path.to_string()));
+        }
+    }
+    Ok(())
+}
+
 fn collect_record_paths(root: &Path) -> Vec<PathBuf> {
     let mut paths = Vec::new();
     let mut stack = vec![root.to_path_buf()];
@@ -124,13 +144,24 @@ fn collect_record_paths(root: &Path) -> Vec<PathBuf> {
             if name.starts_with('.') {
                 continue;
             }
-            if path.is_dir() {
+
+            let file_type = match entry.file_type() {
+                Ok(ft) => ft,
+                Err(_) => continue,
+            };
+
+            if file_type.is_symlink() {
+                continue;
+            }
+
+            if file_type.is_dir() {
                 if matches!(name, "node_modules" | "target" | "__pycache__") {
                     continue;
                 }
                 stack.push(path);
                 continue;
             }
+
             if name == "schema.md" {
                 continue;
             }
@@ -141,18 +172,11 @@ fn collect_record_paths(root: &Path) -> Vec<PathBuf> {
     paths
 }
 
-/// Normalize a collection-relative path to forward slashes.
-pub fn normalize_path(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
-}
-
-#[allow(dead_code)]
-fn _ensure_osstr_import(_: &OsStr) {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
+    use std::os::unix::fs::symlink;
     use tempfile::TempDir;
 
     const NOTES_SCHEMA: &str = "---\ncollection: notes\nfields:\n  - { name: title, type: string, required: true }\n  - { name: tags, type: \"array<string>\" }\n  - { name: rating, type: integer, range: [1, 5] }\n---\n\n# Notes\n";
@@ -202,6 +226,31 @@ mod tests {
         let dir = make_collection();
         let coll = Collection::open(dir.path()).unwrap();
         assert!(coll.record("nonexistent.md").is_err());
+    }
+
+    #[test]
+    fn path_traversal_rejected() {
+        let dir = make_collection();
+        let coll = Collection::open(dir.path()).unwrap();
+        assert!(coll.record("../etc/passwd").is_err());
+        assert!(coll.record("/etc/passwd").is_err());
+        assert!(coll.record("..\\..\\secret").is_err());
+        assert!(coll.record("notes/../secret").is_err());
+        assert!(coll.record("").is_err());
+    }
+
+    #[test]
+    fn nested_subdirectory_record_accessible() {
+        let dir = make_collection();
+        fs::create_dir_all(dir.path().join("2024").join("03")).unwrap();
+        fs::write(
+            dir.path().join("2024").join("03").join("deep.md"),
+            "---\ntitle: Deep\n---\nbody\n",
+        )
+        .unwrap();
+        let coll = Collection::open(dir.path()).unwrap();
+        let r = coll.record("2024/03/deep.md").unwrap();
+        assert_eq!(r.field("title").unwrap().as_str(), Some("Deep"));
     }
 
     #[test]
@@ -255,6 +304,18 @@ mod tests {
         let coll = Collection::open(dir.path()).unwrap();
         let records: Vec<_> = coll.records().collect::<Result<_, _>>().unwrap();
         assert!(!records.iter().any(|r| r.path().contains("node_modules")));
+    }
+
+    #[test]
+    fn symlink_cycle_does_not_infinite_loop() {
+        let dir = make_collection();
+        fs::create_dir_all(dir.path().join("sub")).unwrap();
+        symlink(".", dir.path().join("sub").join("loop")).unwrap();
+        fs::write(dir.path().join("sub").join("real.md"), "---\ntitle: Real\n---\nbody\n").unwrap();
+
+        let coll = Collection::open(dir.path()).unwrap();
+        let records: Vec<_> = coll.records().collect::<Result<_, _>>().unwrap();
+        assert!(records.iter().any(|r| r.path() == "sub/real.md"));
     }
 
     #[test]

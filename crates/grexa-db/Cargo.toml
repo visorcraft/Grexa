@@ -7,7 +7,6 @@ license = "Apache-2.0"
 repository.workspace = true
 
 [dependencies]
-serde.workspace = true
 serde_yaml.workspace = true
 thiserror.workspace = true
 

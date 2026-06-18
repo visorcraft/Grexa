@@ -4,17 +4,26 @@
 //! A database — a root directory containing zero or more collections.
 
 use crate::collection::Collection;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, LazyLock, Mutex};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum DbError {
     #[error("`{0}` is not a directory")]
     NotADirectory(String),
+    #[error("I/O error: {0}")]
+    Io(String),
+    #[error("invalid collection name `{0}`: path separators and `..` are not allowed")]
+    InvalidCollectionName(String),
     #[error("collection error: {0}")]
     Collection(#[from] crate::collection::CollectionError),
 }
+
+static ROOT_LOCKS: LazyLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// A flat-file database rooted at a directory.
 ///
@@ -22,6 +31,7 @@ pub enum DbError {
 /// [`Collection`]. The root itself is not a collection.
 pub struct Db {
     root: PathBuf,
+    view_lock: Arc<Mutex<()>>,
 }
 
 impl Db {
@@ -33,8 +43,19 @@ impl Db {
         if !root.is_dir() {
             return Err(DbError::NotADirectory(root.display().to_string()));
         }
+        let canonical = root
+            .canonicalize()
+            .map_err(|e| DbError::NotADirectory(e.to_string()))?;
+        let view_lock = {
+            let mut registry = ROOT_LOCKS.lock().unwrap();
+            registry
+                .entry(canonical)
+                .or_insert_with(|| Arc::new(Mutex::new(())))
+                .clone()
+        };
         Ok(Self {
             root: root.to_path_buf(),
+            view_lock,
         })
     }
 
@@ -44,7 +65,19 @@ impl Db {
     }
 
     /// Open a named collection (a subdirectory with a `schema.md`).
+    ///
+    /// The name is validated: path separators (`/`, `\`) and `..` are
+    /// rejected to prevent traversal outside the DB root.
     pub fn collection(&self, name: &str) -> Result<Collection, DbError> {
+        if name.is_empty()
+            || name.contains('/')
+            || name.contains('\\')
+            || name.split('/').any(|c| c == ".." || c == ".")
+            || name == ".."
+            || name == "."
+        {
+            return Err(DbError::InvalidCollectionName(name.to_string()));
+        }
         let path = self.root.join(name);
         Ok(Collection::open(path)?)
     }
@@ -52,12 +85,10 @@ impl Db {
     /// Discover all collection names (subdirectories containing
     /// `schema.md`). Returns a sorted list. Hidden directories (starting
     /// with `.`) and the reserved `views` directory are excluded.
-    pub fn collections(&self) -> Vec<String> {
+    pub fn collections(&self) -> Result<Vec<String>, DbError> {
         let mut names = Vec::new();
-        let Ok(entries) = fs::read_dir(&self.root) else {
-            return names;
-        };
-        for entry in entries.flatten() {
+        for entry in fs::read_dir(&self.root).map_err(|e| DbError::Io(e.to_string()))? {
+            let entry = entry.map_err(|e| DbError::Io(e.to_string()))?;
             let file_name = entry.file_name();
             let Some(name) = file_name.to_str() else {
                 continue;
@@ -71,17 +102,21 @@ impl Db {
             }
         }
         names.sort();
-        names
+        Ok(names)
     }
 
     /// Materialize a query result as a directory of symlinks under
     /// `views/<view_name>`. See [`view`](crate::view) for semantics.
+    ///
+    /// View materialization is serialized per DB root via an internal
+    /// mutex, so concurrent calls on the same root are safe.
     pub fn materialize_view(
         &self,
         view_name: &str,
         query: crate::query::Query<'_>,
         group_by: Option<&str>,
     ) -> Result<(), crate::view::MaterializeError> {
+        let _guard = self.view_lock.lock().unwrap();
         crate::view::materialize(&self.root, view_name, query, group_by)
     }
 }
@@ -90,6 +125,8 @@ impl Db {
 mod tests {
     use super::*;
     use std::fs;
+    use std::sync::Arc;
+    use std::thread;
     use tempfile::TempDir;
 
     const NOTES_SCHEMA: &str =
@@ -135,7 +172,7 @@ mod tests {
     fn discover_collections() {
         let dir = make_db();
         let db = Db::open(dir.path()).unwrap();
-        let colls = db.collections();
+        let colls = db.collections().unwrap();
         assert_eq!(colls, vec!["bookmarks", "notes"]);
     }
 
@@ -156,12 +193,22 @@ mod tests {
     }
 
     #[test]
+    fn collection_name_traversal_rejected() {
+        let dir = make_db();
+        let db = Db::open(dir.path()).unwrap();
+        assert!(db.collection("../other").is_err());
+        assert!(db.collection("a/b").is_err());
+        assert!(db.collection("..").is_err());
+        assert!(db.collection("").is_err());
+    }
+
+    #[test]
     fn plain_subdirs_without_schema_are_not_collections() {
         let dir = make_db();
         fs::create_dir_all(dir.path().join("plain")).unwrap();
         fs::write(dir.path().join("plain").join("file.md"), "no schema here\n").unwrap();
         let db = Db::open(dir.path()).unwrap();
-        let colls = db.collections();
+        let colls = db.collections().unwrap();
         assert!(!colls.contains(&"plain".to_string()));
     }
 
@@ -175,7 +222,7 @@ mod tests {
         )
         .unwrap();
         let db = Db::open(dir.path()).unwrap();
-        let colls = db.collections();
+        let colls = db.collections().unwrap();
         assert!(!colls.contains(&".hidden".to_string()));
     }
 
@@ -184,7 +231,7 @@ mod tests {
         let dir = make_db();
         fs::create_dir_all(dir.path().join("views").join("notes-by-tag")).unwrap();
         let db = Db::open(dir.path()).unwrap();
-        let colls = db.collections();
+        let colls = db.collections().unwrap();
         assert!(!colls.contains(&"views".to_string()));
     }
 
@@ -206,5 +253,27 @@ mod tests {
         let records: Vec<_> = notes.records().collect::<Result<_, _>>().unwrap();
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].field("title").unwrap().as_str(), Some("Alpha"));
+    }
+
+    #[test]
+    fn concurrent_materialize_does_not_corrupt() {
+        let dir = make_db();
+        let db = Arc::new(Db::open(dir.path()).unwrap());
+
+        let db1 = db.clone();
+        let db2 = db.clone();
+        let h1 = thread::spawn(move || {
+            let notes = db1.collection("notes").unwrap();
+            db1.materialize_view("view-1", notes.query(), None)
+        });
+        let h2 = thread::spawn(move || {
+            let notes = db2.collection("notes").unwrap();
+            db2.materialize_view("view-2", notes.query(), None)
+        });
+        h1.join().unwrap().unwrap();
+        h2.join().unwrap().unwrap();
+
+        assert!(db.root().join("views").join("view-1").is_symlink());
+        assert!(db.root().join("views").join("view-2").is_symlink());
     }
 }

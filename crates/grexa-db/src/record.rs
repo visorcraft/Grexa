@@ -14,6 +14,8 @@ pub enum RecordError {
     Frontmatter(String),
     #[error("failed to read record file `{path}`: {reason}")]
     ReadFile { path: String, reason: String },
+    #[error("invalid record path `{0}`: absolute paths, `..`, and backslashes are not allowed")]
+    InvalidPath(String),
 }
 
 /// A single record within a collection.

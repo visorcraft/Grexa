@@ -3,9 +3,19 @@
 
 //! Typed query builder with streaming filters and buffering `order_by`.
 //!
-//! Filters chain fluently and stream record-by-record (O(1) memory).
-//! `order_by` forces full materialization before yielding (O(n) memory)
-//! — the design doc's honest streaming semantics.
+//! Filters chain fluently. Filter-only queries read record *content*
+//! lazily (O(1) per record body); file paths are collected eagerly during
+//! the directory walk (O(n) in path count). `order_by` forces full
+//! materialization of matching records before yielding.
+//!
+//! # Edge cases
+//!
+//! - Calling `order_by` twice keeps only the last sort key.
+//! - `contains_any(&[])` matches nothing; `contains_all(&[])` matches
+//!   everything (vacuous truth).
+//! - Records missing a filtered field never match that filter.
+//! - Records missing an `order_by` field always sort last, regardless of
+//!   ascending or descending direction.
 //!
 //! ```
 //! use grexa_db::Collection;
@@ -31,6 +41,7 @@ use crate::record::RecordError;
 use serde_yaml::Value;
 use std::cmp::Ordering;
 use std::iter::FusedIterator;
+use std::path::Path;
 
 /// A trait for Rust values that can be converted into a YAML [`Value`] for
 /// filter comparisons.
@@ -132,9 +143,17 @@ struct OrderBy {
 
 /// A query builder over a [`Collection`].
 ///
-/// Implements [`Iterator`] directly: filter-only queries stream
-/// record-by-record (O(1) memory); `order_by` forces full buffering
-/// before the first yield (O(n) memory).
+/// Implements [`Iterator`] directly: filter-only queries read record
+/// content lazily; `order_by` forces full buffering before the first
+/// yield.
+///
+/// # Edge cases
+///
+/// - Records missing a filtered field never match.
+/// - Records missing the `order_by` field always sort last.
+/// - `order_by` called twice keeps only the last key.
+/// - `contains_any(&[])` matches nothing; `contains_all(&[])` matches
+///   everything.
 pub struct Query<'a> {
     collection: &'a Collection,
     filters: Vec<Filter>,
@@ -180,9 +199,9 @@ impl<'a> Query<'a> {
         }
     }
 
-    /// The name of the collection this query runs against.
-    pub(crate) fn collection_name(&self) -> &str {
-        self.collection.name()
+    /// The on-disk root directory of the collection this query runs against.
+    pub(crate) fn collection_root(&self) -> &Path {
+        self.collection.root()
     }
 
     fn init_state(&mut self) {
@@ -206,10 +225,17 @@ impl<'a> Query<'a> {
                 Some(e) => self.state = QueryState::Errored(Some(e)),
                 None => {
                     records.sort_by(|a, b| {
-                        let ord = compare_by_field(a, b, &order_by.field);
-                        match order_by.direction {
-                            SortDir::Asc => ord,
-                            SortDir::Desc => ord.reverse(),
+                        match (a.field(&order_by.field), b.field(&order_by.field)) {
+                            (Some(_), None) => Ordering::Less,
+                            (None, Some(_)) => Ordering::Greater,
+                            (Some(av), Some(bv)) => {
+                                let ord = cmp(av, bv).unwrap_or(Ordering::Equal);
+                                match order_by.direction {
+                                    SortDir::Asc => ord,
+                                    SortDir::Desc => ord.reverse(),
+                                }
+                            }
+                            (None, None) => Ordering::Equal,
                         }
                     });
                     self.state = QueryState::Buffered(records.into_iter());
@@ -380,6 +406,9 @@ fn as_f64(v: &Value) -> Option<f64> {
 }
 
 fn values_equal(a: &Value, b: &Value) -> bool {
+    if let (Some(ai), Some(bi)) = (a.as_i64(), b.as_i64()) {
+        return ai == bi;
+    }
     if let (Some(an), Some(bn)) = (as_f64(a), as_f64(b)) {
         return an == bn;
     }
@@ -393,6 +422,9 @@ fn values_equal(a: &Value, b: &Value) -> bool {
 }
 
 fn cmp(a: &Value, b: &Value) -> Option<Ordering> {
+    if let (Some(ai), Some(bi)) = (a.as_i64(), b.as_i64()) {
+        return Some(ai.cmp(&bi));
+    }
     if let (Some(an), Some(bn)) = (as_f64(a), as_f64(b)) {
         return an.partial_cmp(&bn);
     }
@@ -410,15 +442,6 @@ fn value_in_collection(value: &Value, target: &Value) -> bool {
         return seq.iter().any(|item| values_equal(item, target));
     }
     values_equal(value, target)
-}
-
-fn compare_by_field(a: &Record, b: &Record, field: &str) -> Ordering {
-    match (a.field(field), b.field(field)) {
-        (Some(av), Some(bv)) => cmp(av, bv).unwrap_or(Ordering::Equal),
-        (Some(_), None) => Ordering::Less,
-        (None, Some(_)) => Ordering::Greater,
-        (None, None) => Ordering::Equal,
-    }
 }
 
 #[cfg(test)]
@@ -648,6 +671,51 @@ mod tests {
             .collect::<Result<_, _>>()
             .unwrap();
         assert_eq!(result.last().unwrap().path(), "delta.md");
+    }
+
+    #[test]
+    fn order_by_desc_missing_field_still_sorts_last() {
+        let dir = make_collection();
+        let coll = Collection::open(dir.path()).unwrap();
+        let result: Vec<_> = coll
+            .query()
+            .order_by("read_at")
+            .desc()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            result.last().unwrap().path(),
+            "delta.md",
+            "missing-field records must sort last even in descending order"
+        );
+    }
+
+    #[test]
+    fn i64_precision_beyond_2pow53() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("schema.md"), SCHEMA).unwrap();
+        let big = 9_007_199_254_740_993_i64;
+        let big_minus_1 = 9_007_199_254_740_992_i64;
+        fs::write(dir.path().join("big.md"), format!("---\nrating: {big}\n---\nbody\n")).unwrap();
+        fs::write(dir.path().join("small.md"), format!("---\nrating: {big_minus_1}\n---\nbody\n"))
+            .unwrap();
+        let coll = Collection::open(dir.path()).unwrap();
+
+        let exact: Vec<_> = coll
+            .query()
+            .filter("rating")
+            .eq(big)
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(paths(exact), vec!["big.md"]);
+
+        let gt: Vec<_> = coll
+            .query()
+            .filter("rating")
+            .gt(big_minus_1)
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(paths(gt), vec!["big.md"]);
     }
 
     #[test]
