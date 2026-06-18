@@ -127,10 +127,23 @@ impl Db {
     ) -> Result<Vec<(String, Vec<crate::validation::ValidationError>)>, DbError> {
         let mut all = Vec::new();
         for name in self.collections()? {
-            let coll = self.collection(&name)?;
-            let errors = coll.validate_all();
-            if !errors.is_empty() {
-                all.push((name, errors));
+            match self.collection(&name) {
+                Ok(coll) => {
+                    let errors = coll.validate_all();
+                    if !errors.is_empty() {
+                        all.push((name, errors));
+                    }
+                }
+                Err(e) => {
+                    all.push((
+                        name,
+                        vec![crate::validation::ValidationError {
+                            record_path: "-".into(),
+                            field: "-".into(),
+                            message: format!("cannot open collection: {e}"),
+                        }],
+                    ));
+                }
             }
         }
         Ok(all)

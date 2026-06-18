@@ -25,12 +25,12 @@ pub fn validate_record(record: &Record, fields: &[FieldDef]) -> Vec<ValidationEr
     let mut errors = Vec::new();
     for fd in fields {
         match record.field(&fd.name) {
-            None => {
+            None | Some(Value::Null) => {
                 if fd.required {
                     errors.push(ValidationError {
                         record_path: record.path().to_string(),
                         field: fd.name.clone(),
-                        message: "required field is missing".into(),
+                        message: "required field is missing or null".into(),
                     });
                 }
             }
@@ -41,6 +41,7 @@ pub fn validate_record(record: &Record, fields: &[FieldDef]) -> Vec<ValidationEr
                         field: fd.name.clone(),
                         message: msg,
                     });
+                    continue;
                 }
                 if let Some((min, max)) = fd.range
                     && let Err(msg) = validate_range(value, min, max)
@@ -113,10 +114,12 @@ fn validate_value(value: &Value, field_type: &FieldType) -> Result<(), String> {
             let s = value
                 .as_str()
                 .ok_or_else(|| format!("expected ref path string, got {}", type_name(value)))?;
-            if s.starts_with('/') || s.contains('\\') || s.split('/').any(|c| c == "..") {
-                return Err(format!(
-                    "ref `{s}` has forbidden components (absolute, .., backslash)"
-                ));
+            if s.is_empty()
+                || s.starts_with('/')
+                || s.contains('\\')
+                || s.split('/').any(|c| c == "..")
+            {
+                return Err(format!("ref `{s}` is empty or has forbidden components"));
             }
         }
     }
@@ -125,6 +128,9 @@ fn validate_value(value: &Value, field_type: &FieldType) -> Result<(), String> {
 
 fn validate_range(value: &Value, min: f64, max: f64) -> Result<(), String> {
     let n = as_f64(value).ok_or("cannot range-check non-numeric value")?;
+    if !n.is_finite() {
+        return Err(format!("value {n} is not finite"));
+    }
     if n < min || n > max {
         return Err(format!("value {n} outside range [{min}, {max}]"));
     }
@@ -152,16 +158,31 @@ fn type_name(v: &Value) -> &'static str {
 
 fn is_iso_date(s: &str) -> bool {
     let b = s.as_bytes();
-    b.len() == 10
-        && b[4] == b'-'
-        && b[7] == b'-'
-        && b[..4].iter().all(u8::is_ascii_digit)
-        && b[5..7].iter().all(u8::is_ascii_digit)
-        && b[8..10].iter().all(u8::is_ascii_digit)
+    if b.len() != 10 || b[4] != b'-' || b[7] != b'-' {
+        return false;
+    }
+    if !b[..4].iter().all(u8::is_ascii_digit) {
+        return false;
+    }
+    let month = (b[5] - b'0') * 10 + (b[6] - b'0');
+    let day = (b[8] - b'0') * 10 + (b[9] - b'0');
+    (1..=12).contains(&month) && (1..=31).contains(&day)
 }
 
 fn is_iso_datetime(s: &str) -> bool {
-    s.len() >= 16 && s.as_bytes()[4] == b'-' && (s.contains('T') || s.contains(' '))
+    let b = s.as_bytes();
+    b.len() >= 19
+        && b[4] == b'-'
+        && b[7] == b'-'
+        && (b[10] == b'T' || b[10] == b' ')
+        && b[13] == b':'
+        && b[16] == b':'
+        && b[..4].iter().all(u8::is_ascii_digit)
+        && b[5..7].iter().all(u8::is_ascii_digit)
+        && b[8..10].iter().all(u8::is_ascii_digit)
+        && b[11..13].iter().all(u8::is_ascii_digit)
+        && b[14..16].iter().all(u8::is_ascii_digit)
+        && b[17..19].iter().all(u8::is_ascii_digit)
 }
 
 #[cfg(test)]

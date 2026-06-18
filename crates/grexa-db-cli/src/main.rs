@@ -98,7 +98,6 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
             if total_errors == 0 {
                 eprintln!("all records valid");
             } else {
-                eprintln!("{total_errors} validation error(s)");
                 return Err(format!("{total_errors} validation error(s)").into());
             }
         }

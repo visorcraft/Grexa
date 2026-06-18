@@ -124,11 +124,17 @@ impl Collection {
         for result in self.records() {
             match result {
                 Ok(record) => errors.extend(self.validate_record(&record)),
-                Err(e) => errors.push(crate::validation::ValidationError {
-                    record_path: "?".into(),
-                    field: "?".into(),
-                    message: format!("failed to read record: {e}"),
-                }),
+                Err(e) => {
+                    let path = match &e {
+                        crate::record::RecordError::ReadFile { path, .. } => path.clone(),
+                        _ => "?".into(),
+                    };
+                    errors.push(crate::validation::ValidationError {
+                        record_path: path,
+                        field: "-".into(),
+                        message: format!("read error: {e}"),
+                    });
+                }
             }
         }
         errors
