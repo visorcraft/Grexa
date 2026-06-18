@@ -17,6 +17,14 @@ Kirigami.ScrollablePage {
 
     DbController {
         id: db
+        onRecord_paths_ready: {
+            var raw = recordPathsResult;
+            page.records = raw.split("\n").filter(r => r.length > 0);
+        }
+        onValidate_ready: {
+            validateResult.text = db.validateResult;
+            validateResult.visible = true;
+        }
     }
 
     ColumnLayout {
@@ -71,8 +79,7 @@ Kirigami.ScrollablePage {
                 highlighted: page.selectedCollection === modelData
                 onClicked: {
                     page.selectedCollection = modelData;
-                    var raw = db.recordPaths(modelData);
-                    page.records = raw.split("\n").filter(r => r.length > 0);
+                    db.recordPaths(modelData);
                 }
             }
         }
@@ -115,9 +122,7 @@ Kirigami.ScrollablePage {
                 text: i18n("Validate")
                 icon.name: "document-edit-verify"
                 onClicked: {
-                    var report = db.validate(page.selectedCollection);
-                    validateResult.text = report;
-                    validateResult.visible = true;
+                    db.validate(page.selectedCollection);
                 }
             }
 
