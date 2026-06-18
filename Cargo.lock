@@ -1261,6 +1261,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "grexa-db"
+version = "1.6.0"
+
+[[package]]
 name = "grexa-i18n"
 version = "1.6.0"
 dependencies = [

@@ -1,0 +1,32 @@
+// SPDX-FileCopyrightText: 2026 VisorCraft LLC
+// SPDX-License-Identifier: Apache-2.0
+
+//! `grexa-db` — a flat-file database engine where records are plain files in
+//! a directory tree and relational joins materialize as directories of
+//! symlinks. The filesystem is the interface: any tool that reads files
+//! (`rg`, `grep`, editors, file managers) is a client without knowing the
+//! database exists.
+//!
+//! ## License divergence from the rest of the Grexa workspace
+//!
+//! Unlike every other Grexa crate, which is `GPL-3.0-only`, this crate is
+//! `Apache-2.0` so that it may be embedded in proprietary applications.
+//! Apache-2.0 is one-way compatible with GPL-3.0: `grexa-core` and the Grexa
+//! GUI may depend on `grexa-db` freely, but the reverse dependency direction
+//! would contaminate this crate's license and is forbidden. Do not pull
+//! GPL-only dependencies into this crate — the permissive license must be
+//! preserved.
+
+/// Crate version. Mirrors the workspace version until `grexa-db` cuts its
+/// own release line.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn version_is_exposed() {
+        assert!(!VERSION.is_empty());
+    }
+}
