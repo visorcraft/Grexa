@@ -11,6 +11,18 @@
 use crate::record::Record;
 use crate::schema::{FieldDef, FieldType};
 use serde_yaml::Value;
+use std::path::Path;
+
+/// Whether a validation finding is a hard error or an advisory warning.
+///
+/// Per the design's "Reference path safety": a *dangling* `ref<T>` target is
+/// a normal, valid state, so it surfaces as [`Severity::Warning`]. Type,
+/// range, structural, and symlink-escape problems are [`Severity::Error`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Severity {
+    Error,
+    Warning,
+}
 
 /// A single validation problem found in one record.
 #[derive(Debug, Clone)]
@@ -18,6 +30,7 @@ pub struct ValidationError {
     pub record_path: String,
     pub field: String,
     pub message: String,
+    pub severity: Severity,
 }
 
 /// Validate a single record against a list of field definitions.
@@ -31,6 +44,7 @@ pub fn validate_record(record: &Record, fields: &[FieldDef]) -> Vec<ValidationEr
                         record_path: record.path().to_string(),
                         field: fd.name.clone(),
                         message: "required field is missing or null".into(),
+                        severity: Severity::Error,
                     });
                 }
             }
@@ -40,6 +54,7 @@ pub fn validate_record(record: &Record, fields: &[FieldDef]) -> Vec<ValidationEr
                         record_path: record.path().to_string(),
                         field: fd.name.clone(),
                         message: msg,
+                        severity: Severity::Error,
                     });
                     continue;
                 }
@@ -50,6 +65,7 @@ pub fn validate_record(record: &Record, fields: &[FieldDef]) -> Vec<ValidationEr
                         record_path: record.path().to_string(),
                         field: fd.name.clone(),
                         message: msg,
+                        severity: Severity::Error,
                     });
                 }
             }
@@ -110,7 +126,7 @@ fn validate_value(value: &Value, field_type: &FieldType) -> Result<(), String> {
                 return Err(format!("`{s}` not in: {}", variants.join(" | ")));
             }
         }
-        FieldType::Ref(_) => {
+        FieldType::Ref(target_collection) => {
             let s = value
                 .as_str()
                 .ok_or_else(|| format!("expected ref path string, got {}", type_name(value)))?;
@@ -120,6 +136,19 @@ fn validate_value(value: &Value, field_type: &FieldType) -> Result<(), String> {
                 || s.split('/').any(|c| c == "..")
             {
                 return Err(format!("ref `{s}` is empty or has forbidden components"));
+            }
+            // Design "Reference path safety" rule #2: a `ref<T>` must point
+            // into collection `T`. The collection name was previously
+            // ignored, so `ref<bookmarks>` accepted `notes/x.md`.
+            // ponytail: structural check only; target-existence and
+            // resolution-time symlink-escape (rules #5 / diagnostic warning)
+            // need the DB root threaded in — a larger change, left for when
+            // a `validate` caller actually wants those diagnostics.
+            let prefix = format!("{target_collection}/");
+            if !s.starts_with(&prefix) {
+                return Err(format!(
+                    "ref `{s}` must target the `{target_collection}` collection (begin with `{prefix}`)"
+                ));
             }
         }
     }
@@ -138,6 +167,67 @@ fn validate_range(value: &Value, min: f64, max: f64) -> Result<(), String> {
 }
 
 use crate::query::as_f64;
+
+/// Resolve every well-formed `ref<T>` field against the database root and
+/// report diagnostics the pure [`validate_record`] cannot (it has no
+/// filesystem context). Implements the remaining "Reference path safety"
+/// rules: target existence (a *warning* — dangling refs are valid) and the
+/// rule #5 symlink-escape check (an *error*).
+///
+/// `db_root` must be the **canonical** database root so the containment
+/// check is symlink-safe. Refs that are structurally invalid or target the
+/// wrong collection are skipped here — [`validate_value`] already reported
+/// those as errors, so re-reporting would be noise.
+///
+/// ponytail: canonicalizes one path per ref per record; validation is
+/// opt-in and explicit, so the I/O cost is acceptable.
+pub fn resolve_refs(record: &Record, fields: &[FieldDef], db_root: &Path) -> Vec<ValidationError> {
+    let mut out = Vec::new();
+    for fd in fields {
+        let FieldType::Ref(target_collection) = &fd.field_type else {
+            continue;
+        };
+        let Some(s) = record.field(&fd.name).and_then(Value::as_str) else {
+            continue;
+        };
+        let prefix = format!("{target_collection}/");
+        let well_formed = !s.is_empty()
+            && !s.starts_with('/')
+            && !s.contains('\\')
+            && !s.split('/').any(|c| c == "..")
+            && s.starts_with(&prefix);
+        if !well_formed {
+            continue;
+        }
+
+        let target = db_root.join(s);
+        let problem = match target.symlink_metadata() {
+            Err(_) => Some((
+                format!("ref target `{s}` does not exist (dangling reference)"),
+                Severity::Warning,
+            )),
+            Ok(_) => match target.canonicalize() {
+                Ok(canon) if !canon.starts_with(db_root) => Some((
+                    format!("ref target `{s}` resolves outside the database root"),
+                    Severity::Error,
+                )),
+                Ok(_) => None,
+                Err(e) => {
+                    Some((format!("ref target `{s}` cannot be resolved: {e}"), Severity::Warning))
+                }
+            },
+        };
+        if let Some((message, severity)) = problem {
+            out.push(ValidationError {
+                record_path: record.path().to_string(),
+                field: fd.name.clone(),
+                message,
+                severity,
+            });
+        }
+    }
+    out
+}
 
 fn type_name(v: &Value) -> &'static str {
     match v {
@@ -298,6 +388,14 @@ mod tests {
         assert!(
             validate_record(&r, &[fd("source", FieldType::Ref("bookmarks".into()))]).is_empty()
         );
+    }
+
+    #[test]
+    fn ref_wrong_collection_rejected() {
+        let r = rec("---\nsource: notes/x.md\n---\nbody\n");
+        let errors = validate_record(&r, &[fd("source", FieldType::Ref("bookmarks".into()))]);
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].message.contains("must target"));
     }
 
     #[test]

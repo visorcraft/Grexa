@@ -141,6 +141,7 @@ impl Db {
                             record_path: "-".into(),
                             field: "-".into(),
                             message: format!("cannot open collection: {e}"),
+                            severity: crate::validation::Severity::Error,
                         }],
                     ));
                 }
@@ -282,6 +283,61 @@ mod tests {
         let records: Vec<_> = notes.records().collect::<Result<_, _>>().unwrap();
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].field("title").unwrap().as_str(), Some("Alpha"));
+    }
+
+    #[test]
+    fn ref_existence_diagnostics() {
+        use std::os::unix::fs::symlink;
+
+        let dir = TempDir::new().unwrap();
+        let notes = dir.path().join("notes");
+        let bookmarks = dir.path().join("bookmarks");
+        fs::create_dir(&notes).unwrap();
+        fs::create_dir(&bookmarks).unwrap();
+        fs::write(
+            notes.join("schema.md"),
+            "---\ncollection: notes\nfields:\n  - { name: source, type: \"ref<bookmarks>\" }\n---\n",
+        )
+        .unwrap();
+        fs::write(
+            bookmarks.join("schema.md"),
+            "---\ncollection: bookmarks\nfields:\n  - { name: url, type: string }\n---\n",
+        )
+        .unwrap();
+        fs::write(bookmarks.join("rust.md"), "---\nurl: https://rust-lang.org\n---\nbody\n")
+            .unwrap();
+
+        // A real file outside the DB root, reached via a symlink inside it.
+        let outside = TempDir::new().unwrap();
+        let secret = outside.path().join("secret.md");
+        fs::write(&secret, "---\nx: 1\n---\nbody\n").unwrap();
+        symlink(&secret, bookmarks.join("evil.md")).unwrap();
+
+        fs::write(notes.join("good.md"), "---\nsource: bookmarks/rust.md\n---\nbody\n").unwrap();
+        fs::write(notes.join("dangling.md"), "---\nsource: bookmarks/missing.md\n---\nbody\n")
+            .unwrap();
+        fs::write(notes.join("escape.md"), "---\nsource: bookmarks/evil.md\n---\nbody\n").unwrap();
+
+        let db = Db::open(dir.path()).unwrap();
+        let coll = db.collection("notes").unwrap();
+        let errors = coll.validate_all();
+
+        // good.md → no diagnostic; dangling.md → 1 warning; escape.md → 1 error.
+        use crate::validation::Severity;
+        let warnings: Vec<_> = errors
+            .iter()
+            .filter(|e| e.severity == Severity::Warning)
+            .collect();
+        let hard: Vec<_> = errors
+            .iter()
+            .filter(|e| e.severity == Severity::Error)
+            .collect();
+        assert_eq!(warnings.len(), 1, "expected one dangling warning, got: {errors:?}");
+        assert!(warnings[0].message.contains("dangling"));
+        assert_eq!(warnings[0].record_path, "dangling.md");
+        assert_eq!(hard.len(), 1, "expected one escape error, got: {errors:?}");
+        assert!(hard[0].message.contains("outside"));
+        assert_eq!(hard[0].record_path, "escape.md");
     }
 
     #[test]

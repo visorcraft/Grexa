@@ -207,7 +207,13 @@ impl ffi::DbController {
                         } else {
                             errors
                                 .iter()
-                                .map(|e| format!("{}: {}: {}", e.record_path, e.field, e.message))
+                                .map(|e| {
+                                    let tag = match e.severity {
+                                        grexa_db::Severity::Error => "error",
+                                        grexa_db::Severity::Warning => "warning",
+                                    };
+                                    format!("[{tag}] {}: {}: {}", e.record_path, e.field, e.message)
+                                })
                                 .collect::<Vec<_>>()
                                 .join("\n")
                         }
@@ -289,6 +295,12 @@ impl ffi::DbController {
                             "name": f.name,
                             "type": f.field_type.to_string(),
                             "required": f.required,
+                            // Per the Phase 2 spec note: {name, type, required, range}.
+                            // `[min, max]` for numeric fields with a range, else null.
+                            "range": match f.range {
+                                Some((min, max)) => serde_json::json!([min, max]),
+                                None => serde_json::Value::Null,
+                            },
                         })
                     })
                     .collect();
@@ -380,11 +392,37 @@ impl ffi::DbController {
     }
 
     fn delete_view(mut self: Pin<&mut Self>, view_name: &QString) -> bool {
-        let rust = self.rust();
-        let Some(db) = &rust.db else {
+        let name = view_name.to_string();
+        // Without this guard `join` escapes the views dir: an absolute arg
+        // (`/etc/...`) replaces the base entirely and `..`/separators walk
+        // out — an arbitrary-file-deletion sink. Mirror grexa-db's own
+        // view-name validation (reject separators, dotfiles, traversal).
+        if !is_safe_view_name(&name) {
+            self.as_mut()
+                .set_status_message(QString::from("Delete error: invalid view name"));
             return false;
+        }
+
+        let view_path = {
+            let rust = self.rust();
+            let Some(db) = &rust.db else {
+                return false;
+            };
+            db.root().join("views").join(&name)
         };
-        let view_path = db.root().join("views").join(view_name.to_string());
+
+        // Defense in depth: only ever remove a genuine view symlink, never
+        // a real file or directory that happens to live under views/.
+        let is_symlink = view_path
+            .symlink_metadata()
+            .map(|m| m.file_type().is_symlink())
+            .unwrap_or(false);
+        if !is_symlink {
+            self.as_mut()
+                .set_status_message(QString::from("Delete error: not a view"));
+            return false;
+        }
+
         match std::fs::remove_file(&view_path) {
             Ok(()) => {
                 self.as_mut()
@@ -397,6 +435,34 @@ impl ffi::DbController {
                 false
             }
         }
+    }
+}
+
+/// A view name is safe iff it names a single entry directly under `views/`:
+/// no path separators, no `.`-prefixed names (dotfiles / `.` / `..`), no
+/// empties. Absolute paths start with `/`, so they're rejected here too.
+fn is_safe_view_name(name: &str) -> bool {
+    !name.is_empty() && !name.starts_with('.') && !name.contains('/') && !name.contains('\\')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_safe_view_name;
+
+    #[test]
+    fn view_name_safety() {
+        assert!(is_safe_view_name("notes-by-tag"));
+        assert!(is_safe_view_name("high_rated"));
+
+        // Traversal / absolute / dotfile / separator escapes all rejected.
+        assert!(!is_safe_view_name(""));
+        assert!(!is_safe_view_name("/etc/passwd"));
+        assert!(!is_safe_view_name("../../etc/passwd"));
+        assert!(!is_safe_view_name(".."));
+        assert!(!is_safe_view_name("."));
+        assert!(!is_safe_view_name(".generations"));
+        assert!(!is_safe_view_name("a/b"));
+        assert!(!is_safe_view_name("a\\b"));
     }
 }
 

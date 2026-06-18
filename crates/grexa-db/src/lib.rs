@@ -37,5 +37,5 @@ pub use query::{FilterBuilder, IntoValue, OrderBuilder, Query};
 pub use record::{Record, RecordError};
 pub use schema::{FieldDef, FieldType, Schema, SchemaError};
 pub use serde_yaml::Value;
-pub use validation::ValidationError;
+pub use validation::{Severity, ValidationError};
 pub use view::MaterializeError;
