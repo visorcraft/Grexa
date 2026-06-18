@@ -11,6 +11,7 @@ chardetng.workspace = true
 encoding_rs.workspace = true
 fancy-regex.workspace = true
 globset.workspace = true
+grexa-db = { version = "1.6.0", path = "../grexa-db" }
 icu_casemap.workspace = true
 icu_locale_core.workspace = true
 icu_properties.workspace = true
