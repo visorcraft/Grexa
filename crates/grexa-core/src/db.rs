@@ -303,6 +303,118 @@ impl SearchHistoryDb {
     }
 }
 
+const PROFILES_SCHEMA: &str = "---\ncollection: search_profiles\nfields:\n  - { name: name, type: string, required: true }\n  - { name: created, type: integer }\n  - { name: updated, type: integer }\n  - { name: data, type: string }\n---\n\n# Search profiles\n";
+
+pub struct SearchProfilesDb {
+    db: grexa_db::Db,
+}
+
+impl SearchProfilesDb {
+    pub fn new(paths: &crate::storage::AppPaths) -> Self {
+        let db_root = paths.data_dir.join("db");
+        let coll_dir = db_root.join("search_profiles");
+        let _ = fs::create_dir_all(&coll_dir);
+        let schema_path = coll_dir.join("schema.md");
+        if !schema_path.exists() {
+            let _ = fs::write(&schema_path, PROFILES_SCHEMA);
+        }
+        let db = grexa_db::Db::open(&db_root).unwrap_or_else(|e| {
+            tracing::warn!("SearchProfilesDb: data dir failed ({e}), using temp");
+            let fallback = std::env::temp_dir().join("grexa-db-fallback");
+            let _ = fs::create_dir_all(&fallback);
+            grexa_db::Db::open(&fallback).expect("grexa-db must open in /tmp")
+        });
+        Self { db }
+    }
+
+    pub fn load(&self) -> Result<Vec<crate::storage::SearchProfile>, DbStoreError> {
+        let coll = self.db.collection("search_profiles")?;
+        let mut entries: Vec<(u64, crate::storage::SearchProfile)> = Vec::new();
+        for result in coll.records() {
+            let record = result?;
+            let updated = record
+                .field("updated")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as u64;
+            if let Some(data) = record.field("data").and_then(|v| v.as_str())
+                && let Ok(profile) = serde_json::from_str::<crate::storage::SearchProfile>(data)
+            {
+                entries.push((updated, profile));
+            }
+        }
+        entries.sort_by_key(|(ts, _)| std::cmp::Reverse(*ts));
+        Ok(entries.into_iter().map(|(_, p)| p).collect())
+    }
+
+    pub fn exists(&self, name: &str) -> Result<bool, DbStoreError> {
+        Ok(self
+            .load()?
+            .iter()
+            .any(|p| p.name.eq_ignore_ascii_case(name)))
+    }
+
+    pub fn upsert(
+        &self,
+        profile: crate::storage::SearchProfile,
+    ) -> Result<Vec<crate::storage::SearchProfile>, DbStoreError> {
+        if profile.name.trim().is_empty() {
+            return self.load();
+        }
+        self.remove(&profile.name)?;
+        let data = serde_json::to_string(&profile)
+            .map_err(|e| DbStoreError::Io(std::io::Error::other(e.to_string())))?;
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let counter = WRITE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let filename = format!("entry-{nanos:019}-{counter}.md");
+        let name = &profile.name;
+        let created = profile.created_unix;
+        let updated = profile.updated_unix;
+        let content = format!(
+            "---\nname: {name}\ncreated: {created}\nupdated: {updated}\ndata: {data}\n---\n"
+        );
+        let coll_dir = self.db.root().join("search_profiles");
+        let record_path = coll_dir.join(&filename);
+        let mut temp = NamedTempFile::new_in(&coll_dir)?;
+        temp.write_all(content.as_bytes())?;
+        temp.persist(&record_path)
+            .map_err(|e| DbStoreError::Io(e.error))?;
+        self.load()
+    }
+
+    pub fn remove(&self, name: &str) -> Result<Vec<crate::storage::SearchProfile>, DbStoreError> {
+        let coll = self.db.collection("search_profiles")?;
+        for result in coll.records() {
+            let record = result?;
+            if record
+                .field("name")
+                .and_then(|v| v.as_str())
+                .map(|n| n.eq_ignore_ascii_case(name))
+                .unwrap_or(false)
+            {
+                let full = self.db.root().join("search_profiles").join(record.path());
+                let _ = fs::remove_file(&full);
+            }
+        }
+        self.load()
+    }
+
+    pub fn clear(&self) -> Result<(), DbStoreError> {
+        let coll_dir = self.db.root().join("search_profiles");
+        if let Ok(entries) = fs::read_dir(&coll_dir) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                if name != "schema.md" {
+                    let _ = fs::remove_file(entry.path());
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -10,14 +10,14 @@
 use std::path::Path;
 use std::rc::Rc;
 
-use grexa_core::{AppPaths, RecentPathsDb, SearchHistoryDb, SearchProfileStore, SettingsStore};
+use grexa_core::{AppPaths, RecentPathsDb, SearchHistoryDb, SearchProfilesDb, SettingsStore};
 use grexa_i18n::{Bundle, Locale};
 
 /// Workspace state — one per running Grexa process.
 pub struct Workspace {
     pub recent_paths: RecentPathsDb,
     pub history: SearchHistoryDb,
-    pub profiles: SearchProfileStore,
+    pub profiles: SearchProfilesDb,
     pub settings: SettingsStore,
     /// Fluent localization bundle, locale-resolved from the persisted
     /// `ui_language` setting. Used by status / notification formatters
@@ -44,7 +44,7 @@ impl Workspace {
         Self {
             recent_paths: RecentPathsDb::new(&paths),
             history: SearchHistoryDb::new(&paths),
-            profiles: SearchProfileStore::new(&paths),
+            profiles: SearchProfilesDb::new(&paths),
             settings,
             bundle,
         }

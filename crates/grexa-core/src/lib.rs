@@ -8,6 +8,7 @@ pub mod db;
 pub mod desktop;
 pub mod documents;
 pub mod encoding;
+pub mod frontmatter;
 pub mod models;
 pub mod pattern;
 pub mod preview;
@@ -20,7 +21,7 @@ pub use baloo::{
 };
 pub use cancel::CancelToken;
 pub use constants::{ENGINE_RESULT_CAP, MAX_SEARCH_FILE_BYTES, file_exceeds_hard_cap};
-pub use db::{DbStoreError, RecentPathsDb, SearchHistoryDb};
+pub use db::{DbStoreError, RecentPathsDb, SearchHistoryDb, SearchProfilesDb};
 pub use desktop::{
     EditorPreset, TrashError, move_to_trash, open_in_editor_command, reveal_with_xdg_open,
 };
