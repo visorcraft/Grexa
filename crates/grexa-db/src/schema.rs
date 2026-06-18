@@ -128,12 +128,6 @@ pub struct FieldDef {
     pub range: Option<(f64, f64)>,
 }
 
-impl FieldDef {
-    pub fn is_optional(&self) -> bool {
-        !self.required
-    }
-}
-
 /// A parsed collection schema — the frontmatter of a `schema.md` file.
 #[derive(Debug, Clone)]
 pub struct Schema {
@@ -348,7 +342,7 @@ mod tests {
         assert_eq!(rating.range, Some((1.0, 5.0)));
 
         let source = schema.field("source").unwrap();
-        assert!(source.is_optional());
+        assert!(!source.required);
     }
 
     #[test]

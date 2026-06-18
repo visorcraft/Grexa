@@ -398,7 +398,7 @@ impl<'a> OrderBuilder<'a> {
     }
 }
 
-fn as_f64(v: &Value) -> Option<f64> {
+pub(crate) fn as_f64(v: &Value) -> Option<f64> {
     if let Some(i) = v.as_i64() {
         return Some(i as f64);
     }

@@ -137,12 +137,7 @@ fn validate_range(value: &Value, min: f64, max: f64) -> Result<(), String> {
     Ok(())
 }
 
-fn as_f64(v: &Value) -> Option<f64> {
-    if let Some(i) = v.as_i64() {
-        return Some(i as f64);
-    }
-    v.as_f64()
-}
+use crate::query::as_f64;
 
 fn type_name(v: &Value) -> &'static str {
     match v {

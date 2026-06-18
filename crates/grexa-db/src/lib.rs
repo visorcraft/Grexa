@@ -30,7 +30,7 @@ pub mod schema;
 pub mod validation;
 pub mod view;
 
-pub use collection::{Collection, CollectionError, RecordIter};
+pub use collection::{Collection, CollectionError};
 pub use db::{Db, DbError};
 pub use frontmatter::{FrontmatterError, Split, split};
 pub use query::{FilterBuilder, IntoValue, OrderBuilder, Query};
@@ -39,13 +39,3 @@ pub use schema::{FieldDef, FieldType, Schema, SchemaError};
 pub use serde_yaml::Value;
 pub use validation::ValidationError;
 pub use view::MaterializeError;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn version_is_exposed() {
-        assert!(!VERSION.is_empty());
-    }
-}

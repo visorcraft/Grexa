@@ -8,7 +8,6 @@ pub mod db;
 pub mod desktop;
 pub mod documents;
 pub mod encoding;
-pub mod frontmatter;
 pub mod models;
 pub mod pattern;
 pub mod preview;
