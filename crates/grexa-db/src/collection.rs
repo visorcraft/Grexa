@@ -74,6 +74,11 @@ impl Collection {
             paths: paths.into_iter(),
         }
     }
+
+    /// Begin a typed query over this collection's records.
+    pub fn query(&self) -> crate::query::Query<'_> {
+        crate::query::Query::new(self)
+    }
 }
 
 /// Lazy iterator over records in a collection.

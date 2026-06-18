@@ -73,6 +73,17 @@ impl Db {
         names.sort();
         names
     }
+
+    /// Materialize a query result as a directory of symlinks under
+    /// `views/<view_name>`. See [`view`](crate::view) for semantics.
+    pub fn materialize_view(
+        &self,
+        view_name: &str,
+        query: crate::query::Query<'_>,
+        group_by: Option<&str>,
+    ) -> Result<(), crate::view::MaterializeError> {
+        crate::view::materialize(&self.root, view_name, query, group_by)
+    }
 }
 
 #[cfg(test)]
