@@ -277,6 +277,7 @@ Kirigami.ApplicationWindow {
             case "regex":    app.pageStack.replace(regexPage); break
             case "history":  app.pageStack.replace(historyPage); break
             case "profiles": app.pageStack.replace(profilesPage); break
+            case "database": app.pageStack.replace(databasePage); break
             case "settings": app.pageStack.replace(settingsPage); break
             case "about":    app.pageStack.replace(aboutPage); break
             case "licenses": app.pageStack.replace(licensesPage); break
@@ -463,6 +464,14 @@ Kirigami.ApplicationWindow {
             }
             NavItem {
                 Layout.fillWidth: true
+                label: i18n("Database")
+                iconName: "folder-open"
+                active: app.currentPageKey === "database"
+                compact: drawer.isCollapsed
+                onTriggered: app.goTo("database")
+            }
+            NavItem {
+                Layout.fillWidth: true
                 label: app.i18n("ui-settings")
                 iconName: "settings-configure-symbolic"
                 active: app.currentPageKey === "settings"
@@ -533,6 +542,7 @@ Kirigami.ApplicationWindow {
     Component { id: regexPage;    RegexBuilderPage {} }
     Component { id: historyPage;  HistoryPage {} }
     Component { id: profilesPage; ProfilesPage {} }
+    Component { id: databasePage; DatabasePage {} }
     Component { id: settingsPage; SettingsPage {} }
     Component {
         id: aboutPage

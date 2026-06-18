@@ -36,6 +36,7 @@ fn main() {
                 "qml/GplLicenseDialog.qml",
                 "qml/HistoryPage.qml",
                 "qml/ProfilesPage.qml",
+                "qml/DatabasePage.qml",
                 "qml/DesignTokens.qml",
                 "qml/NavItem.qml",
                 "qml/ResultRow.qml",
@@ -73,7 +74,8 @@ fn main() {
     .file("src/qobjects/search.rs")
     .file("src/qobjects/settings.rs")
     .file("src/qobjects/regex_builder.rs")
-    .file("src/qobjects/ai.rs");
+    .file("src/qobjects/ai.rs")
+    .file("src/qobjects/db.rs");
 
     // icon_theme.cpp prepends the bundled AppDir/usr/share/icons path to Qt's
     // icon theme search paths so the AppImage can resolve Breeze symbolic

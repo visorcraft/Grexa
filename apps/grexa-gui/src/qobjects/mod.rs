@@ -13,6 +13,7 @@
 pub mod workspace_handle;
 
 pub mod ai;
+pub mod db;
 pub mod regex_builder;
 pub mod search;
 pub mod settings;
