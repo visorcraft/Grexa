@@ -20,6 +20,7 @@ quick-xml.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_yaml.workspace = true
 serde_repr.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true

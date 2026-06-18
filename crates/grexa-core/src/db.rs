@@ -16,8 +16,18 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use serde_yaml::Value;
 use tempfile::NamedTempFile;
 use thiserror::Error;
+
+fn make_frontmatter(entries: Vec<(&str, Value)>) -> String {
+    let mut map = serde_yaml::Mapping::new();
+    for (key, value) in entries {
+        map.insert((*key).into(), value);
+    }
+    let yaml = serde_yaml::to_string(&map).unwrap_or_default();
+    format!("---\n{yaml}---\n")
+}
 
 static WRITE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -94,7 +104,10 @@ impl RecentPathsDb {
             .as_nanos();
         let counter = WRITE_COUNTER.fetch_add(1, Ordering::Relaxed);
         let filename = format!("entry-{nanos:019}-{counter}.md");
-        let content = format!("---\npath: {}\nadded_at: {nanos}\n---\n", path.display());
+        let content = make_frontmatter(vec![
+            ("path", path.display().to_string().into()),
+            ("added_at", (nanos as i64).into()),
+        ]);
         let coll_dir = self.db.root().join(COLLECTION_DIR);
         let record_path = coll_dir.join(&filename);
         let mut temp = NamedTempFile::new_in(&coll_dir)?;
@@ -241,7 +254,11 @@ impl SearchHistoryDb {
             .as_nanos();
         let counter = WRITE_COUNTER.fetch_add(1, Ordering::Relaxed);
         let filename = format!("entry-{nanos:019}-{counter}.md");
-        let content = format!("---\nkey: {key}\ntimestamp: {timestamp}\ndata: {data}\n---\n");
+        let content = make_frontmatter(vec![
+            ("key", key.into()),
+            ("timestamp", (timestamp as i64).into()),
+            ("data", data.into()),
+        ]);
         let coll_dir = self.db.root().join("search_history");
         let record_path = coll_dir.join(&filename);
         let mut temp = NamedTempFile::new_in(&coll_dir)?;
@@ -372,9 +389,12 @@ impl SearchProfilesDb {
         let name = &profile.name;
         let created = profile.created_unix;
         let updated = profile.updated_unix;
-        let content = format!(
-            "---\nname: {name}\ncreated: {created}\nupdated: {updated}\ndata: {data}\n---\n"
-        );
+        let content = make_frontmatter(vec![
+            ("name", name.clone().into()),
+            ("created", (created as i64).into()),
+            ("updated", (updated as i64).into()),
+            ("data", data.into()),
+        ]);
         let coll_dir = self.db.root().join("search_profiles");
         let record_path = coll_dir.join(&filename);
         let mut temp = NamedTempFile::new_in(&coll_dir)?;
