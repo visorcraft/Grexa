@@ -146,7 +146,7 @@ Import semantics from a Grex backup are documented in
 | Path | Owner |
 | ---- | ----- |
 | `$XDG_CONFIG_HOME/grexa/settings.json` | settings |
-| `$XDG_DATA_HOME/grexa/recent_paths.json` | recent paths (cap 20) |
+| `$XDG_DATA_HOME/grexa/db/recent_paths/` | recent paths (grexa-db backed, cap 20) |
 | `$XDG_DATA_HOME/grexa/search_history.json` | search history (cap 20, 7-field dedupe) |
 | `$XDG_DATA_HOME/grexa/search_profiles.json` | saved profiles |
 | `$XDG_STATE_HOME/grexa/grexa.log` | tracing log |

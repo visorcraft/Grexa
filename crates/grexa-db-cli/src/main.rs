@@ -95,9 +95,13 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
             let mut query = coll.query();
             for f in filter {
                 let parts: Vec<&str> = f.splitn(3, ':').collect();
-                if parts.len() == 3 {
-                    query = apply_filter(query, parts[0], parts[1], parts[2]);
+                if parts.len() != 3 {
+                    return Err(format!("malformed filter `{f}` — expected field:op:value").into());
                 }
+                if !matches!(parts[1], "eq" | "ne" | "lt" | "le" | "gt" | "ge" | "contains") {
+                    return Err(format!("unknown operator `{}` in filter `{f}`", parts[1]).into());
+                }
+                query = apply_filter(query, parts[0], parts[1], parts[2]);
             }
             if let Some(field) = order_by {
                 query = if direction == "desc" {

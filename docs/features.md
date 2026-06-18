@@ -147,7 +147,7 @@ crashes on malformed input.
 ## Settings, history, profiles, recent paths
 
 - Settings JSON at `$XDG_CONFIG_HOME/grexa/settings.json`.
-- Recent paths at `$XDG_DATA_HOME/grexa/recent_paths.json` (cap 20,
+- Recent paths at `$XDG_DATA_HOME/grexa/db/recent_paths/` (grexa-db backed;
   case-sensitive dedupe, type-ahead filter).
 - Search history at `$XDG_DATA_HOME/grexa/search_history.json` (cap
   20, 7-field dedupe key matching Grex byte-for-byte).
