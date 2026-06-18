@@ -17,7 +17,11 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 #[derive(Parser)]
-#[command(name = "grexa-db-cli", about = "CLI for grexa-db flat-file databases")]
+#[command(
+    name = "grexa-db-cli",
+    version,
+    about = "CLI for grexa-db flat-file databases"
+)]
 struct Cli {
     /// Path to the database root directory.
     db_path: PathBuf,
