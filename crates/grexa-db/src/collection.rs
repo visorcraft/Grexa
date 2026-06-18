@@ -22,6 +22,7 @@ pub enum CollectionError {
 /// A typed collection of records within a [`Db`](crate::db::Db).
 pub struct Collection {
     root: PathBuf,
+    root_canonical: PathBuf,
     schema: Schema,
 }
 
@@ -34,8 +35,12 @@ impl Collection {
         let schema_content = fs::read_to_string(&schema_path)
             .map_err(|e| CollectionError::ReadSchema(e.to_string()))?;
         let schema = Schema::from_markdown(&schema_content)?;
+        let root_canonical = dir
+            .canonicalize()
+            .map_err(|e| CollectionError::ReadSchema(format!("cannot canonicalize root: {e}")))?;
         Ok(Self {
             root: dir.to_path_buf(),
+            root_canonical,
             schema,
         })
     }
@@ -71,7 +76,16 @@ impl Collection {
                 "`{relative_path}` is a symlink; symlinks are not followed"
             )));
         }
-        let content = fs::read_to_string(&full).map_err(|e| RecordError::ReadFile {
+        let canonical = full.canonicalize().map_err(|e| RecordError::ReadFile {
+            path: relative_path.to_string(),
+            reason: e.to_string(),
+        })?;
+        if !canonical.starts_with(&self.root_canonical) {
+            return Err(RecordError::InvalidPath(format!(
+                "`{relative_path}` resolves outside the collection root"
+            )));
+        }
+        let content = fs::read_to_string(&canonical).map_err(|e| RecordError::ReadFile {
             path: relative_path.to_string(),
             reason: e.to_string(),
         })?;
@@ -254,6 +268,14 @@ mod tests {
         symlink("/etc/passwd", dir.path().join("evil.md")).unwrap();
         let coll = Collection::open(dir.path()).unwrap();
         assert!(coll.record("evil.md").is_err());
+    }
+
+    #[test]
+    fn record_rejects_symlinked_intermediate_dir() {
+        let dir = make_collection();
+        symlink("/etc", dir.path().join("escape")).unwrap();
+        let coll = Collection::open(dir.path()).unwrap();
+        assert!(coll.record("escape/passwd").is_err());
     }
 
     #[test]
