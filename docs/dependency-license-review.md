@@ -43,7 +43,7 @@ new license requires updating both `deny.toml` and this doc.
 | `fancy-regex` | MIT | Extended regex engine. |
 | `fluent`, `fluent-bundle` | Apache-2.0 / MIT | Localization runtime. |
 | `globset`, `ignore` | Unlicense / MIT | gitignore + glob handling. |
-| `keyring` | Apache-2.0 / MIT | Secret-Service wrapper. |
+| `keyring-core`, `zbus-secret-service-keyring-store`, `secret-service` | Apache-2.0 / MIT | Secret-Service API-key storage. |
 | `quick-xml` | MIT | XML parser for OOXML / ODF. |
 | `regex` | Apache-2.0 / MIT | Fast regex engine. |
 | `serde`, `serde_json`, `serde_repr` | MIT / Apache-2.0 | Serialization. |
@@ -109,7 +109,7 @@ clear the same compatibility bar.
 - **Weekly**: dependabot PRs (automated review).
 - **Per release**: human pass over `cargo tree --depth 2`; flag any
   new transitive deps that don't show up in this table.
-- **Per major version bump of `ureq` / `keyring`**: re-check the
+- **Per major version bump of `ureq` / `keyring-core`**: re-check the
   rustls / secret-service backends, since both pull TLS / D-Bus crates
   whose licenses occasionally shift.
 

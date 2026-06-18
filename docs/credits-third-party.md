@@ -17,8 +17,8 @@ If you have questions about license compliance, please contact
 
 ## Licenses in use
 
-- **Apache License 2.0** (248 crates)
-- **MIT License** (51 crates)
+- **Apache License 2.0** (241 crates)
+- **MIT License** (49 crates)
 - **Unicode License v3** (19 crates)
 - **ISC License** (3 crates)
 - **BSD 3-Clause &quot;New&quot; or &quot;Revised&quot; License** (2 crates)
@@ -700,7 +700,7 @@ Used by:
 - [`static_assertions 1.1.0`](https://github.com/nvzqz/static-assertions-rs)
 - [`tinyvec 1.11.0`](https://github.com/Lokathor/tinyvec)
 - [`utf8_iter 1.0.4`](https://github.com/hsivonen/utf8_iter)
-- [`zeroize 1.8.2`](https://github.com/RustCrypto/utils)
+- [`zeroize 1.9.0`](https://github.com/RustCrypto/utils)
 
 ```
 
@@ -915,7 +915,6 @@ Used by:
 Used by:
 - [`windows-link 0.2.1`](https://github.com/microsoft/windows-rs)
 - [`windows-sys 0.52.0`](https://github.com/microsoft/windows-rs)
-- [`windows-sys 0.59.0`](https://github.com/microsoft/windows-rs)
 - [`windows-sys 0.61.2`](https://github.com/microsoft/windows-rs)
 - [`windows-targets 0.52.6`](https://github.com/microsoft/windows-rs)
 - [`windows_aarch64_gnullvm 0.52.6`](https://github.com/microsoft/windows-rs)
@@ -1562,7 +1561,7 @@ Used by:
 ### Apache License 2.0
 
 Used by:
-- [`zerocopy 0.8.48`](https://github.com/google/zerocopy)
+- [`zerocopy 0.8.52`](https://github.com/google/zerocopy)
 
 ```
                                  Apache License
@@ -2858,7 +2857,6 @@ Used by:
 - [`futures-core 0.3.32`](https://github.com/rust-lang/futures-rs)
 - [`futures-io 0.3.32`](https://github.com/rust-lang/futures-rs)
 - [`futures-macro 0.3.32`](https://github.com/rust-lang/futures-rs)
-- [`futures-sink 0.3.32`](https://github.com/rust-lang/futures-rs)
 - [`futures-task 0.3.32`](https://github.com/rust-lang/futures-rs)
 - [`futures-util 0.3.32`](https://github.com/rust-lang/futures-rs)
 
@@ -3073,7 +3071,7 @@ limitations under the License.
 ### Apache License 2.0
 
 Used by:
-- [`typenum 1.20.0`](https://github.com/paholg/typenum)
+- [`typenum 1.20.1`](https://github.com/paholg/typenum)
 
 ```
                               Apache License
@@ -3496,7 +3494,7 @@ limitations under the License.
 ### Apache License 2.0
 
 Used by:
-- [`http 1.4.0`](https://github.com/hyperium/http)
+- [`http 1.4.2`](https://github.com/hyperium/http)
 
 ```
                               Apache License
@@ -4132,7 +4130,8 @@ limitations under the License.
 ### Apache License 2.0
 
 Used by:
-- [`keyring 3.6.3`](https://github.com/hwchen/keyring-rs.git)
+- [`keyring-core 1.0.0`](https://github.com/open-source-cooperative/keyring-core.git)
+- [`zbus-secret-service-keyring-store 1.0.0`](https://github.com/open-source-cooperative/zbus-secret-service-keyring-store.git)
 
 ```
                               Apache License
@@ -4557,27 +4556,26 @@ limitations under the License.
 Used by:
 - [`async-channel 2.5.0`](https://github.com/smol-rs/async-channel)
 - [`async-executor 1.14.0`](https://github.com/smol-rs/async-executor)
-- [`async-fs 2.2.0`](https://github.com/smol-rs/async-fs)
 - [`async-io 2.6.0`](https://github.com/smol-rs/async-io)
 - [`async-lock 3.4.2`](https://github.com/smol-rs/async-lock)
 - [`async-process 2.5.0`](https://github.com/smol-rs/async-process)
 - [`async-signal 0.2.14`](https://github.com/smol-rs/async-signal)
 - [`async-task 4.7.1`](https://github.com/smol-rs/async-task)
 - [`atomic-waker 1.1.2`](https://github.com/smol-rs/atomic-waker)
-- [`autocfg 1.5.0`](https://github.com/cuviper/autocfg)
+- [`autocfg 1.5.1`](https://github.com/cuviper/autocfg)
 - [`base64 0.22.1`](https://github.com/marshallpierce/rust-base64)
-- [`bitflags 2.11.1`](https://github.com/bitflags/bitflags)
+- [`bitflags 2.13.0`](https://github.com/bitflags/bitflags)
 - [`blocking 1.6.2`](https://github.com/smol-rs/blocking)
 - [`bstr 1.12.1`](https://github.com/BurntSushi/bstr)
-- [`bumpalo 3.20.2`](https://github.com/fitzgen/bumpalo)
-- [`cc 1.2.62`](https://github.com/rust-lang/cc-rs)
+- [`bumpalo 3.20.3`](https://github.com/fitzgen/bumpalo)
+- [`cc 1.2.64`](https://github.com/rust-lang/cc-rs)
 - [`cfg-if 1.0.4`](https://github.com/rust-lang/cfg-if)
 - [`concurrent-queue 2.5.0`](https://github.com/smol-rs/concurrent-queue)
 - [`crossbeam-channel 0.5.15`](https://github.com/crossbeam-rs/crossbeam)
 - [`crossbeam-deque 0.8.6`](https://github.com/crossbeam-rs/crossbeam)
 - [`crossbeam-epoch 0.9.18`](https://github.com/crossbeam-rs/crossbeam)
 - [`crossbeam-utils 0.8.21`](https://github.com/crossbeam-rs/crossbeam)
-- [`displaydoc 0.2.5`](https://github.com/yaahc/displaydoc)
+- [`displaydoc 0.2.6`](https://github.com/yaahc/displaydoc)
 - [`equivalent 1.0.2`](https://github.com/indexmap-rs/equivalent)
 - [`errno 0.3.14`](https://github.com/lambda-fairy/rust-errno)
 - [`event-listener-strategy 0.5.4`](https://github.com/smol-rs/event-listener-strategy)
@@ -4598,7 +4596,7 @@ Used by:
 - [`libgit2-sys 0.18.5+1.9.4`](https://github.com/rust-lang/git2-rs)
 - [`libz-sys 1.1.29`](https://github.com/rust-lang/libz-sys)
 - [`linux-raw-sys 0.12.1`](https://github.com/sunfishcode/linux-raw-sys)
-- [`log 0.4.29`](https://github.com/rust-lang/log)
+- [`log 0.4.32`](https://github.com/rust-lang/log)
 - [`num-bigint 0.4.6`](https://github.com/rust-num/num-bigint)
 - [`num-complex 0.4.6`](https://github.com/rust-num/num-complex)
 - [`num-integer 0.1.46`](https://github.com/rust-num/num-integer)
@@ -4616,15 +4614,15 @@ Used by:
 - [`proc-macro-hack 0.5.20+deprecated`](https://github.com/dtolnay/proc-macro-hack)
 - [`proptest 1.11.0`](https://github.com/proptest-rs/proptest)
 - [`regex-automata 0.4.14`](https://github.com/rust-lang/regex)
-- [`regex-syntax 0.8.10`](https://github.com/rust-lang/regex)
-- [`regex 1.12.3`](https://github.com/rust-lang/regex)
+- [`regex-syntax 0.8.11`](https://github.com/rust-lang/regex)
+- [`regex 1.12.4`](https://github.com/rust-lang/regex)
 - [`ring 0.17.14`](https://github.com/briansmith/ring)
 - [`rustix 1.1.4`](https://github.com/bytecodealliance/rustix)
 - [`rustls 0.23.40`](https://github.com/rustls/rustls)
 - [`rusty-fork 0.3.1`](https://github.com/altsysrq/rusty-fork)
-- [`secret-service 4.0.0`](https://github.com/hwchen/secret-service-rs.git)
+- [`secret-service 5.1.0`](https://github.com/hwchen/secret-service-rs.git)
 - [`signal-hook-registry 1.4.8`](https://github.com/vorner/signal-hook)
-- [`smallvec 1.15.1`](https://github.com/servo/rust-smallvec)
+- [`smallvec 1.15.2`](https://github.com/servo/rust-smallvec)
 - [`stable_deref_trait 1.2.1`](https://github.com/storyyeller/stable_deref_trait)
 - [`symlink 0.1.0`](https://gitlab.com/chris-morgan/symlink)
 - [`tempfile 3.27.0`](https://github.com/Stebalien/tempfile)
@@ -4634,14 +4632,14 @@ Used by:
 - [`unic-langid-macros 0.9.6`](https://github.com/zbraniecki/unic-locale)
 - [`unic-langid 0.9.6`](https://github.com/zbraniecki/unic-locale)
 - [`unicode-normalization 0.1.25`](https://github.com/unicode-rs/unicode-normalization)
-- [`unicode-segmentation 1.13.2`](https://github.com/unicode-rs/unicode-segmentation)
+- [`unicode-segmentation 1.13.3`](https://github.com/unicode-rs/unicode-segmentation)
 - [`unicode-width 0.1.14`](https://github.com/unicode-rs/unicode-width)
 - [`unicode-width 0.2.2`](https://github.com/unicode-rs/unicode-width)
+- [`uuid 1.23.3`](https://github.com/uuid-rs/uuid)
 - [`version_check 0.9.5`](https://github.com/SergioBenitez/version_check)
 - [`wait-timeout 0.2.1`](https://github.com/alexcrichton/wait-timeout)
 - [`wasi 0.11.1+wasi-snapshot-preview1`](https://github.com/bytecodealliance/wasi)
-- [`wasip2 1.0.3+wasi-0.2.9`](https://github.com/bytecodealliance/wasi-rs)
-- [`wit-bindgen 0.51.0`](https://github.com/bytecodealliance/wit-bindgen)
+- [`wasip2 1.0.4+wasi-0.2.12`](https://github.com/bytecodealliance/wasi-rs)
 - [`wit-bindgen 0.57.1`](https://github.com/bytecodealliance/wit-bindgen)
 
 ```
@@ -5288,7 +5286,6 @@ Used by:
 - [`digest 0.10.7`](https://github.com/RustCrypto/traits)
 - [`hmac 0.12.1`](https://github.com/RustCrypto/MACs)
 - [`inout 0.1.4`](https://github.com/RustCrypto/utils)
-- [`sha1 0.10.6`](https://github.com/RustCrypto/hashes)
 - [`sha2 0.10.9`](https://github.com/RustCrypto/hashes)
 
 ```
@@ -5501,7 +5498,6 @@ limitations under the License.
 ### Apache License 2.0
 
 Used by:
-- [`rand_core 0.6.4`](https://github.com/rust-random/rand)
 - [`rand_core 0.9.5`](https://github.com/rust-random/rand)
 
 ```
@@ -5702,8 +5698,7 @@ APPENDIX: How to apply the Apache License to your work.
 Used by:
 - [`getrandom 0.2.17`](https://github.com/rust-random/getrandom)
 - [`getrandom 0.3.4`](https://github.com/rust-random/getrandom)
-- [`getrandom 0.4.2`](https://github.com/rust-random/getrandom)
-- [`rand_chacha 0.3.1`](https://github.com/rust-random/rand)
+- [`getrandom 0.4.3`](https://github.com/rust-random/getrandom)
 - [`vergen-git2 10.0.0`](https://github.com/rustyhorde/vergen)
 - [`vergen-lib 10.0.0`](https://github.com/rustyhorde/vergen)
 - [`vergen 10.0.0`](https://github.com/rustyhorde/vergen)
@@ -6503,8 +6498,8 @@ limitations under the License.
 Used by:
 - [`anyhow 1.0.102`](https://github.com/dtolnay/anyhow)
 - [`async-trait 0.1.89`](https://github.com/dtolnay/async-trait)
-- [`bon-macros 3.9.1`](https://github.com/elastio/bon)
-- [`bon 3.9.1`](https://github.com/elastio/bon)
+- [`bon-macros 3.9.3`](https://github.com/elastio/bon)
+- [`bon 3.9.3`](https://github.com/elastio/bon)
 - [`clang-format 0.3.0`](https://github.com/KDAB/clang-format-rs/)
 - [`codespan-reporting 0.11.1`](https://github.com/brendanzab/codespan)
 - [`cxx-gen 0.7.194`](https://github.com/dtolnay/cxx)
@@ -6525,7 +6520,7 @@ Used by:
 - [`libc 0.2.186`](https://github.com/rust-lang/libc)
 - [`link-cplusplus 1.0.12`](https://github.com/dtolnay/link-cplusplus)
 - [`miniz_oxide 0.8.9`](https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide)
-- [`num-conv 0.2.1`](https://github.com/jhpratt/num-conv)
+- [`num-conv 0.2.2`](https://github.com/jhpratt/num-conv)
 - [`pin-project-lite 0.2.17`](https://github.com/taiki-e/pin-project-lite)
 - [`prettyplease 0.2.37`](https://github.com/dtolnay/prettyplease)
 - [`proc-macro2 1.0.106`](https://github.com/dtolnay/proc-macro2)
@@ -6533,7 +6528,6 @@ Used by:
 - [`quote 1.0.45`](https://github.com/dtolnay/quote)
 - [`r-efi 5.3.0`](https://github.com/r-efi/r-efi)
 - [`r-efi 6.0.0`](https://github.com/r-efi/r-efi)
-- [`rand 0.8.6`](https://github.com/rust-random/rand)
 - [`rand 0.9.4`](https://github.com/rust-random/rand)
 - [`rand_chacha 0.9.0`](https://github.com/rust-random/rand)
 - [`rand_xorshift 0.4.0`](https://github.com/rust-random/rngs)
@@ -6545,21 +6539,20 @@ Used by:
 - [`serde_derive 1.0.228`](https://github.com/serde-rs/serde)
 - [`serde_json 1.0.150`](https://github.com/serde-rs/json)
 - [`serde_repr 0.1.20`](https://github.com/dtolnay/serde-repr)
-- [`shlex 1.3.0`](https://github.com/comex/rust-shlex)
-- [`syn 2.0.117`](https://github.com/dtolnay/syn)
+- [`shlex 2.0.1`](https://github.com/comex/rust-shlex)
+- [`syn 2.0.118`](https://github.com/dtolnay/syn)
 - [`thiserror-impl 1.0.69`](https://github.com/dtolnay/thiserror)
 - [`thiserror-impl 2.0.18`](https://github.com/dtolnay/thiserror)
 - [`thiserror 1.0.69`](https://github.com/dtolnay/thiserror)
 - [`thiserror 2.0.18`](https://github.com/dtolnay/thiserror)
-- [`time-core 0.1.8`](https://github.com/time-rs/time)
-- [`time 0.3.47`](https://github.com/time-rs/time)
+- [`time-core 0.1.9`](https://github.com/time-rs/time)
+- [`time 0.3.49`](https://github.com/time-rs/time)
 - [`type-map 0.5.1`](https://github.com/kardeiz/type-map)
 - [`typed-path 0.12.3`](https://github.com/chipsenkbeil/typed-path)
 - [`unicode-ident 1.0.24`](https://github.com/dtolnay/unicode-ident)
 - [`ureq-proto 0.6.0`](https://github.com/algesten/ureq-proto)
 - [`utf8-zero 0.8.1`](https://github.com/algesten/utf8-zero)
 - [`utf8parse 0.2.2`](https://github.com/alacritty/vte)
-- [`wasip3 0.4.0+wasi-0.3.0-rc-2026-01-06`](https://github.com/bytecodealliance/wasi-rs)
 
 ```
 Apache License
@@ -6720,7 +6713,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ### Community Data License Agreement Permissive 2.0
 
 Used by:
-- [`webpki-roots 1.0.7`](https://github.com/rustls/webpki-roots)
+- [`webpki-roots 1.0.8`](https://github.com/rustls/webpki-roots)
 
 ```
 # Community Data License Agreement - Permissive - Version 2.0
@@ -7134,10 +7127,11 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- [`zbus 4.4.0`](https://github.com/dbus2/zbus/)
-- [`zbus_macros 4.4.0`](https://github.com/dbus2/zbus/)
-- [`zvariant 4.2.0`](https://github.com/dbus2/zbus/)
-- [`zvariant_derive 4.2.0`](https://github.com/dbus2/zbus/)
+- [`zbus 5.16.0`](https://github.com/z-galaxy/zbus/)
+- [`zbus_macros 5.16.0`](https://github.com/z-galaxy/zbus/)
+- [`zbus_names 4.3.2`](https://github.com/z-galaxy/zbus/)
+- [`zvariant 5.12.0`](https://github.com/z-galaxy/zbus/)
+- [`zvariant_derive 5.12.0`](https://github.com/z-galaxy/zbus/)
 
 ```
 Copyright (c) 2024 Zeeshan Ali Khan &amp; zbus contributors
@@ -7372,10 +7366,8 @@ SOFTWARE.
 
 Used by:
 - [`endi 1.1.1`](https://github.com/zeenix/endi)
-- [`xdg-home 1.3.0`](https://github.com/zeenix/xdg-home)
-- [`zbus_names 3.0.0`](https://github.com/dbus2/zbus/)
 - [`zmij 1.0.21`](https://github.com/dtolnay/zmij)
-- [`zvariant_utils 2.1.0`](https://github.com/dbus2/zbus/)
+- [`zvariant_utils 3.4.0`](https://github.com/z-galaxy/zbus/)
 
 ```
 Permission is hereby granted, free of charge, to any
@@ -7504,8 +7496,8 @@ SOFTWARE.
 Used by:
 - [`aho-corasick 1.1.4`](https://github.com/BurntSushi/aho-corasick)
 - [`globset 0.4.18`](https://github.com/BurntSushi/ripgrep/tree/master/crates/globset)
-- [`ignore 0.4.25`](https://github.com/BurntSushi/ripgrep/tree/master/crates/ignore)
-- [`memchr 2.8.0`](https://github.com/BurntSushi/memchr)
+- [`ignore 0.4.26`](https://github.com/BurntSushi/ripgrep/tree/master/crates/ignore)
+- [`memchr 2.8.2`](https://github.com/BurntSushi/memchr)
 - [`termcolor 1.4.1`](https://github.com/BurntSushi/termcolor)
 - [`walkdir 2.5.0`](https://github.com/BurntSushi/walkdir)
 
@@ -7539,7 +7531,6 @@ THE SOFTWARE.
 ### MIT License
 
 Used by:
-- [`nix 0.29.0`](https://github.com/nix-rust/nix)
 - [`nix 0.31.3`](https://github.com/nix-rust/nix)
 
 ```
@@ -7799,7 +7790,7 @@ Used by:
 - [`tinystr 0.8.3`](https://github.com/unicode-org/icu4x)
 - [`writeable 0.6.3`](https://github.com/unicode-org/icu4x)
 - [`yoke-derive 0.8.2`](https://github.com/unicode-org/icu4x)
-- [`yoke 0.8.2`](https://github.com/unicode-org/icu4x)
+- [`yoke 0.8.3`](https://github.com/unicode-org/icu4x)
 - [`zerofrom-derive 0.1.7`](https://github.com/unicode-org/icu4x)
 - [`zerofrom 0.1.8`](https://github.com/unicode-org/icu4x)
 - [`zerotrie 0.2.4`](https://github.com/unicode-org/icu4x)

@@ -100,7 +100,7 @@ Status legend:
 | Error extraction | ✅ | `extract_error_message`. |
 | Context prompt builder | ✅ | `build_context_prompt`. |
 | Linux-aware filter hints | ✅ | `linux_suggestions_for`. |
-| Secret-Service-backed API key | ✅ | `secret.rs` via `keyring`. |
+| Secret-Service-backed API key | ✅ | `secret.rs` via `keyring-core`. |
 | Opt-in setting | ✅ | `DefaultSettings.ai_search_enabled`. |
 | Provider scope doc | ✅ | `docs/ai-provider-scope.md`. |
 | In-tab conversation state | ✅ | `AiChatPanel.qml` with turn-count header + Clear button (v0.3). |

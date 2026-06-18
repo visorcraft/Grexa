@@ -4,7 +4,8 @@
 //! Secret-Service-backed API key storage.
 //!
 //! Grexa never persists an OpenAI-style API key to settings.json. Instead
-//! the key is stored in the system keyring via the `keyring` crate, which
+//! the key is stored in the system keyring via `keyring-core` plus the
+//! `zbus-secret-service-keyring-store` backend, which
 //! on Linux talks to `org.freedesktop.secrets` (KWallet, GNOME Keyring,
 //! KeePassXC's secret-service plugin, …). The functions in this module
 //! are sync, infallible-when-the-keyring-is-up, and return a structured
@@ -23,8 +24,11 @@
 //! `localhost:8000`, and corporate proxies without one overwriting the
 //! other.
 
-use keyring::Entry;
+use std::sync::OnceLock;
+
+use keyring_core::Entry;
 use thiserror::Error;
+use zbus_secret_service_keyring_store::Store;
 
 use crate::normalize_endpoint_base;
 
@@ -38,10 +42,10 @@ pub enum SecretError {
     Missing { endpoint: String },
 }
 
-impl From<keyring::Error> for SecretError {
-    fn from(value: keyring::Error) -> Self {
+impl From<keyring_core::Error> for SecretError {
+    fn from(value: keyring_core::Error) -> Self {
         match value {
-            keyring::Error::NoEntry => SecretError::Missing {
+            keyring_core::Error::NoEntry => SecretError::Missing {
                 endpoint: String::new(),
             },
             other => SecretError::Backend(other.to_string()),
@@ -49,7 +53,25 @@ impl From<keyring::Error> for SecretError {
     }
 }
 
+/// Register the secret-service store as keyring-core's default. keyring-core
+/// has no default store, so the app must install one before any [`Entry`] is
+/// used. `Store::new()` opens the session-bus connection — the new
+/// "backend unavailable" failure point — and `set_default_store` is
+/// process-global + set-once, so a [`OnceLock`] guards it and replays the
+/// connect outcome to every caller.
+fn ensure_store() -> Result<(), SecretError> {
+    static INIT: OnceLock<Result<(), String>> = OnceLock::new();
+    INIT.get_or_init(|| {
+        let store = Store::new().map_err(|err| err.to_string())?;
+        keyring_core::set_default_store(store);
+        Ok(())
+    })
+    .clone()
+    .map_err(SecretError::Backend)
+}
+
 fn entry_for(endpoint: &str) -> Result<Entry, SecretError> {
+    ensure_store()?;
     let base = normalize_endpoint_base(endpoint);
     Entry::new(SERVICE, &base).map_err(SecretError::from)
 }
@@ -60,7 +82,7 @@ pub fn store_api_key(endpoint: &str, api_key: &str) -> Result<(), SecretError> {
     let entry = entry_for(endpoint)?;
     if api_key.is_empty() {
         match entry.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Ok(()) | Err(keyring_core::Error::NoEntry) => Ok(()),
             Err(err) => Err(SecretError::Backend(err.to_string())),
         }
     } else {
@@ -76,7 +98,7 @@ pub fn load_api_key(endpoint: &str) -> Result<Option<String>, SecretError> {
     let entry = entry_for(endpoint)?;
     match entry.get_password() {
         Ok(value) => Ok(Some(value)),
-        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(keyring_core::Error::NoEntry) => Ok(None),
         Err(err) => Err(SecretError::Backend(err.to_string())),
     }
 }
@@ -86,7 +108,7 @@ pub fn load_api_key(endpoint: &str) -> Result<Option<String>, SecretError> {
 pub fn delete_api_key(endpoint: &str) -> Result<(), SecretError> {
     let entry = entry_for(endpoint)?;
     match entry.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Ok(()) | Err(keyring_core::Error::NoEntry) => Ok(()),
         Err(err) => Err(SecretError::Backend(err.to_string())),
     }
 }

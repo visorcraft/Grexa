@@ -98,10 +98,11 @@ remaining `$PATH`-related consideration.
 
 ## API key handling
 
-API keys for the AI endpoint are stored in the system keyring via the
-[`keyring`](https://crates.io/crates/keyring) crate, which on Linux
-talks to `org.freedesktop.secrets` (KWallet / GNOME Keyring /
-KeePassXC).
+API keys for the AI endpoint are stored in the system keyring via
+[`keyring-core`](https://crates.io/crates/keyring-core) plus the
+[`zbus-secret-service-keyring-store`](https://crates.io/crates/zbus-secret-service-keyring-store)
+backend, which on Linux talks to `org.freedesktop.secrets` (KWallet /
+GNOME Keyring / KeePassXC).
 
 - Service id: `com.visorcraft.Grexa.ai`
 - Account: canonical endpoint base URL

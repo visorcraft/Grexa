@@ -75,6 +75,16 @@
   </supports>
 
   <releases>
+    <release version="1.6.0" date="2026-06-17">
+      <description>
+        <p>Dependency refresh and secret-storage backend migration.</p>
+        <ul>
+          <li>Refreshed all third-party crates to their latest compatible versions.</li>
+          <li>Migrated API-key storage to keyring-core with the zbus secret-service backend; the same KWallet / GNOME Keyring storage, no user-visible change.</li>
+          <li>Reconciled the in-app Credits and Third-Party Licenses with the current dependency tree.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.5.4" date="2026-06-17">
       <description>
         <p>Reliability and localization patch.</p>

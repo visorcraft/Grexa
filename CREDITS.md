@@ -84,7 +84,8 @@ license compatibility on every CI run.
 | `rustls`, `rustls-pki-types` | Apache-2.0 OR ISC OR MIT | [rustls/rustls](https://github.com/rustls/rustls) |
 | `rustls-webpki` | ISC | [rustls/webpki](https://github.com/rustls/webpki) |
 | `webpki-roots` | CDLA-Permissive-2.0 | [rustls/webpki-roots](https://github.com/rustls/webpki-roots) |
-| `keyring`, `linux-keyutils` | MIT OR Apache-2.0 | [hwchen/keyring-rs](https://github.com/hwchen/keyring-rs) |
+| `keyring-core`, `zbus-secret-service-keyring-store` | MIT OR Apache-2.0 | [open-source-cooperative/keyring-rs](https://github.com/open-source-cooperative/keyring-core) |
+| `secret-service` | MIT OR Apache-2.0 | [hwchen/secret-service-rs](https://github.com/hwchen/secret-service-rs) |
 
 ### Serialization + CLI plumbing
 
@@ -102,6 +103,13 @@ license compatibility on every CI run.
 | ----- | ------- | ------- |
 | `tracing`, `tracing-subscriber`, `tracing-appender`, `tracing-attributes`, `tracing-core` | MIT | [tokio-rs/tracing](https://github.com/tokio-rs/tracing) |
 
+### Build + platform
+
+| Crate | License | Project |
+| ----- | ------- | ------- |
+| `libc` | MIT OR Apache-2.0 | [rust-lang/libc](https://github.com/rust-lang/libc) |
+| `vergen-git2` | MIT OR Apache-2.0 | [rustyhorde/vergen](https://github.com/rustyhorde/vergen) |
+
 ### Dev / test-only
 
 | Crate | License | Project |
@@ -116,7 +124,8 @@ GPL-3.0-only is compatible with all licenses listed above. Specifically:
 - MIT / Apache-2.0 / BSD-3-Clause / ISC are permissive and combine freely.
 - `Unicode-3.0` (ICU4X) is FSF-approved as GPL-compatible.
 - `Unlicense` (ripgrep components) is FSF-approved as GPL-compatible.
-- `Zlib` (used by `foldhash`, `miniz_oxide`, `tinyvec`) is FSF-approved as GPL-compatible.
+- `Zlib` (used by `zlib-rs`, `foldhash`) is FSF-approved as GPL-compatible.
+- `0BSD` (used by `adler2`) is a public-domain-equivalent permissive license, GPL-compatible.
 - `CDLA-Permissive-2.0` (used by `webpki-roots`) is a permissive license whose terms are compatible with redistribution under GPL-3.0.
 
 The deny.toml allowlist enforces this. New licenses outside the

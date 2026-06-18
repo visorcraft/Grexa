@@ -1,3 +1,13 @@
+grexa (1.6.0-1) unstable; urgency=medium
+
+  * Refresh all third-party crates to their latest compatible versions.
+  * Migrate API-key storage to keyring-core with the zbus secret-service
+    backend; same KWallet / GNOME Keyring storage, no user-visible change.
+  * Reconcile the in-app Credits and Third-Party Licenses with the current
+    dependency tree.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Wed, 17 Jun 2026 00:00:00 +0000
+
 grexa (1.5.4-1) unstable; urgency=medium
 
   * Harden the container command runner: enforce per-command timeouts and an

@@ -6,7 +6,7 @@
 #
 
 Name:           grexa
-Version:        1.5.4
+Version:        1.6.0
 Release:        0
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 License:        GPL-3.0-only
@@ -102,6 +102,13 @@ cargo test --workspace --release --frozen
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Wed Jun 17 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.6.0-0
+- Refresh all third-party crates to their latest compatible versions.
+- Migrate API-key storage to keyring-core with the zbus secret-service backend;
+  same KWallet / GNOME Keyring storage, no user-visible change.
+- Reconcile the in-app Credits and Third-Party Licenses with the current
+  dependency tree.
+
 * Wed Jun 17 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.5.4-0
 - Harden the container command runner: per-command timeout and output-size cap
   with reliable process-group cleanup; large container searches report capped

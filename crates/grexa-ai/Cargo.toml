@@ -7,8 +7,9 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-grexa-core = { version = "1.5.4", path = "../grexa-core" }
-keyring.workspace = true
+grexa-core = { version = "1.6.0", path = "../grexa-core" }
+keyring-core.workspace = true
+zbus-secret-service-keyring-store.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
