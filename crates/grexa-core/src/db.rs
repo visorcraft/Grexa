@@ -11,10 +11,15 @@
 //! This proves the engine works by using it for Grexa's own data.
 
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use tempfile::NamedTempFile;
 use thiserror::Error;
+
+static WRITE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 const COLLECTION_DIR: &str = "recent_paths";
 const SCHEMA: &str = "---\ncollection: recent_paths\nfields:\n  - { name: path, type: string, required: true }\n  - { name: added_at, type: integer }\n---\n\n# Recent search paths\n";
@@ -54,16 +59,24 @@ impl RecentPathsDb {
 
     /// Add a path to the store. If it already exists, the old entry is
     /// removed first (dedup by path value).
+    ///
+    /// Single-writer assumed: the GUI's storage path is not called from
+    /// multiple threads simultaneously.
     pub fn add_path(&self, path: &Path) -> Result<(), DbStoreError> {
         self.remove_path(path)?;
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
-        let filename = format!("entry-{nanos}.md");
-        let content = format!("---\npath: {}\nadded_at: {}\n---\n", path.display(), nanos);
-        let record_path = self.db.root().join(COLLECTION_DIR).join(&filename);
-        fs::write(&record_path, &content)?;
+        let counter = WRITE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let filename = format!("entry-{nanos:019}-{counter}.md");
+        let content = format!("---\npath: {}\nadded_at: {nanos}\n---\n", path.display());
+        let coll_dir = self.db.root().join(COLLECTION_DIR);
+        let record_path = coll_dir.join(&filename);
+        let mut temp = NamedTempFile::new_in(&coll_dir)?;
+        temp.write_all(content.as_bytes())?;
+        temp.persist(&record_path)
+            .map_err(|e| DbStoreError::Io(e.error))?;
         self.enforce_limit()?;
         Ok(())
     }
