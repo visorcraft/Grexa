@@ -1,10 +1,13 @@
 [package]
 name = "grexa-db"
 version.workspace = true
-publish = false
+publish = true
 edition.workspace = true
 license = "Apache-2.0"
 repository.workspace = true
+description = "Flat-file database engine where records are plain files and joins materialize as symlink directories"
+keywords = ["database", "flat-file", "markdown", "yaml", "embedded"]
+categories = ["database-implementations", "filesystem"]
 
 [dependencies]
 serde_yaml.workspace = true

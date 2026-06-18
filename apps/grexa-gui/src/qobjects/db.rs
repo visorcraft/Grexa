@@ -76,9 +76,9 @@ impl ffi::DbController {
     fn open_db(mut self: Pin<&mut Self>, path: &QString) -> bool {
         let path_str = {
             let s = path.to_string();
-            if s.starts_with('~') {
+            if let Some(rest) = s.strip_prefix('~') {
                 if let Some(home) = std::env::var_os("HOME") {
-                    format!("{}{}", home.to_string_lossy(), &s[1..])
+                    format!("{}{}", home.to_string_lossy(), rest)
                 } else {
                     s
                 }
@@ -152,7 +152,7 @@ impl ffi::DbController {
                 }
             };
 
-            thread.queue(move |mut pin| {
+            let _ = thread.queue(move |mut pin| {
                 pin.as_mut().set_record_paths_result(QString::from(&result));
                 pin.as_mut().set_busy(false);
                 pin.as_mut().record_paths_ready();
@@ -193,7 +193,7 @@ impl ffi::DbController {
                 Err(e) => format!("Cannot open db: {e}"),
             };
 
-            thread.queue(move |mut pin| {
+            let _ = thread.queue(move |mut pin| {
                 pin.as_mut().set_validate_result(QString::from(&result));
                 pin.as_mut().set_busy(false);
                 pin.as_mut().validate_ready();
@@ -217,7 +217,11 @@ impl ffi::DbController {
         };
         let view = view_name.to_string();
         let group = group_by.to_string();
-        let group_opt = if group.is_empty() { None } else { Some(group.as_str()) };
+        let group_opt = if group.is_empty() {
+            None
+        } else {
+            Some(group.as_str())
+        };
         let query = coll.query();
         match db.materialize_view(&view, query, group_opt) {
             Ok(()) => {

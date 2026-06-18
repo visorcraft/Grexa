@@ -60,7 +60,9 @@ impl RecentPathsDb {
             let _ = fs::create_dir_all(&fallback);
             grexa_db::Db::open(&fallback).expect("grexa-db must open in /tmp")
         });
-        Self { db, limit: 20 }
+        let store = Self { db, limit: 20 };
+        migrate_from_json(&paths.data_dir, &store);
+        store
     }
 
     /// Open (or create) a recent-paths database under `data_dir/db/`.
@@ -146,6 +148,29 @@ impl RecentPathsDb {
             let _ = fs::remove_file(&full);
         }
         Ok(())
+    }
+}
+
+fn migrate_from_json(data_dir: &Path, store: &RecentPathsDb) {
+    let json_path = data_dir.join("recent_paths.json");
+    if !json_path.exists() {
+        return;
+    }
+    if !store.load().unwrap_or_default().is_empty() {
+        return;
+    }
+    match fs::read_to_string(&json_path) {
+        Ok(content) => {
+            if let Ok(paths) = serde_json::from_str::<Vec<PathBuf>>(&content) {
+                tracing::info!("Migrating {} paths from recent_paths.json", paths.len());
+                for path in paths {
+                    let _ = store.add(&path);
+                }
+                let backup = data_dir.join("recent_paths.json.bak");
+                let _ = fs::rename(&json_path, &backup);
+            }
+        }
+        Err(e) => tracing::warn!("Migration: cannot read recent_paths.json: {e}"),
     }
 }
 
