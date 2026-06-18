@@ -123,22 +123,16 @@ fn build_generation(
         let record = result?;
         let record_path = record.path();
 
-        let groups: Vec<String> = match group_by {
+        let group_values: Vec<GroupValue> = match group_by {
             Some(field) => extract_group_values(&record, field),
-            None => vec![String::new()],
+            None => vec![GroupValue::Flat],
         };
 
-        for group in groups {
-            let (group_dir_name, grouped) = match group_by {
-                Some(_) => {
-                    let name = if group == UNGROUPED {
-                        group.clone()
-                    } else {
-                        encode_segment(&group)?
-                    };
-                    (name, true)
-                }
-                None => (String::new(), false),
+        for gv in group_values {
+            let (group_dir_name, grouped) = match gv {
+                GroupValue::Missing => (UNGROUPED.to_string(), true),
+                GroupValue::Present(val) => (encode_segment(&val)?, true),
+                GroupValue::Flat => (String::new(), false),
             };
 
             let group_dir = if grouped {
@@ -187,17 +181,26 @@ fn gen_id() -> String {
     format!("gen-{nanos:x}-{counter}")
 }
 
-fn extract_group_values(record: &Record, field: &str) -> Vec<String> {
+enum GroupValue {
+    Missing,
+    Present(String),
+    Flat,
+}
+
+fn extract_group_values(record: &Record, field: &str) -> Vec<GroupValue> {
     let raw: Vec<String> = match record.field(field) {
         Some(Value::Sequence(seq)) => seq.iter().filter_map(value_to_string).collect(),
         Some(value) => value_to_string(value).into_iter().collect(),
-        None => return vec![UNGROUPED.into()],
+        None => return vec![GroupValue::Missing],
     };
     if raw.is_empty() {
-        return vec![UNGROUPED.into()];
+        return vec![GroupValue::Missing];
     }
     let mut seen: HashSet<String> = HashSet::new();
-    raw.into_iter().filter(|v| seen.insert(v.clone())).collect()
+    raw.into_iter()
+        .filter(|v| seen.insert(v.clone()))
+        .map(GroupValue::Present)
+        .collect()
 }
 
 fn value_to_string(v: &Value) -> Option<String> {
@@ -505,6 +508,25 @@ mod tests {
 
         let view = resolve_view(&dir, "test");
         assert!(view.join("_ungrouped").join("empty.md").exists());
+    }
+
+    #[test]
+    fn literal_ungrouped_tag_is_rejected() {
+        let dir = TempDir::new().unwrap();
+        let notes = dir.path().join("notes");
+        fs::create_dir(&notes).unwrap();
+        fs::write(notes.join("schema.md"), NOTES_SCHEMA).unwrap();
+        fs::write(notes.join("literal.md"), "---\ntags: [_ungrouped]\nrating: 5\n---\nbody\n")
+            .unwrap();
+
+        let db = Db::open(dir.path()).unwrap();
+        let coll = db.collection("notes").unwrap();
+
+        let result = db.materialize_view("test", coll.query(), Some("tags"));
+        assert!(
+            result.is_err(),
+            "literal `_ungrouped` tag must be rejected, not silently bucketed"
+        );
     }
 
     #[test]

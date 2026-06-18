@@ -737,8 +737,8 @@ mod tests {
     fn streaming_is_lazy() {
         let dir = make_collection();
         let coll = Collection::open(dir.path()).unwrap();
-        let mut iter = coll.query().filter("rating").ge(4).into_iter();
-        let first = iter.next().unwrap().unwrap();
+        let mut query = coll.query().filter("rating").ge(4);
+        let first = query.next().unwrap().unwrap();
         assert!(first.field("rating").unwrap().as_i64().unwrap() >= 4);
     }
 }

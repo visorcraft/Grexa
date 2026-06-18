@@ -72,7 +72,7 @@ my-db/                         ← Db root (any directory)
           2024-transformers.md -> ../../../../notes/2024-transformers.md
       gen-9c4e7d/              ← previous generation (pending GC)
     notes-by-tag -> .generations/gen-a3f1b2   ← symlink (atomic swap target)
-  .grexa-db.lock               ← cross-process lock file (flock)
+  .grexa-db.lock               ← reserved for Phase 1+ cross-process flock (not yet implemented)
 ```
 
 **Path IS the record identity** (not a stable PK — see "Path semantics"
@@ -327,7 +327,7 @@ These are locked (peer-reviewed):
 | **Ref format: DB-root-relative path.** Not name-based. | Transparent, inspectable, no engine needed to resolve. |
 | **Tags: plain `array<string>`.** Not first-class. | Zero special-casing; grouping works for any array field. |
 | **Atomicity: symlink-swap pattern** with generation directories. | `rename(2)` over a non-empty dir fails; symlink-over-symlink is atomic. |
-| **Concurrency: per-canonical-root Mutex** (Phase 0), `flock` (Phase 1+). | Serializes view writes correctly; overlap detection prevents clobbering. |
+| **Concurrency: per-canonical-root in-process Mutex** (Phase 0); `flock` deferred to Phase 1+. | Serializes view writes within one process; cross-process is NOT yet safe. |
 | **Group-by encoding: percent-encode** with `.`/`..`/empty rejection. | Reversible, traversal-safe, collision-free. |
 | **`&Db` is `Sync`.** | Embedders expect `Send + Sync`. |
 | **License: Apache-2.0** (sole permissive crate in the GPL-3.0 Grexa workspace). | Must stay embeddable in proprietary apps. No GPL deps allowed. |

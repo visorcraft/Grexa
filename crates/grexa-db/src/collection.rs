@@ -58,10 +58,19 @@ impl Collection {
     /// Read a single record by its collection-relative path.
     ///
     /// The path is validated against traversal attacks: absolute paths,
-    /// `..` components, and backslashes are rejected.
+    /// `..` components, backslashes, and symlinks are rejected.
     pub fn record(&self, relative_path: &str) -> Result<Record, RecordError> {
         validate_relative_path(relative_path)?;
         let full = self.root.join(relative_path);
+        let metadata = fs::symlink_metadata(&full).map_err(|e| RecordError::ReadFile {
+            path: relative_path.to_string(),
+            reason: e.to_string(),
+        })?;
+        if metadata.file_type().is_symlink() {
+            return Err(RecordError::InvalidPath(format!(
+                "`{relative_path}` is a symlink; symlinks are not followed"
+            )));
+        }
         let content = fs::read_to_string(&full).map_err(|e| RecordError::ReadFile {
             path: relative_path.to_string(),
             reason: e.to_string(),
@@ -237,6 +246,14 @@ mod tests {
         assert!(coll.record("..\\..\\secret").is_err());
         assert!(coll.record("notes/../secret").is_err());
         assert!(coll.record("").is_err());
+    }
+
+    #[test]
+    fn record_rejects_symlink() {
+        let dir = make_collection();
+        symlink("/etc/passwd", dir.path().join("evil.md")).unwrap();
+        let coll = Collection::open(dir.path()).unwrap();
+        assert!(coll.record("evil.md").is_err());
     }
 
     #[test]
