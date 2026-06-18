@@ -21,6 +21,8 @@ use thiserror::Error;
 
 static WRITE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+const RECENT_SEARCH_LIMIT: usize = 20;
+
 const COLLECTION_DIR: &str = "recent_paths";
 const SCHEMA: &str = "---\ncollection: recent_paths\nfields:\n  - { name: path, type: string, required: true }\n  - { name: added_at, type: integer }\n---\n\n# Recent search paths\n";
 
@@ -171,6 +173,133 @@ fn migrate_from_json(data_dir: &Path, store: &RecentPathsDb) {
             }
         }
         Err(e) => tracing::warn!("Migration: cannot read recent_paths.json: {e}"),
+    }
+}
+
+const HISTORY_SCHEMA: &str = "---\ncollection: search_history\nfields:\n  - { name: key, type: string, required: true }\n  - { name: timestamp, type: integer }\n  - { name: data, type: string }\n---\n\n# Search history\n";
+
+pub struct SearchHistoryDb {
+    db: grexa_db::Db,
+}
+
+impl SearchHistoryDb {
+    pub fn new(paths: &crate::storage::AppPaths) -> Self {
+        let db_root = paths.data_dir.join("db");
+        let coll_dir = db_root.join("search_history");
+        let _ = fs::create_dir_all(&coll_dir);
+        let schema_path = coll_dir.join("schema.md");
+        if !schema_path.exists() {
+            let _ = fs::write(&schema_path, HISTORY_SCHEMA);
+        }
+        let db = grexa_db::Db::open(&db_root).unwrap_or_else(|e| {
+            tracing::warn!("SearchHistoryDb: data dir failed ({e}), using temp");
+            let fallback = std::env::temp_dir().join("grexa-db-fallback");
+            let _ = fs::create_dir_all(&fallback);
+            grexa_db::Db::open(&fallback).expect("grexa-db must open in /tmp")
+        });
+        Self { db }
+    }
+
+    pub fn load(&self) -> Result<Vec<crate::storage::RecentSearch>, DbStoreError> {
+        let coll = self.db.collection("search_history")?;
+        let mut entries: Vec<(u64, crate::storage::RecentSearch)> = Vec::new();
+        for result in coll.records() {
+            let record = result?;
+            let ts = record
+                .field("timestamp")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as u64;
+            if let Some(data) = record.field("data").and_then(|v| v.as_str())
+                && let Ok(search) = serde_json::from_str::<crate::storage::RecentSearch>(data)
+            {
+                entries.push((ts, search));
+            }
+        }
+        entries.sort_by_key(|(ts, _)| std::cmp::Reverse(*ts));
+        Ok(entries
+            .into_iter()
+            .map(|(_, s)| s)
+            .take(RECENT_SEARCH_LIMIT)
+            .collect())
+    }
+
+    pub fn add(
+        &self,
+        search: crate::storage::RecentSearch,
+    ) -> Result<Vec<crate::storage::RecentSearch>, DbStoreError> {
+        if search.search_term.trim().is_empty() {
+            return self.load();
+        }
+        let key = search.key();
+        self.remove_by_key(&key)?;
+        let timestamp = search.timestamp_unix;
+        let data = serde_json::to_string(&search)
+            .map_err(|e| DbStoreError::Io(std::io::Error::other(e.to_string())))?;
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let counter = WRITE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let filename = format!("entry-{nanos:019}-{counter}.md");
+        let content = format!("---\nkey: {key}\ntimestamp: {timestamp}\ndata: {data}\n---\n");
+        let coll_dir = self.db.root().join("search_history");
+        let record_path = coll_dir.join(&filename);
+        let mut temp = NamedTempFile::new_in(&coll_dir)?;
+        temp.write_all(content.as_bytes())?;
+        temp.persist(&record_path)
+            .map_err(|e| DbStoreError::Io(e.error))?;
+        self.enforce_history_limit()?;
+        self.load()
+    }
+
+    pub fn remove_by_key(
+        &self,
+        key: &str,
+    ) -> Result<Vec<crate::storage::RecentSearch>, DbStoreError> {
+        let coll = self.db.collection("search_history")?;
+        for result in coll.records() {
+            let record = result?;
+            if record.field("key").and_then(|v| v.as_str()) == Some(key) {
+                let full = self.db.root().join("search_history").join(record.path());
+                let _ = fs::remove_file(&full);
+            }
+        }
+        self.load()
+    }
+
+    pub fn remove(
+        &self,
+        search: &crate::storage::RecentSearch,
+    ) -> Result<Vec<crate::storage::RecentSearch>, DbStoreError> {
+        self.remove_by_key(&search.key())
+    }
+
+    pub fn clear(&self) -> Result<(), DbStoreError> {
+        let coll_dir = self.db.root().join("search_history");
+        if let Ok(entries) = fs::read_dir(&coll_dir) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                if name != "schema.md" && name != "." && name != ".." {
+                    let _ = fs::remove_file(entry.path());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn enforce_history_limit(&self) -> Result<(), DbStoreError> {
+        let coll = self.db.collection("search_history")?;
+        let mut entries: Vec<String> = coll
+            .records()
+            .filter_map(|r| r.ok().map(|r| r.path().to_string()))
+            .collect();
+        entries.sort();
+        entries.reverse();
+        for name in entries.into_iter().skip(RECENT_SEARCH_LIMIT) {
+            let full = self.db.root().join("search_history").join(&name);
+            let _ = fs::remove_file(&full);
+        }
+        Ok(())
     }
 }
 

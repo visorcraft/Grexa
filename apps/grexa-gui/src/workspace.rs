@@ -10,13 +10,13 @@
 use std::path::Path;
 use std::rc::Rc;
 
-use grexa_core::{AppPaths, RecentPathsDb, SearchHistoryStore, SearchProfileStore, SettingsStore};
+use grexa_core::{AppPaths, RecentPathsDb, SearchHistoryDb, SearchProfileStore, SettingsStore};
 use grexa_i18n::{Bundle, Locale};
 
 /// Workspace state — one per running Grexa process.
 pub struct Workspace {
     pub recent_paths: RecentPathsDb,
-    pub history: SearchHistoryStore,
+    pub history: SearchHistoryDb,
     pub profiles: SearchProfileStore,
     pub settings: SettingsStore,
     /// Fluent localization bundle, locale-resolved from the persisted
@@ -43,7 +43,7 @@ impl Workspace {
         let bundle = build_bundle(&settings);
         Self {
             recent_paths: RecentPathsDb::new(&paths),
-            history: SearchHistoryStore::new(&paths),
+            history: SearchHistoryDb::new(&paths),
             profiles: SearchProfileStore::new(&paths),
             settings,
             bundle,
