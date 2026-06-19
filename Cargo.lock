@@ -1291,8 +1291,8 @@ dependencies = [
 
 [[package]]
 name = "grexa-db"
-version = "1.8.0"
-source = "git+https://github.com/visorcraft/grexa-db#82b2e1581ac7bd11feb9f864c827533c9fc41031"
+version = "1.8.1"
+source = "git+https://github.com/visorcraft/grexa-db#b452cdd00cd6d3a55fe2e5305b2152cecaa01016"
 dependencies = [
  "serde_json",
  "serde_yaml_ng",
