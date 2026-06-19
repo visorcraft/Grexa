@@ -5,8 +5,6 @@ members = [
     "crates/grexa-cli",
     "crates/grexa-containers",
     "crates/grexa-core",
-    "crates/grexa-db",
-    "crates/grexa-db-cli",
     "crates/grexa-i18n",
 ]
 resolver = "3"
