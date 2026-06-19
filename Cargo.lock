@@ -1266,20 +1266,11 @@ dependencies = [
 [[package]]
 name = "grexa-db"
 version = "1.7.0"
+source = "git+https://github.com/visorcraft/grexa-db?tag=v1.7.0#825d6b38572fb13812f0c37d1b53e6409386fcd9"
 dependencies = [
  "serde_json",
  "serde_yaml_ng",
- "tempfile",
  "thiserror 2.0.18",
-]
-
-[[package]]
-name = "grexa-db-cli"
-version = "1.7.0"
-dependencies = [
- "clap",
- "grexa-db",
- "tempfile",
 ]
 
 [[package]]
