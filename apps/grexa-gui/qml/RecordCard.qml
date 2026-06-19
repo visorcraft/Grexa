@@ -30,9 +30,9 @@ Controls.ItemDelegate {
     background: Rectangle {
         color: card.down ? Kirigami.Theme.alternateBackgroundColor
                          : Kirigami.Theme.backgroundColor
-        radius: Kirigami.Units.smallRadius
+        radius: Kirigami.Units.cornerRadius
         border.width: 1
-        border.color: Kirigami.Theme.separatorColor
+        border.color: Qt.alpha(Kirigami.Theme.textColor, 0.15)
     }
 
     contentItem: ColumnLayout {

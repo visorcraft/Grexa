@@ -1,3 +1,11 @@
+grexa (1.7.1-1) unstable; urgency=medium
+
+  * Fix the GUI failing to launch: the database browser page used signal-handler
+    names that did not match the controller's signals, which prevented the main
+    window from instantiating. No other changes.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Thu, 18 Jun 2026 12:00:00 +0000
+
 grexa (1.7.0-1) unstable; urgency=medium
 
   * Extract the grexa-db storage engine into its own repository; consume it as

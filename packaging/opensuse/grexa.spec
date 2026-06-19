@@ -6,7 +6,7 @@
 #
 
 Name:           grexa
-Version:        1.7.0
+Version:        1.7.1
 Release:        0
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 License:        GPL-3.0-only
@@ -102,6 +102,11 @@ cargo test --workspace --release --frozen
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Thu Jun 18 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.7.1-0
+- Fix the GUI failing to launch: the database browser page used signal-handler
+  names that did not match the controller's signals, which prevented the main
+  window from instantiating. No other changes.
+
 * Thu Jun 18 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.7.0-0
 - Extract the grexa-db storage engine into its own repository; consume it as a
   pinned git dependency instead of an in-tree workspace member. No user-visible
