@@ -75,12 +75,13 @@
   </supports>
 
   <releases>
-    <release version="1.8.0" date="2026-06-19">
+    <release version="1.8.1" date="2026-06-19">
       <description>
         <p>Adds AI summaries of your search results.</p>
         <ul>
           <li>The AI Search panel gains a "Summarize results" button: it packs the on-screen matches (path, line, and matched text) into the model prompt — budget-bounded and breadth-first across files — so the assistant answers about what the search actually found instead of only suggesting filters.</li>
           <li>Settings → AI Search adds an excerpt-budget slider that caps how much matched text is sent to the model.</li>
+          <li>Maintenance: the project now builds on the Rust 1.96 toolchain.</li>
         </ul>
       </description>
     </release>

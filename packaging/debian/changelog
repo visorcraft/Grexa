@@ -1,8 +1,9 @@
-grexa (1.8.0-1) unstable; urgency=medium
+grexa (1.8.1-1) unstable; urgency=medium
 
   * Add AI "Summarize results": the AI Search panel can summarize the on-screen
     matches (path, line, matched text), packed breadth-first into a bounded
     prompt budget. Settings adds an AI excerpt-budget slider to tune it.
+  * Build on the Rust 1.96 toolchain (workspace pin + release CI).
 
  -- VisorCraft LLC <maintainer@visorcraft.com>  Fri, 19 Jun 2026 12:00:00 +0000
 

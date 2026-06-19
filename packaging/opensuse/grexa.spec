@@ -6,7 +6,7 @@
 #
 
 Name:           grexa
-Version:        1.8.0
+Version:        1.8.1
 Release:        0
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 License:        GPL-3.0-only
@@ -102,10 +102,11 @@ cargo test --workspace --release --frozen
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
-* Fri Jun 19 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.8.0-0
+* Fri Jun 19 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.8.1-0
 - Add AI "Summarize results": the AI Search panel summarizes the on-screen
   matches (path, line, matched text), packed breadth-first into a bounded
   prompt budget. Settings adds an AI excerpt-budget slider to tune it.
+- Build on the Rust 1.96 toolchain (workspace pin and release CI).
 
 * Thu Jun 18 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.7.1-0
 - Fix the GUI failing to launch: the database browser page used signal-handler
