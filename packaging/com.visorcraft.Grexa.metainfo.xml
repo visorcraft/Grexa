@@ -75,6 +75,15 @@
   </supports>
 
   <releases>
+    <release version="1.7.0" date="2026-06-18">
+      <description>
+        <p>Extracted the flat-file storage engine into its own repository.</p>
+        <ul>
+          <li>grexa-db is now a standalone Apache-2.0 crate, consumed as a pinned git dependency instead of an in-tree workspace member. No user-visible change.</li>
+          <li>Hardened reference-path validation and view deletion in the storage engine.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.6.0" date="2026-06-17">
       <description>
         <p>Dependency refresh and secret-storage backend migration.</p>
