@@ -1,5 +1,5 @@
 Name:           grexa
-Version:        1.7.1
+Version:        1.7.2
 Release:        1%{?dist}
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 
@@ -89,6 +89,10 @@ command -v appstream-util >/dev/null && \
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Fri Jun 19 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.7.2-1
+- Build on the Rust 1.96 toolchain (workspace pin and release CI). No
+  user-visible change.
+
 * Thu Jun 18 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.7.1-1
 - Fix the GUI failing to launch: the database browser page used signal-handler
   names that did not match the controller's signals, which prevented the main

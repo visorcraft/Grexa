@@ -1,3 +1,10 @@
+grexa (1.7.2-1) unstable; urgency=medium
+
+  * Build on the Rust 1.96 toolchain (workspace pin + release CI). No
+    user-visible change.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Fri, 19 Jun 2026 12:00:00 +0000
+
 grexa (1.7.1-1) unstable; urgency=medium
 
   * Fix the GUI failing to launch: the database browser page used signal-handler

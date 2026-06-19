@@ -75,6 +75,14 @@
   </supports>
 
   <releases>
+    <release version="1.7.2" date="2026-06-19">
+      <description>
+        <p>Maintenance release.</p>
+        <ul>
+          <li>Build on the Rust 1.96 toolchain (workspace pin and release CI). No user-visible change.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.7.1" date="2026-06-18">
       <description>
         <p>Fixes the GUI failing to launch.</p>
