@@ -20,22 +20,22 @@ Kirigami.ScrollablePage {
 
     DbController {
         id: db
-        onRecord_paths_ready: {
+        onRecordPathsReady: {
             var raw = recordPathsResult;
             page.records = raw.split("\n").filter(r => r.length > 0);
         }
-        onValidate_ready: {
+        onValidateReady: {
             validateResult.text = db.validateResult;
             validateResult.visible = true;
         }
-        onQuery_ready: {
+        onQueryReady: {
             var raw = queryResult;
             page.records = raw.split("\n").filter(r => r.length > 0);
         }
     }
 
     function refreshViews() {
-        var raw = db.listView();
+        var raw = db.listViews();
         page.views = raw.split("\n").filter(v => v.length > 0);
     }
 

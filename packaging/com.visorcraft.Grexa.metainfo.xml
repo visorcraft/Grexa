@@ -75,6 +75,14 @@
   </supports>
 
   <releases>
+    <release version="1.7.1" date="2026-06-18">
+      <description>
+        <p>Fixes the GUI failing to launch.</p>
+        <ul>
+          <li>The database browser page used signal-handler names that did not match the controller's signals, which prevented the main window from loading. No other changes.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.7.0" date="2026-06-18">
       <description>
         <p>Extracted the flat-file storage engine into its own repository.</p>
