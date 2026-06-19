@@ -41,6 +41,104 @@ Grexa can:
 - Store API keys in the Linux Secret Service when optional AI features
   are configured.
 
+## Plain files all the way down
+
+Most apps bury your data in an opaque blob — a SQLite file, a settings
+database, a binary cache — that only the app can read. Grexa does the
+opposite. Its storage layer is **[grexa-db](https://github.com/visorcraft/grexa-db)**,
+a standalone (`Apache-2.0`) flat-file database engine where **every record is a
+plain Markdown file** and **a query is just the filesystem**. That one decision
+shows up in Grexa two ways.
+
+### It remembers everything — in files you own
+
+Your **recent folders**, **search history**, and **saved search profiles**
+aren't trapped in a binary blob. Each is a human-readable Markdown record under
+`~/.local/share/grexa/db/`, with YAML frontmatter and a schema you can read:
+
+```console
+$ cat ~/.local/share/grexa/db/recent_paths/entry-*.md
+---
+path: /home/you/projects/kernel
+added_at: 1718706000000000000
+---
+```
+
+So your own data is greppable, diffable, versionable, and portable with the
+tools you already have — `grep` it, track it in `git`, back it up with `cp`,
+sync it with Syncthing. **If Grexa vanished tomorrow, every byte is still
+readable.** No export step, no proprietary format, no lock-in. (Grexa writes
+these records atomically — temp file + rename — so a crash never leaves a torn
+entry.)
+
+### A database browser, built in
+
+Open **Tools → Database** in the desktop app and point it at *any* grexa-db
+directory — including Grexa's own. From there you can list collections, run
+typed filter queries, validate records against their schema, and **materialize
+a query as a real directory of symlinks** you can open in any file manager.
+Point it at `~/.local/share/grexa/db` and you'll browse the very history and
+profiles the app has been quietly writing.
+
+### Benchmarks: where flat files beat a binary database
+
+grexa-db is not trying to out-race SQLite on a million-row `JOIN` — its own
+[design spec](https://github.com/visorcraft/grexa-db/blob/master/docs/grexa-db-design.md)
+says a real database wins past ~250k records. What the flat-file design *buys*
+you is everything below. Every number is measured by a deterministic,
+fixed-seed benchmark holding the **same 5,000 records** three ways: as grexa-db
+records, as a SQLite database, and as a single JSON blob (what Grexa used
+*before* grexa-db).
+
+| # | Property | grexa-db | The "standard" way |
+|---|----------|----------|--------------------|
+| 1 | Records readable with **zero database software** | **5,000 / 5,000** (`cat note.md`) | SQLite: **0** — it's a binary blob |
+| 2 | Tools that can query it with **no driver** | **7** — `grep` `rg` `awk` `find` `git` `sed` `fzf` | SQLite: **1** (`sqlite3`, SQL only) |
+| 3 | A one-field edit is a **human-reviewable diff** | **2-line** `git diff` | SQLite: `Binary files differ` — **0** reviewable lines |
+| 4 | **Incremental backup** of that one-field edit | **195 bytes** re-transmitted | SQLite: **4,064 bytes** — ≈ **21× more** |
+| 5 | **Blast radius** of one corrupted byte | **1 record** lost; **4,999** still readable | SQLite: header byte → **whole DB unreadable** (0/5,000) |
+| 6 | Engine **footprint / supply chain** | **19** pure-Rust crates, **0** C libraries | SQLite: a ~1.6 MB C library linked in + a C build step |
+| 7 | **Peak RAM** to scan-filter **40,000** records | **7.7 MB** — streams one record at a time | Load-the-blob: **53 MB** — ≈ **7× more** |
+| 8 | **Open + first answer** | **0.8 ms** | Parse-the-blob: **30 ms** — ≈ **37× slower** |
+| 9 | **Crash mid-write** (`SIGKILL`) | **0** partial records across **47,000** writes | In-place JSON rewrite: file truncated to **0 bytes** |
+| 10 | **Merge** two datasets | `cp -r` — **0** lines of SQL, ~2 ms | SQLite: `ATTACH` + `INSERT…SELECT`, or dump + reload |
+| 11 | Query results are **real directories** | **983** symlinks in `views/by-rating/5/`, usable by `ls`/`find`/`du`/`fzf` | SQL views: **0** filesystem objects |
+| 12 | **Add a new field** | **0** `ALTER TABLE`, **0** rows rewritten; old records still query | SQLite: `ALTER TABLE` + a migration |
+
+Reproduce all of it (deterministic — fixed seed, writes `bench-results.json`):
+
+```bash
+git clone https://github.com/visorcraft/grexa-db && cd grexa-db
+cargo build --release -p grexa-db-cli
+python3 scripts/bench.py          # optional: N=20000 N_BIG=100000 python3 scripts/bench.py
+```
+
+> Absolute numbers are from one CachyOS / AMD box (5,000 records; the memory
+> test uses 40,000). Your machine's numbers will differ — the **ratios** are
+> the point, and the script regenerates them on your hardware.
+
+### Scaling
+
+The table above is grexa-db's behavior *today*. Read+parse dominates query time
+and **now runs in parallel across all cores** (shipped in grexa-db; results are
+byte-identical to the serial path, verified). Measured on **200,000 records**
+(16-core box):
+
+| Operation | Before (serial) | After (parallel) | Gain |
+|---|---|---|---|
+| selective filter (100 hits) | 1005 ms | **208 ms** | **4.8×** |
+| broad filter (80k hits) | 1017 ms | **276 ms** | **3.7×** |
+| list all records | 992 ms | **375 ms** | **2.6×** |
+| `order_by` (sort 200k) | 1669 ms | **851 ms** | **2.0×** |
+
+Two larger wins are **prototyped and benchmarked, not yet shipped**: a
+hand-rolled frontmatter fast-path (→ ~10× on the scan) and an optional derived
+**sidecar index** (rebuildable — delete it and every record is still intact)
+that takes a selective query to **~0.1 ms (~1,000×)** and a `count()` to
+near-zero. The directory walk is linear to 1M records (no cliff). Full method,
+numbers, and design in grexa-db's
+[scaling R&D](https://github.com/visorcraft/grexa-db/blob/master/docs/grexa-db-scaling-rnd.md).
+
 ## Setup
 
 ### Requirements

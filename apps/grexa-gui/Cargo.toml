@@ -11,7 +11,7 @@ description = "Grexa Qt 6 / Kirigami GUI shell"
 grexa-ai = { version = "1.7.1", path = "../../crates/grexa-ai" }
 grexa-containers = { version = "1.7.1", path = "../../crates/grexa-containers" }
 grexa-core = { version = "1.7.1", path = "../../crates/grexa-core" }
-grexa-db = { git = "https://github.com/visorcraft/grexa-db", tag = "v1.7.0" }
+grexa-db = { git = "https://github.com/visorcraft/grexa-db" }
 grexa-i18n = { version = "1.7.1", path = "../../crates/grexa-i18n" }
 regex.workspace = true
 serde_json.workspace = true

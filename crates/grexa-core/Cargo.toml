@@ -11,7 +11,7 @@ chardetng.workspace = true
 encoding_rs.workspace = true
 fancy-regex.workspace = true
 globset.workspace = true
-grexa-db = { git = "https://github.com/visorcraft/grexa-db", tag = "v1.7.0" }
+grexa-db = { git = "https://github.com/visorcraft/grexa-db" }
 icu_casemap.workspace = true
 icu_locale_core.workspace = true
 icu_properties.workspace = true
