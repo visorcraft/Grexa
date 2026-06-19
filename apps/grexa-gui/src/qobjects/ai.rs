@@ -32,6 +32,10 @@ use grexa_ai::{
     secret::{delete_api_key, load_api_key, store_api_key},
 };
 
+use grexa_core::{
+    DEFAULT_AI_SUMMARY_BUDGET_CHARS, MAX_AI_SUMMARY_BUDGET_CHARS, MIN_AI_SUMMARY_BUDGET_CHARS,
+};
+
 use super::workspace_handle::with_workspace;
 
 #[cxx_qt::bridge]
@@ -107,10 +111,6 @@ pub struct AiControllerRust {
     last_response: QString,
     last_error: QString,
 }
-
-/// Character budget for the excerpts packed into a "Summarize results" request
-/// (~3k model tokens). Bounds the prompt regardless of how many rows matched.
-const EVIDENCE_BUDGET_CHARS: usize = 12_000;
 
 /// Returns `Some(())` if the AI search panel is enabled in settings,
 /// `None` otherwise. The audit makes this gate mandatory.
@@ -201,6 +201,16 @@ impl ffi::AiController {
         }
         let model = self.as_ref().rust().model.to_string();
         let api_key = load_api_key(&endpoint).ok().flatten();
+        // Excerpt budget is user-tunable via the Settings slider; clamp the
+        // stored value defensively in case settings.json was hand-edited.
+        let budget = with_workspace(|w| {
+            w.settings
+                .load()
+                .map(|s| s.ai_summary_budget_chars)
+                .unwrap_or(DEFAULT_AI_SUMMARY_BUDGET_CHARS)
+        })
+        .clamp(MIN_AI_SUMMARY_BUDGET_CHARS, MAX_AI_SUMMARY_BUDGET_CHARS)
+            as usize;
         self.as_mut().set_busy(true);
         self.as_mut().set_last_error(QString::default());
 
@@ -223,13 +233,8 @@ impl ffi::AiController {
                 content: "Summarize these search results: the main findings grouped by theme, each with file:line citations, and note anything notable or surprising.".to_string(),
             }];
             let client = AiSearchClient::new();
-            let response = client.send_chat_with_evidence(
-                &config,
-                &context,
-                &matches,
-                EVIDENCE_BUDGET_CHARS,
-                &conversation,
-            );
+            let response =
+                client.send_chat_with_evidence(&config, &context, &matches, budget, &conversation);
             let _ = thread.queue(move |pin| finish_chat(pin, response));
         });
     }

@@ -19,6 +19,14 @@ const RECENT_PATH_LIMIT: usize = 20;
 const RECENT_SEARCH_LIMIT: usize = 20;
 const MIN_IMPORTED_WINDOW_DIM: u32 = 400;
 
+/// Bounds for the AI "Summarize results" excerpt budget, in characters.
+/// The Settings slider exposes this range; values are clamped on import,
+/// on save, and at read time so a hand-edited `settings.json` can't push
+/// an absurd prompt size.
+pub const DEFAULT_AI_SUMMARY_BUDGET_CHARS: u32 = 12_000;
+pub const MIN_AI_SUMMARY_BUDGET_CHARS: u32 = 2_000;
+pub const MAX_AI_SUMMARY_BUDGET_CHARS: u32 = 40_000;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppPaths {
     pub config_dir: PathBuf,
@@ -160,6 +168,11 @@ pub struct DefaultSettings {
     pub context_preview_lines_after: u8,
     pub ai_search_endpoint: String,
     pub ai_search_model: String,
+    /// Character budget for the "Summarize results" excerpt packer.
+    /// Caps how much matched-line text is packed into the model prompt;
+    /// tuned via the Settings slider. Clamped to
+    /// `[MIN_AI_SUMMARY_BUDGET_CHARS, MAX_AI_SUMMARY_BUDGET_CHARS]`.
+    pub ai_summary_budget_chars: u32,
     /// AI is **opt-in**. The chat panel can be enabled even when an API key
     /// is stored, but no request is ever sent until the user toggles this on
     /// in Settings. The audit (`docs/grex-ai-search-service-audit.md`) and
@@ -230,6 +243,7 @@ impl Default for DefaultSettings {
             context_preview_lines_after: DEFAULT_CONTEXT_LINES,
             ai_search_endpoint: "https://api.openai.com/v1".to_string(),
             ai_search_model: "gpt-4o-mini".to_string(),
+            ai_summary_budget_chars: DEFAULT_AI_SUMMARY_BUDGET_CHARS,
             ai_search_enabled: false,
             editor_preset: 8, // XdgOpen
             editor_custom_command: String::new(),
@@ -461,6 +475,9 @@ impl SettingsStore {
 
         merged.ai_search_endpoint = imported.ai_search_endpoint.trim().to_string();
         merged.ai_search_model = imported.ai_search_model.trim().to_string();
+        merged.ai_summary_budget_chars = imported
+            .ai_summary_budget_chars
+            .clamp(MIN_AI_SUMMARY_BUDGET_CHARS, MAX_AI_SUMMARY_BUDGET_CHARS);
         merged.ai_search_enabled = imported.ai_search_enabled;
 
         self.save(&merged)?;
@@ -920,6 +937,22 @@ mod tests {
         let imported = store.import_json(json).unwrap();
         assert_eq!(imported.ai_search_endpoint, "https://api.custom.local/v1");
         assert_eq!(imported.ai_search_model, "gpt-4o-mini");
+    }
+
+    #[test]
+    fn settings_import_clamps_ai_summary_budget() {
+        let (_dir, paths) = make_paths();
+        let store = SettingsStore::new(&paths);
+
+        let over = store
+            .import_json(r#"{"ai_summary_budget_chars": 9000000}"#)
+            .unwrap();
+        assert_eq!(over.ai_summary_budget_chars, MAX_AI_SUMMARY_BUDGET_CHARS);
+
+        let under = store
+            .import_json(r#"{"ai_summary_budget_chars": 1}"#)
+            .unwrap();
+        assert_eq!(under.ai_summary_budget_chars, MIN_AI_SUMMARY_BUDGET_CHARS);
     }
 
     #[test]

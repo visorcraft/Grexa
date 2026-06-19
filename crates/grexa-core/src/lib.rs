@@ -39,6 +39,7 @@ pub use replace::{
 };
 pub use search::{ProgressEvent, ProgressSink, SearchError, SkipReason, search, search_with};
 pub use storage::{
-    AppPaths, DefaultSettings, ImportError, JsonStoreError, RecentPathStore, RecentSearch,
+    AppPaths, DEFAULT_AI_SUMMARY_BUDGET_CHARS, DefaultSettings, ImportError, JsonStoreError,
+    MAX_AI_SUMMARY_BUDGET_CHARS, MIN_AI_SUMMARY_BUDGET_CHARS, RecentPathStore, RecentSearch,
     SearchHistoryStore, SearchProfile, SearchProfileStore, SettingsStore, ThemePreference,
 };

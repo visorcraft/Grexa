@@ -172,7 +172,9 @@ It packs the on-screen result lines (path + line + matched text) into the model
 prompt — budget-bounded and breadth-first across files — so the model answers
 *about what the search found* instead of only suggesting filters. The summary
 lands in the chat as an assistant message; if the matched lines don't contain
-the answer, the model is told to say so rather than guess.
+the answer, the model is told to say so rather than guess. The excerpt budget
+(how much matched text is packed into the prompt) is tunable from the slider in
+**Settings → AI Search**.
 
 The same capability is in the library: `AiSearchClient::send_chat_with_evidence`
 takes `&[grexa_ai::EvidenceMatch]` (each `{ path, lines: [{ line, text }] }`)

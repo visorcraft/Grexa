@@ -414,6 +414,30 @@ Kirigami.ScrollablePage {
                             }
                             onEditingFinished: page.commit()
                         }
+                        Controls.Label { text: app.i18n("ui-summary-excerpt-budget") }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: app.tokens.spaceM
+                            AppSlider {
+                                id: budgetSlider
+                                Layout.fillWidth: true
+                                from: 2000
+                                to: 40000
+                                stepSize: 1000
+                                snapMode: Controls.Slider.SnapAlways
+                                value: page.settings.aiSummaryBudgetChars
+                                Accessible.name: app.i18n("ui-summary-excerpt-budget")
+                                onMoved: {
+                                    page.settings.aiSummaryBudgetChars = value
+                                    page.commit()
+                                }
+                            }
+                            Controls.Label {
+                                Layout.minimumWidth: 72
+                                horizontalAlignment: Text.AlignRight
+                                text: budgetSlider.value + " " + app.i18n("ui-characters")
+                            }
+                        }
                         Controls.Label { text: app.i18n("ui-api-key") }
                         RowLayout {
                             Layout.fillWidth: true

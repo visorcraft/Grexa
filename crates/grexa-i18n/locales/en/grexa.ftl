@@ -652,6 +652,10 @@ ui-endpoint = Endpoint
 
 ui-model = Model
 
+ui-summary-excerpt-budget = Summary excerpt budget
+
+ui-characters = characters
+
 ui-api-key = API key
 
 ui-api-key-stored = •••••• (stored)
