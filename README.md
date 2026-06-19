@@ -131,11 +131,14 @@ byte-identical to the serial path, verified). Measured on **200,000 records**
 | list all records | 992 ms | **375 ms** | **2.6×** |
 | `order_by` (sort 200k) | 1669 ms | **851 ms** | **2.0×** |
 
-Two larger wins are **prototyped and benchmarked, not yet shipped**: a
-hand-rolled frontmatter fast-path (→ ~10× on the scan) and an optional derived
-**sidecar index** (rebuildable — delete it and every record is still intact)
-that takes a selective query to **~0.1 ms (~1,000×)** and a `count()` to
-near-zero. The directory walk is linear to 1M records (no cliff). Full method,
+A **secondary index** is also shipped — and wired into the **Database browser**,
+which holds it in memory and keeps it fresh via `inotify`. It's a derived
+`.grexa-index/` sidecar (rebuildable — delete it and every record is still
+intact). Held that way, a **selective query drops from 188 ms to 0.63 ms
+(297×)**, byte-identical to a scan, with verify-on-read so a stale index can
+never return a wrong match and a selectivity guard so broad queries fall back to
+the parallel scan. The directory walk is linear to 1M records (no cliff). A
+frontmatter fast-path (→ ~10× on the cold scan) remains prototyped. Full method,
 numbers, and design in grexa-db's
 [scaling R&D](https://github.com/visorcraft/grexa-db/blob/master/docs/grexa-db-scaling-rnd.md).
 

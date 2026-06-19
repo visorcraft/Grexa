@@ -7,10 +7,19 @@
 //! worker threads via [`cxx_qt::Threading`]; results are posted back
 //! through qproperty updates + signals so the GUI never freezes.
 
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::sync::{Arc, RwLock};
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
+use grexa_db::Index;
+use notify::Watcher as _;
+
+/// Per-collection in-memory indexes, shared between the query worker threads
+/// (read) and the filesystem watcher (reconcile).
+type SharedIndexes = Arc<RwLock<HashMap<String, Index>>>;
 
 #[cxx_qt::bridge]
 pub mod ffi {
@@ -94,6 +103,10 @@ pub struct DbControllerRust {
     query_result: QString,
     busy: bool,
     db: Option<grexa_db::Db>,
+    /// Held index per collection; queries read it, the watcher reconciles it.
+    indexes: SharedIndexes,
+    /// Kept alive to keep watching; replaced on each `open_db`.
+    watcher: Option<notify::RecommendedWatcher>,
 }
 
 impl ffi::DbController {
@@ -116,7 +129,8 @@ impl ffi::DbController {
                 self.as_mut().set_is_open(true);
                 self.as_mut()
                     .set_status_message(QString::from("Database opened"));
-                self.rust_mut().db = Some(db);
+                self.as_mut().rust_mut().db = Some(db);
+                self.as_mut().start_indexing(&path_str);
                 true
             }
             Err(e) => {
@@ -126,6 +140,42 @@ impl ffi::DbController {
                 false
             }
         }
+    }
+
+    /// Start the secondary-index machinery for a freshly opened database: build
+    /// every collection's index in the background (so the first selective query
+    /// is fast) and watch the tree to keep the indexes current. Both are
+    /// best-effort; queries fall back to a scan whenever an index is absent.
+    fn start_indexing(mut self: Pin<&mut Self>, root: &str) {
+        let root = PathBuf::from(root);
+        let indexes = self.rust().indexes.clone();
+
+        // Background build — never blocks the UI; queries scan until it lands.
+        {
+            let indexes = indexes.clone();
+            let root = root.clone();
+            std::thread::spawn(move || build_all_indexes(&root, &indexes));
+        }
+
+        // Watch for out-of-band edits and reconcile the touched collection's
+        // index. Verify-on-read keeps queries correct even before this fires.
+        let watch_indexes = indexes;
+        let watch_root = root.clone();
+        let watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+            if let Ok(event) = res {
+                reconcile_event(&watch_root, &watch_indexes, &event.paths);
+            }
+        })
+        .ok()
+        .and_then(|mut w| {
+            w.watch(&root, notify::RecursiveMode::Recursive)
+                .ok()
+                .map(|()| w)
+        });
+        if watcher.is_none() {
+            tracing::warn!("DbController: no filesystem watcher; index won't auto-refresh");
+        }
+        self.rust_mut().watcher = watcher;
     }
 
     fn collection_names(self: Pin<&mut Self>) -> QString {
@@ -322,6 +372,7 @@ impl ffi::DbController {
 
         self.as_mut().set_busy(true);
         let thread = self.qt_thread();
+        let indexes = self.rust().indexes.clone();
 
         std::thread::spawn(move || {
             let result = (|| {
@@ -333,13 +384,33 @@ impl ffi::DbController {
                 for (field, op, value) in &parsed {
                     query = apply_query_filter(query, field, op, value);
                 }
-                let mut paths = Vec::new();
-                for r in query.take(500) {
-                    match r {
-                        Ok(r) => paths.push(r.path().to_string()),
-                        Err(e) => tracing::warn!("query record: {e}"),
+                // Use the held index only when a filter it can serve is present
+                // (eq/contains) and the collection has been indexed — that's the
+                // selective case it wins on. Otherwise stream the first 500
+                // (cheap early-exit; no whole-result materialization).
+                let serviceable = parsed.iter().any(|(_, op, _)| op == "eq" || op == "contains");
+                let guard = indexes.read().map_err(|_| "index lock poisoned".to_string())?;
+                let paths: Vec<String> = match guard.get(&coll_name) {
+                    Some(idx) if serviceable => query
+                        .using_index(idx)
+                        .collect_par()
+                        .map_err(|e| e.to_string())?
+                        .into_iter()
+                        .take(500)
+                        .map(|r| r.path().to_string())
+                        .collect(),
+                    _ => {
+                        drop(guard);
+                        let mut v = Vec::new();
+                        for r in query.take(500) {
+                            match r {
+                                Ok(r) => v.push(r.path().to_string()),
+                                Err(e) => tracing::warn!("query record: {e}"),
+                            }
+                        }
+                        v
                     }
-                }
+                };
                 Ok::<String, String>(paths.join("\n"))
             })();
 
@@ -447,7 +518,22 @@ fn is_safe_view_name(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::is_safe_view_name;
+    use super::{collection_and_rel, is_safe_view_name};
+    use std::path::Path;
+
+    #[test]
+    fn collection_and_rel_maps_records_only() {
+        let root = Path::new("/db");
+        let cr = |p| collection_and_rel(root, Path::new(p));
+        assert_eq!(cr("/db/notes/a.md"), Some(("notes".into(), "a.md".into())));
+        assert_eq!(cr("/db/notes/2024/03/b.md"), Some(("notes".into(), "2024/03/b.md".into())));
+        // schema, the index dir, views, and paths outside a collection are skipped.
+        assert_eq!(cr("/db/notes/schema.md"), None);
+        assert_eq!(cr("/db/.grexa-index/index.json"), None);
+        assert_eq!(cr("/db/views/by-tag/x.md"), None);
+        assert_eq!(cr("/db/loose.md"), None);
+        assert_eq!(cr("/elsewhere/notes/a.md"), None);
+    }
 
     #[test]
     fn view_name_safety() {
@@ -464,6 +550,73 @@ mod tests {
         assert!(!is_safe_view_name("a/b"));
         assert!(!is_safe_view_name("a\\b"));
     }
+}
+
+/// Build an index for every collection in the database (best-effort).
+fn build_all_indexes(root: &Path, indexes: &SharedIndexes) {
+    let Ok(db) = grexa_db::Db::open(root) else {
+        return;
+    };
+    let Ok(names) = db.collections() else {
+        return;
+    };
+    for name in names {
+        let Ok(coll) = db.collection(&name) else {
+            continue;
+        };
+        match Index::build(&coll) {
+            Ok(idx) => {
+                if let Ok(mut map) = indexes.write() {
+                    map.insert(name, idx);
+                }
+            }
+            Err(e) => tracing::warn!("DbController: index build `{name}`: {e}"),
+        }
+    }
+}
+
+/// Reconcile the affected collections' indexes for a batch of changed paths.
+fn reconcile_event(root: &Path, indexes: &SharedIndexes, paths: &[PathBuf]) {
+    let mut by_coll: HashMap<String, Vec<String>> = HashMap::new();
+    for p in paths {
+        if let Some((coll, rel)) = collection_and_rel(root, p) {
+            by_coll.entry(coll).or_default().push(rel);
+        }
+    }
+    if by_coll.is_empty() {
+        return;
+    }
+    let Ok(db) = grexa_db::Db::open(root) else {
+        return;
+    };
+    for (coll_name, rels) in by_coll {
+        let Ok(coll) = db.collection(&coll_name) else {
+            continue;
+        };
+        if let Ok(mut map) = indexes.write()
+            && let Some(idx) = map.get_mut(&coll_name)
+            && let Err(e) = idx.reconcile(&coll, &rels)
+        {
+            tracing::warn!("DbController: index reconcile `{coll_name}`: {e}");
+        }
+    }
+}
+
+/// Map a changed absolute path to `(collection, record-relative-path)`, or
+/// `None` for the index dir, views, schema files, or anything outside a
+/// collection.
+fn collection_and_rel(root: &Path, changed: &Path) -> Option<(String, String)> {
+    let rel = changed.strip_prefix(root).ok()?;
+    let mut comps = rel.components();
+    let coll = comps.next()?.as_os_str().to_str()?.to_string();
+    if coll.starts_with('.') || coll == "views" {
+        return None;
+    }
+    let rest = comps.as_path().to_string_lossy().replace('\\', "/");
+    if rest.is_empty() || rest == "schema.md" {
+        return None;
+    }
+    Some((coll, rest))
 }
 
 fn apply_query_filter<'a>(
