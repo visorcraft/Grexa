@@ -28,6 +28,7 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use grexa_ai::{
     AiConversationTurn, AiRole, AiSearchClient, AiSearchConfig, AiSearchContext, AiSearchResponse,
+    EvidenceMatch,
     secret::{delete_api_key, load_api_key, store_api_key},
 };
 
@@ -58,6 +59,13 @@ pub mod ffi {
         /// `last_response` + emits `response_ready`.
         #[qinvokable]
         fn send_message(self: Pin<&mut AiController>, prompt: &QString);
+
+        /// Summarize the on-screen search results. `evidence_json` comes from
+        /// `SearchController::current_evidence_json`. Same opt-in / endpoint /
+        /// busy guards as `send_message`; the summary lands in `last_response`
+        /// and emits `response_ready`.
+        #[qinvokable]
+        fn summarize_results(self: Pin<&mut AiController>, evidence_json: &QString);
 
         /// Store a new API key keyed by the *current* `endpoint`.
         /// Returns false when no endpoint is set.
@@ -99,6 +107,10 @@ pub struct AiControllerRust {
     last_response: QString,
     last_error: QString,
 }
+
+/// Character budget for the excerpts packed into a "Summarize results" request
+/// (~3k model tokens). Bounds the prompt regardless of how many rows matched.
+const EVIDENCE_BUDGET_CHARS: usize = 12_000;
 
 /// Returns `Some(())` if the AI search panel is enabled in settings,
 /// `None` otherwise. The audit makes this gate mandatory.
@@ -158,6 +170,66 @@ impl ffi::AiController {
             }];
             let client = AiSearchClient::new();
             let response = client.send_chat(&config, &context, &conversation);
+            let _ = thread.queue(move |pin| finish_chat(pin, response));
+        });
+    }
+
+    fn summarize_results(mut self: Pin<&mut Self>, evidence_json: &QString) {
+        if !ai_enabled() {
+            self.as_mut().set_last_error(QString::from(
+                "AI search is disabled. Enable it in Settings → AI Search.",
+            ));
+            return;
+        }
+        let endpoint = self.as_ref().rust().endpoint.to_string();
+        if endpoint.trim().is_empty() {
+            self.as_mut()
+                .set_last_error(QString::from("AI endpoint is not configured."));
+            return;
+        }
+        let matches: Vec<EvidenceMatch> =
+            serde_json::from_str(&evidence_json.to_string()).unwrap_or_default();
+        if matches.is_empty() {
+            self.as_mut()
+                .set_last_error(QString::from("There are no results to summarize."));
+            return;
+        }
+        if self.as_ref().rust().busy {
+            self.as_mut()
+                .set_last_error(QString::from("A request is already in progress."));
+            return;
+        }
+        let model = self.as_ref().rust().model.to_string();
+        let api_key = load_api_key(&endpoint).ok().flatten();
+        self.as_mut().set_busy(true);
+        self.as_mut().set_last_error(QString::default());
+
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            let config = AiSearchConfig {
+                endpoint,
+                api_key,
+                model: trim_to_option(model),
+            };
+            let context = AiSearchContext {
+                search_path: String::new(),
+                search_query: String::new(),
+                filter_suggestions: Vec::new(),
+                regex_search: false,
+                files_search: false,
+            };
+            let conversation = vec![AiConversationTurn {
+                role: AiRole::User,
+                content: "Summarize these search results: the main findings grouped by theme, each with file:line citations, and note anything notable or surprising.".to_string(),
+            }];
+            let client = AiSearchClient::new();
+            let response = client.send_chat_with_evidence(
+                &config,
+                &context,
+                &matches,
+                EVIDENCE_BUDGET_CHARS,
+                &conversation,
+            );
             let _ = thread.queue(move |pin| finish_chat(pin, response));
         });
     }

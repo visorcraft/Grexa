@@ -147,6 +147,8 @@ ui-ask-ai-for-help-shaping-a = Ask AI for help shaping a search
 ui-describe-what-youre-looking-for-in-1d0236 = Describe what you're looking for in plain English. The model will suggest a path, term, and flags.
 
 ui-ask-the-ai = Ask the AI…
+ui-summarize-results = Summarize results
+ui-summarize-the-current-search-results-with-ai = Summarize the current search results with AI
 
 ui-chat-message = Chat message
 
