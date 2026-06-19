@@ -148,7 +148,7 @@ numbers, and design in grexa-db's
 
 - Linux on Wayland or X11. KDE Plasma 6 is the primary desktop target.
 - Qt 6.6+ and Kirigami 6 for the GUI.
-- Rust 1.95+ only when building from source.
+- Rust 1.96+ only when building from source.
 - Optional: `pdftotext` from Poppler for PDF search.
 - Optional: Docker or Podman for container search.
 - Optional: KWallet or GNOME Keyring for AI-provider keys.

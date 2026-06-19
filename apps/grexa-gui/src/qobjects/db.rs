@@ -146,7 +146,7 @@ impl ffi::DbController {
     /// every collection's index in the background (so the first selective query
     /// is fast) and watch the tree to keep the indexes current. Both are
     /// best-effort; queries fall back to a scan whenever an index is absent.
-    fn start_indexing(mut self: Pin<&mut Self>, root: &str) {
+    fn start_indexing(self: Pin<&mut Self>, root: &str) {
         let root = PathBuf::from(root);
         let indexes = self.rust().indexes.clone();
 
@@ -388,8 +388,12 @@ impl ffi::DbController {
                 // (eq/contains) and the collection has been indexed — that's the
                 // selective case it wins on. Otherwise stream the first 500
                 // (cheap early-exit; no whole-result materialization).
-                let serviceable = parsed.iter().any(|(_, op, _)| op == "eq" || op == "contains");
-                let guard = indexes.read().map_err(|_| "index lock poisoned".to_string())?;
+                let serviceable = parsed
+                    .iter()
+                    .any(|(_, op, _)| op == "eq" || op == "contains");
+                let guard = indexes
+                    .read()
+                    .map_err(|_| "index lock poisoned".to_string())?;
                 let paths: Vec<String> = match guard.get(&coll_name) {
                     Some(idx) if serviceable => query
                         .using_index(idx)
@@ -516,42 +520,6 @@ fn is_safe_view_name(name: &str) -> bool {
     !name.is_empty() && !name.starts_with('.') && !name.contains('/') && !name.contains('\\')
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{collection_and_rel, is_safe_view_name};
-    use std::path::Path;
-
-    #[test]
-    fn collection_and_rel_maps_records_only() {
-        let root = Path::new("/db");
-        let cr = |p| collection_and_rel(root, Path::new(p));
-        assert_eq!(cr("/db/notes/a.md"), Some(("notes".into(), "a.md".into())));
-        assert_eq!(cr("/db/notes/2024/03/b.md"), Some(("notes".into(), "2024/03/b.md".into())));
-        // schema, the index dir, views, and paths outside a collection are skipped.
-        assert_eq!(cr("/db/notes/schema.md"), None);
-        assert_eq!(cr("/db/.grexa-index/index.json"), None);
-        assert_eq!(cr("/db/views/by-tag/x.md"), None);
-        assert_eq!(cr("/db/loose.md"), None);
-        assert_eq!(cr("/elsewhere/notes/a.md"), None);
-    }
-
-    #[test]
-    fn view_name_safety() {
-        assert!(is_safe_view_name("notes-by-tag"));
-        assert!(is_safe_view_name("high_rated"));
-
-        // Traversal / absolute / dotfile / separator escapes all rejected.
-        assert!(!is_safe_view_name(""));
-        assert!(!is_safe_view_name("/etc/passwd"));
-        assert!(!is_safe_view_name("../../etc/passwd"));
-        assert!(!is_safe_view_name(".."));
-        assert!(!is_safe_view_name("."));
-        assert!(!is_safe_view_name(".generations"));
-        assert!(!is_safe_view_name("a/b"));
-        assert!(!is_safe_view_name("a\\b"));
-    }
-}
-
 /// Build an index for every collection in the database (best-effort).
 fn build_all_indexes(root: &Path, indexes: &SharedIndexes) {
     let Ok(db) = grexa_db::Db::open(root) else {
@@ -656,5 +624,41 @@ fn apply_query_filter<'a>(
         "ge" => builder.ge(value),
         "contains" => builder.contains(value),
         _ => builder.eq(value),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{collection_and_rel, is_safe_view_name};
+    use std::path::Path;
+
+    #[test]
+    fn collection_and_rel_maps_records_only() {
+        let root = Path::new("/db");
+        let cr = |p| collection_and_rel(root, Path::new(p));
+        assert_eq!(cr("/db/notes/a.md"), Some(("notes".into(), "a.md".into())));
+        assert_eq!(cr("/db/notes/2024/03/b.md"), Some(("notes".into(), "2024/03/b.md".into())));
+        // schema, the index dir, views, and paths outside a collection are skipped.
+        assert_eq!(cr("/db/notes/schema.md"), None);
+        assert_eq!(cr("/db/.grexa-index/index.json"), None);
+        assert_eq!(cr("/db/views/by-tag/x.md"), None);
+        assert_eq!(cr("/db/loose.md"), None);
+        assert_eq!(cr("/elsewhere/notes/a.md"), None);
+    }
+
+    #[test]
+    fn view_name_safety() {
+        assert!(is_safe_view_name("notes-by-tag"));
+        assert!(is_safe_view_name("high_rated"));
+
+        // Traversal / absolute / dotfile / separator escapes all rejected.
+        assert!(!is_safe_view_name(""));
+        assert!(!is_safe_view_name("/etc/passwd"));
+        assert!(!is_safe_view_name("../../etc/passwd"));
+        assert!(!is_safe_view_name(".."));
+        assert!(!is_safe_view_name("."));
+        assert!(!is_safe_view_name(".generations"));
+        assert!(!is_safe_view_name("a/b"));
+        assert!(!is_safe_view_name("a\\b"));
     }
 }

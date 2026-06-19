@@ -73,7 +73,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
         with:
-          toolchain: "1.95.0"
+          toolchain: "1.96.0"
           components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
@@ -338,7 +338,7 @@ jobs:
           CARGO_HOME: /usr/local/cargo
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-            | sh -s -- -y --default-toolchain 1.95.0 --profile minimal --no-modify-path
+            | sh -s -- -y --default-toolchain 1.96.0 --profile minimal --no-modify-path
           {
             echo "RUSTUP_HOME=/usr/local/rustup"
             echo "CARGO_HOME=/usr/local/cargo"
@@ -471,7 +471,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
         with:
-          toolchain: "1.95.0"
+          toolchain: "1.96.0"
 
       - name: Resolve workspace version
         id: version

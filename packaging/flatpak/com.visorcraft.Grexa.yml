@@ -1,8 +1,10 @@
 # Flatpak manifest for Grexa.
 #
-# This manifest pairs with the workspace `rust-toolchain.toml` pin (Rust
-# 1.95, 2024 edition) by selecting the KDE 6.10 runtime, which is built on
-# the FDO 25.08 SDK and gets us the matching rust-stable Sdk extension.
+# This manifest targets the 2024 edition via the KDE 6.10 runtime, built on
+# the FDO 25.08 SDK whose rust-stable Sdk extension ships Rust 1.95.0. The
+# workspace `rust-toolchain.toml` pins 1.96.0 for dev/CI, so this build is
+# one minor behind — keep the code 1.95-compatible until FDO ships a 1.96
+# rust-stable extension (the sandbox has no rustup to honor the pin).
 #
 # Build the .flatpak bundle via `just flatpak-bundle` (recommended). The
 # Justfile target vendors cargo deps into target/flatpak/vendor, stages
