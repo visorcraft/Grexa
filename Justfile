@@ -122,15 +122,29 @@ flatpak-bundle: flatpak
         com.visorcraft.Grexa master
     @echo "wrote target/release/grexa.flatpak"
 
-# Build the Arch / CachyOS package from the local source tree via
-# makepkg, writing packaging/arch/grexa-<ver>-1-x86_64.pkg.tar.zst.
-# The PKGBUILD builds release with --locked, so bump the version and
-# refresh Cargo.lock first (see "Releasing / reinstalling" in AGENTS.md).
-# This does NOT install — pacman needs root, so run the install by hand:
+# Headless-launch a built grexa GUI binary and FAIL if the main window does
+# not instantiate (the "taskbar pin does nothing" bug). A green `cargo build`
+# is NOT proof the GUI runs — cxx-qt-lib swallows fatal QML errors. Arg is a
+# binary path, or `pkg:<path>` to verify the binary inside an Arch package.
+verify-gui binary="target/release/grexa":
+    scripts/verify_gui.sh "{{binary}}"
+
+# Build the Arch / CachyOS package from the local source tree via makepkg,
+# writing packaging/arch/grexa-<ver>-1-x86_64.pkg.tar.zst, THEN refuse to
+# return success unless the packaged GUI actually launches. This is the gate
+# that stops a broken GUI from ever reaching `sudo pacman -U`. The PKGBUILD
+# builds release with --locked, so bump the version and refresh Cargo.lock
+# first (see "Build + install" in AGENTS.md). Does NOT install — pacman needs
+# root, so run the install by hand:
 #   sudo pacman -U packaging/arch/grexa-*-x86_64.pkg.tar.zst
 arch-package:
-    cd packaging/arch && makepkg -f
-    @echo "wrote packaging/arch/grexa-*-x86_64.pkg.tar.zst"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ( cd packaging/arch && makepkg -f )
+    pkg="$(ls -t packaging/arch/grexa-*-x86_64.pkg.tar.zst | head -1)"
+    echo "built $pkg — verifying the packaged GUI launches before declaring success…"
+    scripts/verify_gui.sh "pkg:$pkg"
+    echo "OK — wrote and verified $pkg"
 
 # Convenience target — everything CI does. Useful before pushing.
 ci: fmt-check lint test
