@@ -43,6 +43,27 @@ ColumnLayout {
         text: controller.lastError
     }
 
+    // -- Summarize results — turns the AI from "suggest searches" into
+    // "answer over what the search found": packs the on-screen result lines
+    // into the model prompt (budget-bounded on the Rust side). Visible only
+    // once a search has produced matches.
+    AppFlatButton {
+        Layout.alignment: Qt.AlignLeft
+        visible: panel.aiEnabled && app.searchController.matchCount > 0
+        enabled: !controller.busy
+        icon.name: "view-list-text-symbolic"
+        icon.color: app.tokens.textPrimary
+        text: app.i18n("ui-summarize-results")
+        display: Controls.AbstractButton.TextBesideIcon
+        Controls.ToolTip.text: app.i18n("ui-summarize-the-current-search-results-with-ai")
+        Controls.ToolTip.visible: hovered
+        onClicked: {
+            const evidence = app.searchController.currentEvidenceJson()
+            messageModel.append({ role: "user", content: app.i18n("ui-summarize-results") })
+            controller.summarizeResults(evidence)
+        }
+    }
+
     // -- Conversation header — small action row with a Clear button.
     // Only visible once the panel has at least one message so it
     // doesn't clutter the empty state. The counter is "messages"

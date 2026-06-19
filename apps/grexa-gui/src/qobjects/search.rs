@@ -295,6 +295,13 @@ pub mod ffi {
         #[qinvokable]
         fn export_results(self: &SearchController, dest_path: &QString, format: i32) -> QString;
 
+        /// Serialize the on-screen results as JSON evidence
+        /// (`[{"path","lines":[{"line","text"}]}]`, capped at
+        /// `MAX_EVIDENCE_ROWS`) for the AI "Summarize results" action. The AI
+        /// side (`AiController::summarize_results`) budget-packs them.
+        #[qinvokable]
+        fn current_evidence_json(self: &SearchController) -> QString;
+
         /// Sort the underlying row set in place by the given column.
         /// `column`: 0=Path, 1=Line, 2=Match preview text.
         /// `ascending`: false flips to descending.
@@ -1317,6 +1324,17 @@ impl ffi::SearchController {
         }
     }
 
+    fn current_evidence_json(&self) -> QString {
+        let rust = self.rust();
+        // Project through `visible` so the AI sees exactly the on-screen rows.
+        let rows: Vec<&ResultRow> = rust
+            .visible
+            .iter()
+            .filter_map(|&i| rust.rows.get(i))
+            .collect();
+        QString::from(&build_evidence_json(&rows))
+    }
+
     fn refresh_view(mut self: Pin<&mut Self>) {
         unsafe { self.as_mut().begin_reset_model() };
         self.as_mut().rust_mut().rebuild_visible();
@@ -1697,6 +1715,39 @@ fn export_as_json(rows: &[&ResultRow]) -> String {
         })
         .collect();
     serde_json::to_string_pretty(&arr).unwrap_or_else(|_| "[]".into())
+}
+
+/// Cap on the on-screen rows folded into the AI evidence JSON; the AI side then
+/// budget-packs whatever fits its token budget.
+const MAX_EVIDENCE_ROWS: usize = 400;
+
+/// Group the visible rows by file into `grexa_ai::EvidenceMatch` JSON for the
+/// "Summarize results" action — the query-relevant lines the model answers from.
+fn build_evidence_json(rows: &[&ResultRow]) -> String {
+    let mut order: Vec<String> = Vec::new();
+    let mut by_path: std::collections::HashMap<String, Vec<grexa_ai::EvidenceLine>> =
+        std::collections::HashMap::new();
+    for row in rows.iter().take(MAX_EVIDENCE_ROWS) {
+        let path = row.full_path.to_string_lossy().into_owned();
+        if !by_path.contains_key(&path) {
+            order.push(path.clone());
+        }
+        by_path
+            .entry(path)
+            .or_default()
+            .push(grexa_ai::EvidenceLine {
+                line: row.line,
+                text: row.preview_line.clone(),
+            });
+    }
+    let matches: Vec<grexa_ai::EvidenceMatch> = order
+        .into_iter()
+        .map(|path| grexa_ai::EvidenceMatch {
+            lines: by_path.remove(&path).unwrap_or_default(),
+            path,
+        })
+        .collect();
+    serde_json::to_string(&matches).unwrap_or_else(|_| "[]".into())
 }
 
 /// Markdown table export — for sharing in PRs / issue trackers.
@@ -2512,5 +2563,40 @@ mod tests {
 
         assert!(csv.contains("\"'=HYPERLINK(\"\"https://example.invalid\"\""));
         assert!(csv.contains("'=cmd.txt"));
+    }
+
+    fn ev_row(path: &str, line: u32, text: &str) -> ResultRow {
+        ResultRow {
+            full_path: PathBuf::from(path),
+            relative_path: PathBuf::from(path),
+            line,
+            column: 1,
+            preview_before: String::new(),
+            preview_match: text.to_string(),
+            preview_after: String::new(),
+            preview_line: text.to_string(),
+        }
+    }
+
+    #[test]
+    fn evidence_json_groups_rows_by_file_preserving_order() {
+        let rows = [
+            ev_row("/a.rs", 3, "alpha"),
+            ev_row("/b.rs", 9, "beta"),
+            ev_row("/a.rs", 7, "gamma"),
+        ];
+        let refs: Vec<&ResultRow> = rows.iter().collect();
+        let json = build_evidence_json(&refs);
+        let parsed: Vec<grexa_ai::EvidenceMatch> = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.len(), 2, "two distinct files");
+        assert_eq!(parsed[0].path, "/a.rs");
+        assert_eq!(parsed[0].lines.len(), 2, "both /a.rs matches under one file");
+        assert_eq!(parsed[0].lines[0].line, 3);
+        assert_eq!(parsed[1].path, "/b.rs");
+    }
+
+    #[test]
+    fn evidence_json_empty_rows_serialize_to_empty_array() {
+        assert_eq!(build_evidence_json(&[]), "[]");
     }
 }

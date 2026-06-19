@@ -13,6 +13,11 @@ use thiserror::Error;
 pub mod secret;
 pub use secret::{SecretError, delete_api_key, load_api_key, store_api_key};
 
+pub mod evidence;
+pub use evidence::{
+    CHARS_PER_TOKEN_ESTIMATE, EvidenceLine, EvidenceMatch, PackedEvidence, pack_evidence,
+};
+
 pub const DEFAULT_MODEL: &str = "gpt-4o-mini";
 pub const DEFAULT_TIMEOUT_SECS: u64 = 90;
 const MAX_RESPONSE_BODY_BYTES: usize = 4 * 1024 * 1024;
@@ -312,6 +317,32 @@ impl<T: HttpTransport> AiSearchClient<T> {
         context: &AiSearchContext,
         conversation: &[AiConversationTurn],
     ) -> AiSearchResponse {
+        self.chat(config, context, conversation, None)
+    }
+
+    /// Like [`AiSearchClient::send_chat`], but also hands the model the matched
+    /// file lines so it can answer ABOUT the files instead of only suggesting
+    /// searches. `matches` (best-first from the search) are packed breadth-first
+    /// into at most `budget_chars` characters via [`pack_evidence`].
+    pub fn send_chat_with_evidence(
+        &self,
+        config: &AiSearchConfig,
+        context: &AiSearchContext,
+        matches: &[EvidenceMatch],
+        budget_chars: usize,
+        conversation: &[AiConversationTurn],
+    ) -> AiSearchResponse {
+        let packed = pack_evidence(matches, budget_chars);
+        self.chat(config, context, conversation, Some(packed.text.as_str()))
+    }
+
+    fn chat(
+        &self,
+        config: &AiSearchConfig,
+        context: &AiSearchContext,
+        conversation: &[AiConversationTurn],
+        evidence: Option<&str>,
+    ) -> AiSearchResponse {
         if config.endpoint.trim().is_empty() {
             return AiSearchResponse::fail("AI endpoint is not configured.");
         }
@@ -324,7 +355,7 @@ impl<T: HttpTransport> AiSearchClient<T> {
             .map(str::to_string)
             .unwrap_or_else(|| self.discover_model(config));
 
-        let messages = build_messages(context, conversation);
+        let messages = build_messages(context, conversation, evidence);
         let payload = serde_json::json!({
             "model": model,
             "temperature": 0.2,
@@ -398,8 +429,9 @@ fn auth_headers(api_key: Option<&str>, url: &str) -> HashMap<String, String> {
 fn build_messages(
     context: &AiSearchContext,
     conversation: &[AiConversationTurn],
+    evidence: Option<&str>,
 ) -> Vec<serde_json::Value> {
-    let mut out = Vec::with_capacity(conversation.len() + 2);
+    let mut out = Vec::with_capacity(conversation.len() + 3);
     out.push(serde_json::json!({
         "role": "system",
         "content": "You are Grexa AI Search. Help the user locate relevant files and code using the provided path, query, and filter suggestions. Ask concise follow-up questions when needed.",
@@ -408,6 +440,16 @@ fn build_messages(
         "role": "system",
         "content": build_context_prompt(context),
     }));
+    if let Some(evidence) = evidence.map(str::trim).filter(|value| !value.is_empty()) {
+        out.push(serde_json::json!({
+            "role": "system",
+            "content": format!(
+                "Excerpts from the matching files (each block is `path:` then `  <line>: <text>`). \
+Answer the user's question from these excerpts and cite `path:line`; if they do not contain the \
+answer, say so plainly instead of guessing.\n\n{evidence}"
+            ),
+        }));
+    }
     for turn in conversation {
         let trimmed = turn.content.trim();
         if trimmed.is_empty() {
@@ -988,6 +1030,97 @@ mod tests {
         let body: serde_json::Value =
             serde_json::from_slice(chat_request.body.as_ref().unwrap()).unwrap();
         assert_eq!(body["model"], "discovered-model");
+    }
+
+    #[test]
+    fn send_chat_with_evidence_puts_excerpts_in_the_prompt() {
+        let transport = MockTransport::with_responses(vec![response(
+            200,
+            "{\"choices\":[{\"message\":{\"content\":\"the backoff is 250ms\"}}]}",
+        )]);
+        let client = AiSearchClient::with_transport(transport.clone());
+        let config = AiSearchConfig {
+            endpoint: "https://api.example.com/v1".into(),
+            api_key: Some("sk".into()),
+            model: Some("gpt-4o-mini".into()),
+        };
+        let context = AiSearchContext {
+            search_path: "/home/me/code".into(),
+            search_query: "retry".into(),
+            filter_suggestions: vec![],
+            regex_search: false,
+            files_search: false,
+        };
+        let matches = vec![EvidenceMatch {
+            path: "net/client.rs".into(),
+            lines: vec![EvidenceLine {
+                line: 42,
+                text: "let backoff = RETRY_BACKOFF_MS;".into(),
+            }],
+        }];
+        let conversation = vec![AiConversationTurn {
+            role: AiRole::User,
+            content: "what is the retry backoff?".into(),
+        }];
+        let result =
+            client.send_chat_with_evidence(&config, &context, &matches, 4000, &conversation);
+        assert!(result.success, "{result:?}");
+
+        let request = transport.captured().pop().unwrap();
+        let body: serde_json::Value =
+            serde_json::from_slice(request.body.as_ref().unwrap()).unwrap();
+        let messages = body["messages"].as_array().unwrap();
+        assert!(
+            messages.iter().any(|msg| msg["role"] == "system"
+                && msg["content"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .contains("RETRY_BACKOFF_MS")),
+            "the matched line must reach the model: {messages:?}"
+        );
+        assert!(
+            messages.iter().any(|msg| msg["content"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("net/client.rs:")),
+            "the file path header must be present"
+        );
+    }
+
+    #[test]
+    fn send_chat_without_evidence_omits_the_excerpt_block() {
+        // The no-evidence path must be byte-for-byte the old behavior: only the
+        // two system messages, no excerpt block.
+        let transport = MockTransport::with_responses(vec![response(
+            200,
+            "{\"choices\":[{\"message\":{\"content\":\"ok\"}}]}",
+        )]);
+        let client = AiSearchClient::with_transport(transport.clone());
+        client.send_chat(
+            &AiSearchConfig {
+                endpoint: "https://api.example.com/v1".into(),
+                api_key: None,
+                model: Some("m".into()),
+            },
+            &AiSearchContext {
+                search_path: "/".into(),
+                search_query: "x".into(),
+                filter_suggestions: vec![],
+                regex_search: false,
+                files_search: false,
+            },
+            &[],
+        );
+        let body: serde_json::Value =
+            serde_json::from_slice(transport.captured().pop().unwrap().body.as_ref().unwrap())
+                .unwrap();
+        let systems = body["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|m| m["role"] == "system")
+            .count();
+        assert_eq!(systems, 2, "no-evidence path keeps exactly the two original system messages");
     }
 
     #[test]

@@ -165,6 +165,23 @@ if response.success {
 See [ai-provider-scope.md](ai-provider-scope.md) for which servers
 Grexa can talk to (any OpenAI-compatible endpoint).
 
+### Summarize results
+
+Once a search has matches, the AI panel shows a **Summarize results** button.
+It packs the on-screen result lines (path + line + matched text) into the model
+prompt — budget-bounded and breadth-first across files — so the model answers
+*about what the search found* instead of only suggesting filters. The summary
+lands in the chat as an assistant message; if the matched lines don't contain
+the answer, the model is told to say so rather than guess. The excerpt budget
+(how much matched text is packed into the prompt) is tunable from the slider in
+**Settings → AI Search**.
+
+The same capability is in the library: `AiSearchClient::send_chat_with_evidence`
+takes `&[grexa_ai::EvidenceMatch]` (each `{ path, lines: [{ line, text }] }`)
+and a character budget, packs them with `grexa_ai::pack_evidence`, and hands the
+model cited excerpts. A local endpoint (Ollama on `localhost:11434`) gives a
+fully offline summary.
+
 ## CLI output formats
 
 | Format | Use case |

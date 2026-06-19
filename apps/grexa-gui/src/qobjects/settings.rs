@@ -12,7 +12,9 @@ use std::pin::Pin;
 
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
-use grexa_core::{DefaultSettings, ThemePreference};
+use grexa_core::{
+    DefaultSettings, MAX_AI_SUMMARY_BUDGET_CHARS, MIN_AI_SUMMARY_BUDGET_CHARS, ThemePreference,
+};
 use serde_json::json;
 
 use super::workspace_handle::with_workspace;
@@ -41,6 +43,7 @@ pub mod ffi {
         #[qproperty(bool, ai_search_enabled)]
         #[qproperty(QString, ai_endpoint)]
         #[qproperty(QString, ai_model)]
+        #[qproperty(i32, ai_summary_budget_chars)]
         #[qproperty(QString, default_match_files)]
         #[qproperty(QString, default_exclude_dirs)]
         #[qproperty(i32, theme)]
@@ -235,6 +238,7 @@ pub struct SettingsControllerRust {
     ai_search_enabled: bool,
     ai_endpoint: QString,
     ai_model: QString,
+    ai_summary_budget_chars: i32,
     default_match_files: QString,
     default_exclude_dirs: QString,
     theme: i32,
@@ -267,6 +271,7 @@ impl Default for SettingsControllerRust {
             ai_search_enabled: false,
             ai_endpoint: QString::default(),
             ai_model: QString::default(),
+            ai_summary_budget_chars: grexa_core::DEFAULT_AI_SUMMARY_BUDGET_CHARS as i32,
             default_match_files: QString::default(),
             default_exclude_dirs: QString::default(),
             theme: 0,
@@ -307,6 +312,7 @@ impl SettingsControllerRust {
         self.ai_search_enabled = s.ai_search_enabled;
         self.ai_endpoint = QString::from(&s.ai_search_endpoint);
         self.ai_model = QString::from(&s.ai_search_model);
+        self.ai_summary_budget_chars = s.ai_summary_budget_chars as i32;
         self.default_match_files = QString::from(&s.default_match_files);
         self.default_exclude_dirs = QString::from(&s.default_exclude_dirs);
         self.theme = theme_to_i32(s.theme_preference);
@@ -335,6 +341,10 @@ impl SettingsControllerRust {
         s.ai_search_enabled = self.ai_search_enabled;
         s.ai_search_endpoint = self.ai_endpoint.to_string();
         s.ai_search_model = self.ai_model.to_string();
+        s.ai_summary_budget_chars = self
+            .ai_summary_budget_chars
+            .clamp(MIN_AI_SUMMARY_BUDGET_CHARS as i32, MAX_AI_SUMMARY_BUDGET_CHARS as i32)
+            as u32;
         s.default_match_files = self.default_match_files.to_string();
         s.default_exclude_dirs = self.default_exclude_dirs.to_string();
         s.theme_preference = theme_from_i32(self.theme);
@@ -527,6 +537,8 @@ impl ffi::SettingsController {
             .set_ai_endpoint(QString::from(&settings.ai_search_endpoint));
         self.as_mut()
             .set_ai_model(QString::from(&settings.ai_search_model));
+        self.as_mut()
+            .set_ai_summary_budget_chars(settings.ai_summary_budget_chars as i32);
         self.as_mut()
             .set_default_match_files(QString::from(&settings.default_match_files));
         self.as_mut()

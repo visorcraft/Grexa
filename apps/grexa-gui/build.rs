@@ -50,6 +50,7 @@ fn main() {
                 "qml/AppComboBox.qml",
                 "qml/AppCheckBox.qml",
                 "qml/AppSpinBox.qml",
+                "qml/AppSlider.qml",
                 "qml/AppFlatButton.qml",
             ]),
     )
