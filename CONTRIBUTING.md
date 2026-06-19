@@ -86,7 +86,7 @@ cargo test -p grexa-core
 
 ## Coding standards
 
-- Use stable Rust 1.95+ and edition 2024. Do not require nightly.
+- Use stable Rust 1.96+ and edition 2024. Do not require nightly.
 - Keep `grexa-core` synchronous. Do not introduce an async runtime.
 - Follow the existing crate boundaries and adjacent code style.
 - Prefer focused, explicit code over broad abstractions.

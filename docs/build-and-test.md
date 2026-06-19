@@ -11,7 +11,7 @@
 
 Notes:
 
-- **Rust 1.95+** is required (Rust 2024 edition). Install via your
+- **Rust 1.96+** is required (Rust 2024 edition). Install via your
   distro or via [rustup](https://rustup.rs/).
 - **Qt 6.6+** is required only for the GUI. The CLI builds with
   the Rust toolchain alone.
@@ -137,9 +137,14 @@ flatpak install --user -y flathub \
     org.freedesktop.Sdk.Extension.rust-stable//25.08
 ```
 
-The `rust-stable//25.08` extension ships Rust 1.95.0, matching
-`rust-toolchain.toml` exactly, so no rustup roundtrip happens inside
-the sandbox. The build itself runs **with no network access** —
+The `rust-stable//25.08` extension ships Rust 1.95.0 — one minor behind
+the workspace `rust-toolchain.toml` pin (now 1.96.0). The Flatpak SDK
+provides `cargo`/`rustc` directly (no rustup in the sandbox), so the pin
+is not honored there and the build compiles against 1.95.0. **Keep the
+code 1.95-compatible** (no 1.96-only language or stdlib features) until
+the freedesktop SDK ships a matching 1.96 `rust-stable` extension, and
+verify the Flatpak build after any toolchain bump. The build itself runs
+**with no network access** —
 `just flatpak-vendor` populates `target/flatpak/vendor` first and the
 manifest's `cargo --offline build --release --workspace --frozen`
 reads only from that directory.

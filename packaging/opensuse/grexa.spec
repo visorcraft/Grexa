@@ -14,7 +14,7 @@ Group:          Productivity/Other
 URL:            https://github.com/visorcraft/grexa
 Source0:        %{name}-%{version}.tar.gz
 
-BuildRequires:  rust >= 1.95
+BuildRequires:  rust >= 1.96
 BuildRequires:  cargo
 BuildRequires:  pkgconfig(Qt6Core) >= 6.6
 BuildRequires:  pkgconfig(Qt6Quick) >= 6.6
