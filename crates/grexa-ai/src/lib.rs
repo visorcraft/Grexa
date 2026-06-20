@@ -15,7 +15,8 @@ pub use secret::{SecretError, delete_api_key, load_api_key, store_api_key};
 
 pub mod evidence;
 pub use evidence::{
-    CHARS_PER_TOKEN_ESTIMATE, EvidenceLine, EvidenceMatch, PackedEvidence, pack_evidence,
+    CHARS_PER_TOKEN_ESTIMATE, EvidenceLine, EvidenceMatch, EvidenceSnippet, PackedEvidence,
+    pack_evidence,
 };
 
 pub const DEFAULT_MODEL: &str = "gpt-4o-mini";
@@ -1053,9 +1054,12 @@ mod tests {
         };
         let matches = vec![EvidenceMatch {
             path: "net/client.rs".into(),
-            lines: vec![EvidenceLine {
-                line: 42,
-                text: "let backoff = RETRY_BACKOFF_MS;".into(),
+            snippets: vec![EvidenceSnippet {
+                lines: vec![EvidenceLine {
+                    line: 42,
+                    text: "let backoff = RETRY_BACKOFF_MS;".into(),
+                    is_match: true,
+                }],
             }],
         }];
         let conversation = vec![AiConversationTurn {

@@ -168,19 +168,21 @@ Grexa can talk to (any OpenAI-compatible endpoint).
 ### Summarize results
 
 Once a search has matches, the AI panel shows a **Summarize results** button.
-It packs the on-screen result lines (path + line + matched text) into the model
-prompt — budget-bounded and breadth-first across files — so the model answers
-*about what the search found* instead of only suggesting filters. The summary
-lands in the chat as an assistant message; if the matched lines don't contain
-the answer, the model is told to say so rather than guess. The excerpt budget
-(how much matched text is packed into the prompt) is tunable from the slider in
-**Settings → AI Search**.
+It packs the on-screen matches — each with a few lines of surrounding context,
+the hit line flagged — into the model prompt, budget-bounded and breadth-first
+across files, so the model answers *about the matched code* instead of only
+suggesting filters. The summary lands in the chat as an assistant message; if
+the matches don't contain the answer, the model is told to say so rather than
+guess, and a one-line notice flags when the row cap or the budget left matches
+out. The excerpt budget (how much is packed into the prompt) is tunable from the
+slider in **Settings → AI Search**.
 
 The same capability is in the library: `AiSearchClient::send_chat_with_evidence`
-takes `&[grexa_ai::EvidenceMatch]` (each `{ path, lines: [{ line, text }] }`)
-and a character budget, packs them with `grexa_ai::pack_evidence`, and hands the
-model cited excerpts. A local endpoint (Ollama on `localhost:11434`) gives a
-fully offline summary.
+takes `&[grexa_ai::EvidenceMatch]` (each `{ path, snippets: [{ lines: [{ line,
+text, is_match }] }] }` — a match plus its context lines) and a character budget,
+packs them breadth-first with `grexa_ai::pack_evidence`, and hands the model
+cited excerpts. A local endpoint (Ollama on `localhost:11434`) gives a fully
+offline summary.
 
 ## CLI output formats
 

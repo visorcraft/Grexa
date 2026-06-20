@@ -1721,33 +1721,63 @@ fn export_as_json(rows: &[&ResultRow]) -> String {
 /// budget-packs whatever fits its token budget.
 const MAX_EVIDENCE_ROWS: usize = 400;
 
+/// Context lines packed before/after each match in the AI evidence. A small,
+/// fixed window — enough to read the hit in situ without spending the whole
+/// budget on one match's surroundings.
+const EVIDENCE_CONTEXT_LINES: u8 = 2;
+
 /// Group the visible rows by file into `grexa_ai::EvidenceMatch` JSON for the
-/// "Summarize results" action — the query-relevant lines the model answers from.
+/// "Summarize results" action — each match with a few lines of surrounding
+/// context so the model answers about the code, not just the bare hit line.
 fn build_evidence_json(rows: &[&ResultRow]) -> String {
     let mut order: Vec<String> = Vec::new();
-    let mut by_path: std::collections::HashMap<String, Vec<grexa_ai::EvidenceLine>> =
+    let mut by_path: std::collections::HashMap<String, Vec<grexa_ai::EvidenceSnippet>> =
         std::collections::HashMap::new();
     for row in rows.iter().take(MAX_EVIDENCE_ROWS) {
         let path = row.full_path.to_string_lossy().into_owned();
         if !by_path.contains_key(&path) {
             order.push(path.clone());
         }
-        by_path
-            .entry(path)
-            .or_default()
-            .push(grexa_ai::EvidenceLine {
-                line: row.line,
-                text: row.preview_line.clone(),
-            });
+        by_path.entry(path).or_default().push(snippet_for(row));
     }
     let matches: Vec<grexa_ai::EvidenceMatch> = order
         .into_iter()
         .map(|path| grexa_ai::EvidenceMatch {
-            lines: by_path.remove(&path).unwrap_or_default(),
+            snippets: by_path.remove(&path).unwrap_or_default(),
             path,
         })
         .collect();
     serde_json::to_string(&matches).unwrap_or_else(|_| "[]".into())
+}
+
+/// One match plus a few lines of context, read from the file. Falls back to the
+/// bare matched line when the file can't be re-read (deleted, too large, denied).
+fn snippet_for(row: &ResultRow) -> grexa_ai::EvidenceSnippet {
+    match context_preview(
+        &row.full_path,
+        row.line as usize,
+        EVIDENCE_CONTEXT_LINES,
+        EVIDENCE_CONTEXT_LINES,
+    ) {
+        Ok(ctx) => grexa_ai::EvidenceSnippet {
+            lines: ctx
+                .lines
+                .into_iter()
+                .map(|cl| grexa_ai::EvidenceLine {
+                    line: cl.line_number as u32,
+                    text: cl.content,
+                    is_match: cl.is_match,
+                })
+                .collect(),
+        },
+        Err(_) => grexa_ai::EvidenceSnippet {
+            lines: vec![grexa_ai::EvidenceLine {
+                line: row.line,
+                text: row.preview_line.clone(),
+                is_match: true,
+            }],
+        },
+    }
 }
 
 /// Markdown table export — for sharing in PRs / issue trackers.
@@ -2590,8 +2620,10 @@ mod tests {
         let parsed: Vec<grexa_ai::EvidenceMatch> = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.len(), 2, "two distinct files");
         assert_eq!(parsed[0].path, "/a.rs");
-        assert_eq!(parsed[0].lines.len(), 2, "both /a.rs matches under one file");
-        assert_eq!(parsed[0].lines[0].line, 3);
+        assert_eq!(parsed[0].snippets.len(), 2, "both /a.rs matches under one file");
+        // The fake paths don't exist, so context_preview falls back to the bare
+        // matched line — one line per snippet, carrying the row's line number.
+        assert_eq!(parsed[0].snippets[0].lines[0].line, 3);
         assert_eq!(parsed[1].path, "/b.rs");
     }
 

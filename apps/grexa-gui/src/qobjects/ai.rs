@@ -250,9 +250,9 @@ impl ffi::AiController {
             let packed = pack_evidence(&matches, budget);
             let notice = coverage_notice(
                 matches.len(),
-                matches.iter().map(|m| m.lines.len()).sum(),
+                matches.iter().map(|m| m.snippets.len()).sum(),
                 packed.files_included,
-                packed.lines_included,
+                packed.snippets_included,
                 total_matches,
             );
             let _ = thread.queue(move |pin| {
@@ -385,30 +385,30 @@ fn trim_to_option(value: String) -> Option<String> {
 }
 
 /// One-line coverage notice prepended to a "Summarize results" answer, or `""`
-/// when every matched line made it into the prompt. Surfaces both truncation
-/// points: the on-screen row cap (`total_matches` vs the `evidence_lines`
-/// actually handed to the model) and the excerpt budget (`evidence_lines` vs
-/// the `covered_lines` that fit). Without it, a 4000-match search silently gets
-/// a summary of whatever fit and the user is never told the rest was dropped.
+/// when every match made it into the prompt. Surfaces both truncation points:
+/// the on-screen row cap (`total_matches` vs the `evidence_matches` actually
+/// handed to the model) and the excerpt budget (`evidence_matches` vs the
+/// `covered_matches` whose snippets fit). Without it, a 4000-match search
+/// silently gets a summary of whatever fit and the user is never told.
 fn coverage_notice(
     evidence_files: usize,
-    evidence_lines: usize,
+    evidence_matches: usize,
     covered_files: usize,
-    covered_lines: usize,
+    covered_matches: usize,
     total_matches: usize,
 ) -> String {
-    let rows_capped = total_matches > evidence_lines;
-    let budget_truncated = covered_lines < evidence_lines;
+    let rows_capped = total_matches > evidence_matches;
+    let budget_truncated = covered_matches < evidence_matches;
     if !rows_capped && !budget_truncated {
         return String::new();
     }
     if rows_capped {
         format!(
-            "_Heads up: your search has {total_matches} matches; this summary considers only the first {evidence_lines}, and {covered_lines} of those fit the excerpt budget. Raise the budget in Settings → AI Search, or narrow the search._"
+            "_Heads up: your search has {total_matches} matches; this summary considers only the first {evidence_matches}, and {covered_matches} of those fit the excerpt budget. Raise the budget in Settings → AI Search, or narrow the search._"
         )
     } else {
         format!(
-            "_Heads up: only {covered_files} of {evidence_files} matched files ({covered_lines}/{evidence_lines} lines) fit the excerpt budget. Raise it in Settings → AI Search to include the rest._"
+            "_Heads up: only {covered_matches} of {evidence_matches} matches (across {covered_files}/{evidence_files} files) fit the excerpt budget. Raise it in Settings → AI Search to include the rest._"
         )
     }
 }
@@ -426,7 +426,8 @@ mod tests {
     fn flags_budget_truncation() {
         let n = coverage_notice(5, 20, 2, 8, 20);
         assert!(n.contains("excerpt budget"), "{n}");
-        assert!(n.contains("2 of 5"), "{n}");
+        assert!(n.contains("8 of 20 matches"), "{n}");
+        assert!(n.contains("2/5 files"), "{n}");
     }
 
     #[test]
