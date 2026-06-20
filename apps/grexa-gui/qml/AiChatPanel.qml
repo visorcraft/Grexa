@@ -60,7 +60,7 @@ ColumnLayout {
         onClicked: {
             const evidence = app.searchController.currentEvidenceJson()
             messageModel.append({ role: "user", content: app.i18n("ui-summarize-results") })
-            controller.summarizeResults(evidence)
+            controller.summarizeResults(evidence, app.searchController.matchCount)
         }
     }
 

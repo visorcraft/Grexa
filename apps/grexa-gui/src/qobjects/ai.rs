@@ -28,7 +28,7 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use grexa_ai::{
     AiConversationTurn, AiRole, AiSearchClient, AiSearchConfig, AiSearchContext, AiSearchResponse,
-    EvidenceMatch,
+    EvidenceMatch, pack_evidence,
     secret::{delete_api_key, load_api_key, store_api_key},
 };
 
@@ -65,11 +65,17 @@ pub mod ffi {
         fn send_message(self: Pin<&mut AiController>, prompt: &QString);
 
         /// Summarize the on-screen search results. `evidence_json` comes from
-        /// `SearchController::current_evidence_json`. Same opt-in / endpoint /
-        /// busy guards as `send_message`; the summary lands in `last_response`
-        /// and emits `response_ready`.
+        /// `SearchController::current_evidence_json`; `total_matches` is the full
+        /// match count so the summary can warn when the on-screen row cap or the
+        /// excerpt budget left some matches out. Same opt-in / endpoint / busy
+        /// guards as `send_message`; the summary lands in `last_response` and
+        /// emits `response_ready`.
         #[qinvokable]
-        fn summarize_results(self: Pin<&mut AiController>, evidence_json: &QString);
+        fn summarize_results(
+            self: Pin<&mut AiController>,
+            evidence_json: &QString,
+            total_matches: i32,
+        );
 
         /// Store a new API key keyed by the *current* `endpoint`.
         /// Returns false when no endpoint is set.
@@ -174,7 +180,7 @@ impl ffi::AiController {
         });
     }
 
-    fn summarize_results(mut self: Pin<&mut Self>, evidence_json: &QString) {
+    fn summarize_results(mut self: Pin<&mut Self>, evidence_json: &QString, total_matches: i32) {
         if !ai_enabled() {
             self.as_mut().set_last_error(QString::from(
                 "AI search is disabled. Enable it in Settings → AI Search.",
@@ -211,6 +217,7 @@ impl ffi::AiController {
         })
         .clamp(MIN_AI_SUMMARY_BUDGET_CHARS, MAX_AI_SUMMARY_BUDGET_CHARS)
             as usize;
+        let total_matches = total_matches.max(0) as usize;
         self.as_mut().set_busy(true);
         self.as_mut().set_last_error(QString::default());
 
@@ -235,7 +242,26 @@ impl ffi::AiController {
             let client = AiSearchClient::new();
             let response =
                 client.send_chat_with_evidence(&config, &context, &matches, budget, &conversation);
-            let _ = thread.queue(move |pin| finish_chat(pin, response));
+            // Re-pack (deterministic) to read what actually fit, so the summary
+            // can disclose the on-screen row cap and excerpt-budget truncation
+            // rather than silently dropping matches. ponytail: pack_evidence is
+            // microseconds on a ~12 KB budget — cheaper than threading the stats
+            // back out of the client.
+            let packed = pack_evidence(&matches, budget);
+            let notice = coverage_notice(
+                matches.len(),
+                matches.iter().map(|m| m.lines.len()).sum(),
+                packed.files_included,
+                packed.lines_included,
+                total_matches,
+            );
+            let _ = thread.queue(move |pin| {
+                let mut response = response;
+                if response.success && !notice.is_empty() {
+                    response.message = format!("{notice}\n\n{}", response.message);
+                }
+                finish_chat(pin, response);
+            });
         });
     }
 
@@ -355,5 +381,58 @@ fn trim_to_option(value: String) -> Option<String> {
         None
     } else {
         Some(trimmed.to_string())
+    }
+}
+
+/// One-line coverage notice prepended to a "Summarize results" answer, or `""`
+/// when every matched line made it into the prompt. Surfaces both truncation
+/// points: the on-screen row cap (`total_matches` vs the `evidence_lines`
+/// actually handed to the model) and the excerpt budget (`evidence_lines` vs
+/// the `covered_lines` that fit). Without it, a 4000-match search silently gets
+/// a summary of whatever fit and the user is never told the rest was dropped.
+fn coverage_notice(
+    evidence_files: usize,
+    evidence_lines: usize,
+    covered_files: usize,
+    covered_lines: usize,
+    total_matches: usize,
+) -> String {
+    let rows_capped = total_matches > evidence_lines;
+    let budget_truncated = covered_lines < evidence_lines;
+    if !rows_capped && !budget_truncated {
+        return String::new();
+    }
+    if rows_capped {
+        format!(
+            "_Heads up: your search has {total_matches} matches; this summary considers only the first {evidence_lines}, and {covered_lines} of those fit the excerpt budget. Raise the budget in Settings → AI Search, or narrow the search._"
+        )
+    } else {
+        format!(
+            "_Heads up: only {covered_files} of {evidence_files} matched files ({covered_lines}/{evidence_lines} lines) fit the excerpt budget. Raise it in Settings → AI Search to include the rest._"
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::coverage_notice;
+
+    #[test]
+    fn no_notice_when_everything_fits() {
+        assert!(coverage_notice(3, 10, 3, 10, 10).is_empty());
+    }
+
+    #[test]
+    fn flags_budget_truncation() {
+        let n = coverage_notice(5, 20, 2, 8, 20);
+        assert!(n.contains("excerpt budget"), "{n}");
+        assert!(n.contains("2 of 5"), "{n}");
+    }
+
+    #[test]
+    fn flags_row_cap() {
+        let n = coverage_notice(10, 400, 10, 400, 1500);
+        assert!(n.contains("1500 matches"), "{n}");
+        assert!(n.contains("first 400"), "{n}");
     }
 }
