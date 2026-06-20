@@ -38,6 +38,9 @@ Grexa can:
 - Search extracted text from OOXML, ODF, and PDF documents.
 - Search inside Docker or Podman containers.
 - Run as either the `grexa` desktop app or the `grexa-cli` command.
+- Chat with an optional, opt-in AI panel (any OpenAI-compatible
+  endpoint) that can summarize the current search results over the
+  matched lines.
 - Store API keys in the Linux Secret Service when optional AI features
   are configured.
 
