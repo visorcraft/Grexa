@@ -75,6 +75,14 @@
   </supports>
 
   <releases>
+    <release version="1.9.0" date="2026-06-20">
+      <description>
+        <p>Smarter AI summaries.</p>
+        <ul>
+          <li>"Summarize results" now packs a few lines of context around each match — not just the matched line — with the hit flagged, so the assistant can answer about the surrounding code instead of an isolated line. The excerpt budget (Settings → AI Search) and the coverage notice still bound and disclose how much is sent.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.8.1" date="2026-06-19">
       <description>
         <p>Adds AI summaries of your search results.</p>

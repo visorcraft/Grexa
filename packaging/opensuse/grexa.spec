@@ -6,7 +6,7 @@
 #
 
 Name:           grexa
-Version:        1.8.1
+Version:        1.9.0
 Release:        0
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 License:        GPL-3.0-only
@@ -102,6 +102,11 @@ cargo test --workspace --release --frozen
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Sat Jun 20 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.9.0-0
+- AI "Summarize results" now packs a few lines of context around each match
+  (not just the matched line), with the hit flagged, so the assistant can
+  answer about the surrounding code. Budget-bounded and disclosed as before.
+
 * Fri Jun 19 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.8.1-0
 - Add AI "Summarize results": the AI Search panel summarizes the on-screen
   matches (path, line, matched text), packed breadth-first into a bounded
