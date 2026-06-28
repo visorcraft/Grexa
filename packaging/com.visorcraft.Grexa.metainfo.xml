@@ -75,6 +75,16 @@
   </supports>
 
   <releases>
+    <release version="1.9.1" date="2026-06-27">
+      <description>
+        <p>Security and reliability patch.</p>
+        <ul>
+          <li>Bound the regex replace scan per file (CPU deadline plus a match cap) so a pathological pattern can no longer peg a core on a large file, mirroring the search hot path's existing guards.</li>
+          <li>Removed hardcoded absolute build paths from committed config and docs.</li>
+          <li>Pinned the grexa-db git dependency to a release tag for reproducible builds and restored the cargo-deny policy check to green.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.9.0" date="2026-06-20">
       <description>
         <p>Smarter AI summaries.</p>

@@ -17,7 +17,7 @@ Source evidence:
 - `Scripts/update_version.py`
 
 There are no top-level `*.sh`, `*.ps1`, `*.bat`, or non-`Scripts/` Python
-helpers in `/work/repos/visorcraft/grex/`. The repository delegates build
+helpers in `<grex-checkout>/`. The repository delegates build
 orchestration entirely to MSBuild/Visual Studio, so no shell or PowerShell
 glue exists. Decision rows that mention PowerShell are therefore by absence,
 not by replacement.
@@ -46,7 +46,7 @@ Total: 7 scripts, 1798 lines.
 
 ## `Scripts/add_localization_entry.py`
 
-- Path: `/work/repos/visorcraft/grex/Scripts/add_localization_entry.py`
+- Path: `<grex-checkout>/Scripts/add_localization_entry.py`
 - Language: Python 3 (stdlib only, `xml.etree.ElementTree`)
 - Lines: 168
 
@@ -69,18 +69,18 @@ shot across every locale shipping with the app. The output format will not be
 Linux equivalent:
 
 - New script: `scripts/i18n/add-entry.py` (Python 3 stdlib, no third-party
-  deps) under `/work/repos/visorcraft/grexa/scripts/i18n/`.
+  deps) under `scripts/i18n/`.
 - The script operates on whatever locale storage Grexa chooses (`gettext`
   `.po`/`.pot`, `fluent` `.ftl`, or a flat JSON/YAML keyed by locale). The
   current `linux-decisions.md` does not pin this; the audit treats the choice
   as pending, but the entry-point CLI signature stays `add-entry <key>
   <value>`.
 - Wired into the workspace via `just i18n-add KEY VALUE` in
-  `/work/repos/visorcraft/grexa/Justfile`.
+  `Justfile`.
 
 ## `Scripts/remove_localization_entry.py`
 
-- Path: `/work/repos/visorcraft/grex/Scripts/remove_localization_entry.py`
+- Path: `<grex-checkout>/Scripts/remove_localization_entry.py`
 - Language: Python 3 (stdlib only, `xml.etree.ElementTree`, `glob`)
 - Lines: 85
 
@@ -99,14 +99,14 @@ or not at all.
 Linux equivalent:
 
 - New script: `scripts/i18n/remove-entry.py` under
-  `/work/repos/visorcraft/grexa/scripts/i18n/`. Whatever format the
+  `scripts/i18n/`. Whatever format the
   add-counterpart writes, this script must inversely strip the same key from
   every locale file.
-- `just i18n-remove KEY` recipe in `/work/repos/visorcraft/grexa/Justfile`.
+- `just i18n-remove KEY` recipe in `Justfile`.
 
 ## `Scripts/test_add_localization_entry.py`
 
-- Path: `/work/repos/visorcraft/grex/Scripts/test_add_localization_entry.py`
+- Path: `<grex-checkout>/Scripts/test_add_localization_entry.py`
 - Language: Python 3 (`unittest`)
 - Lines: 216
 
@@ -143,7 +143,7 @@ Linux equivalent:
 
 ## `Scripts/test_remove_localization_entry.py`
 
-- Path: `/work/repos/visorcraft/grex/Scripts/test_remove_localization_entry.py`
+- Path: `<grex-checkout>/Scripts/test_remove_localization_entry.py`
 - Language: Python 3 (`unittest`)
 - Lines: 216
 
@@ -173,7 +173,7 @@ Linux equivalent:
 
 ## `Scripts/generate_translation_status.py`
 
-- Path: `/work/repos/visorcraft/grex/Scripts/generate_translation_status.py`
+- Path: `<grex-checkout>/Scripts/generate_translation_status.py`
 - Language: Python 3 (stdlib only, `xml.etree.ElementTree`)
 - Lines: 192
 
@@ -193,7 +193,7 @@ because the catalog ships ~100 locales and CI needs to surface drift.
 
 Linux equivalent:
 
-- `scripts/i18n/status.py` under `/work/repos/visorcraft/grexa/scripts/i18n/`.
+- `scripts/i18n/status.py` under `scripts/i18n/`.
 - Output stays plain text by default; add a `--json` flag so a future GitHub
   Actions job (or a `cargo xtask`) can ingest the summary.
 - `just i18n-status` recipe in the `Justfile`.
@@ -203,7 +203,7 @@ Linux equivalent:
 
 ## `Scripts/translate_remaining_entries.py`
 
-- Path: `/work/repos/visorcraft/grex/Scripts/translate_remaining_entries.py`
+- Path: `<grex-checkout>/Scripts/translate_remaining_entries.py`
 - Language: Python 3 with `googletrans==4.0.0rc1`
 - Lines: 705
 
@@ -243,7 +243,7 @@ Decision: `port`, but as a rewrite. Three reasons to rewrite rather than copy:
 
 Linux equivalent:
 
-- `scripts/i18n/translate.py` under `/work/repos/visorcraft/grexa/scripts/i18n/`.
+- `scripts/i18n/translate.py` under `scripts/i18n/`.
 - Replace `googletrans` with one of:
   - `argos-translate` (offline, open-source, packaged on Linux).
   - The DeepL or LibreTranslate HTTP API behind a `GREXA_TRANSLATE_API_KEY`
@@ -260,7 +260,7 @@ Linux equivalent:
 
 ## `Scripts/update_version.py`
 
-- Path: `/work/repos/visorcraft/grex/Scripts/update_version.py`
+- Path: `<grex-checkout>/Scripts/update_version.py`
 - Language: Python 3 (stdlib only, `re`)
 - Lines: 216
 
@@ -295,13 +295,13 @@ implementation is unrecognizable.
 
 Linux equivalent:
 
-- A `just version <X.Y.Z>` recipe in `/work/repos/visorcraft/grexa/Justfile`
+- A `just version <X.Y.Z>` recipe in `Justfile`
   that:
   1. Edits `[workspace.package].version` in
-     `/work/repos/visorcraft/grexa/Cargo.toml` via `cargo set-version`
+     `Cargo.toml` via `cargo set-version`
      (`cargo install cargo-edit`) — Cargo's workspace inheritance then
      propagates to every member crate without a regex sweep.
-  2. Stamps `/work/repos/visorcraft/grexa/packaging/com.visorcraft.Grexa.metainfo.xml`
+  2. Stamps `packaging/com.visorcraft.Grexa.metainfo.xml`
      with a new `<release version="X.Y.Z" date="YYYY-MM-DD"/>` row. This is
      the AppStream metadata Flatpak and AppImage consume.
   3. Optionally regenerates the manpage (`just manpage`) and shell
@@ -324,7 +324,7 @@ left implicit:
   role.
 - `scripts/fixtures/generate-search-corpus.sh`. Produces the synthetic
   directory trees the `SearchService` integration suite uses. Today
-  `/work/repos/visorcraft/grex/IntegrationTests/SearchWorkflowTests.cs`
+  `<grex-checkout>/IntegrationTests/SearchWorkflowTests.cs`
   manufactures these inline via `Directory.CreateDirectory(...)`. A standalone
   generator keeps the fixtures reproducible outside the test runner and lets
   the Rust port reuse the same content.
@@ -338,15 +338,15 @@ left implicit:
 - `scripts/packaging/build-flatpak.sh` and
   `scripts/packaging/build-appimage.sh`. Thin wrappers over
   `flatpak-builder` and `appimagetool` that reference
-  `/work/repos/visorcraft/grexa/packaging/flatpak/` and
-  `/work/repos/visorcraft/grexa/packaging/appimage/`. They replace the
+  `packaging/flatpak/` and
+  `packaging/appimage/`. They replace the
   `msix`/`appxmanifest` packaging that `Package.appxmanifest` implied.
 - `scripts/release/cut-release.sh`. Runs `just version`, regenerates
   manpages, regenerates completions, runs `just ci`, builds Flatpak +
   AppImage, and tags the commit. Subsumes the trailing instructions from
   `update_version.py` (`git add`, `git tag v<x.y>`, `git push --tags`).
 
-Suggested layout under `/work/repos/visorcraft/grexa/scripts/`:
+Suggested layout under `scripts/`:
 
 ```
 scripts/
@@ -372,7 +372,7 @@ scripts/
 
 All recipes (`i18n-add`, `i18n-remove`, `i18n-status`, `i18n-translate`,
 `i18n-test`, `version`, `fixtures`, `smoke`, `release`) live in
-`/work/repos/visorcraft/grexa/Justfile` so contributors discover them via
+`Justfile` so contributors discover them via
 `just --list`. Python scripts target Python 3.11 stdlib-only by default;
 optional dependencies (a translator backend) are isolated behind an env-var
 toggle so the default checkout never needs `pip install` to lint or test.

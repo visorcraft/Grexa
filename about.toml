@@ -24,4 +24,6 @@ accepted = [
     "Unicode-3.0",
     "Unlicense",
     "Zlib",
+    # Mirrors deny.toml [licenses].allow.
+    "CC0-1.0",
 ]

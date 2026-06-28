@@ -1,5 +1,5 @@
 Name:           grexa
-Version:        1.9.0
+Version:        1.9.1
 Release:        1%{?dist}
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 
@@ -89,6 +89,14 @@ command -v appstream-util >/dev/null && \
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Sat Jun 27 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.9.1-1
+- Bound the regex replace scan per file (CPU deadline + match cap) so a
+  pathological pattern can no longer peg a core on a large file, matching the
+  search hot path's existing guards.
+- Remove hardcoded absolute build paths from committed config and docs.
+- Pin the grexa-db git dependency to a release tag for reproducible builds and
+  bring the cargo-deny policy check back to green.
+
 * Sat Jun 20 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.9.0-1
 - AI "Summarize results" now packs a few lines of context around each match
   (not just the matched line), with the hit flagged, so the assistant can

@@ -1,3 +1,14 @@
+grexa (1.9.1-1) unstable; urgency=medium
+
+  * Bound the regex replace scan per file (CPU deadline + match cap) so a
+    pathological pattern can no longer peg a core on a large file, matching the
+    search hot path's existing guards.
+  * Remove hardcoded absolute build paths from committed config and docs.
+  * Pin the grexa-db git dependency to a release tag for reproducible builds
+    and bring the cargo-deny policy check back to green.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Sat, 27 Jun 2026 12:00:00 +0000
+
 grexa (1.9.0-1) unstable; urgency=medium
 
   * AI "Summarize results" now packs a few lines of context around each match

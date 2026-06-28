@@ -4,7 +4,7 @@
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
@@ -170,6 +170,23 @@ fn clear_journal() {
 /// the operation shape is captured by the initial write and the on-disk cost
 /// stays O(N) instead of O(N²).
 const JOURNAL_FLUSH_INTERVAL: usize = 100;
+
+/// CPU guard for the regex replace path. `apply_substitution` runs the engine
+/// (which may be the backtracking `fancy-regex` engine for lookaround /
+/// backreference patterns) over the whole file body at once, unlike the search
+/// hot path which is bounded per line. A pathological extended pattern can
+/// otherwise peg a core for minutes on one large file; this deadline is
+/// generous enough that no legitimate pattern reaches it (the fast engine is
+/// linear-time and never will) while capping the worst case. Mirrors the
+/// intent of `REGEX_PER_LINE_BUDGET` in `search.rs`.
+const REGEX_PER_FILE_BUDGET: Duration = Duration::from_secs(5);
+
+/// Memory guard for the regex replace path: cap how many match spans a single
+/// file can materialize before the operation stops collecting, so a dense
+/// haystack cannot build an unbounded vector. Mirrors `MAX_MATCHES_PER_LINE`
+/// (search) scaled to a whole-file scope and the workspace's 1,000,000-row
+/// ceiling.
+const MAX_MATCHES_PER_FILE: usize = 1_000_000;
 
 /// Safety brake: refuse to rewrite more than this many files in a single
 /// replace operation. A 1M-row search can map to many unique files; without a
@@ -516,16 +533,26 @@ fn apply_substitution(
     substitution: &SubstitutionContext,
 ) -> (String, usize) {
     if let Some(engine) = substitution.regex_engine.as_ref() {
-        if !options.search.whole_word {
-            let count = engine.find_iter(text).len();
-            let replaced = engine.replace_all(text, options.replacement.as_str());
-            return (replaced, count);
+        // Collect raw matches with both a CPU deadline and a memory cap so a
+        // pathological extended-engine pattern (or a haystack dense with
+        // matches) cannot peg a core or build an unbounded vector — same
+        // guards the search hot path enforces per line. `whole_word` filtering
+        // only shrinks the set, so it is applied to the bounded collection.
+        // The replacement then goes through `expand_matches`, which re-queries
+        // captures in the full-haystack context (correct for lookaround) and
+        // stays consistent with the bounded count.
+        let collect_cap = MAX_MATCHES_PER_FILE + 1;
+        let mut matches = engine.find_iter_with_budget(text, REGEX_PER_FILE_BUDGET, collect_cap);
+        if matches.len() > MAX_MATCHES_PER_FILE {
+            tracing::warn!(
+                "regex replace hit the per-file match cap ({}); truncating",
+                MAX_MATCHES_PER_FILE
+            );
+            matches.truncate(MAX_MATCHES_PER_FILE);
         }
-        let matches: Vec<_> = engine
-            .find_iter(text)
-            .into_iter()
-            .filter(|(start, end)| is_whole_word_match(text, *start, *end))
-            .collect();
+        if options.search.whole_word {
+            matches.retain(|(start, end)| is_whole_word_match(text, *start, *end));
+        }
         let count = matches.len();
         if count == 0 {
             return (text.to_string(), 0);
@@ -761,6 +788,26 @@ mod tests {
         assert_eq!(summary.matches_replaced, 2);
         let rewritten = fs::read_to_string(&target).unwrap();
         assert_eq!(rewritten, "v1.2.3\nv2.0.0\n");
+    }
+
+    #[test]
+    fn regex_replace_unified_path_handles_dense_matches() {
+        // Regression guard for the bounded-regex refactor: the non-whole-word
+        // branch used to call `replace_all`; it now collects via
+        // `find_iter_with_budget` and splices via `expand_matches`. A line with
+        // many capture-bearing matches must still count and rewrite every one.
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("a.txt");
+        fs::write(&target, "a1 a2 a3 a4 a5\n").unwrap();
+
+        let mut options = opts(dir.path(), r"a(\d)", "b$1");
+        options.search.regex = true;
+
+        let summary = replace_with(&options, &CancelToken::new(), None).unwrap();
+        assert_eq!(summary.files_modified, 1);
+        assert_eq!(summary.matches_replaced, 5);
+        let rewritten = fs::read_to_string(&target).unwrap();
+        assert_eq!(rewritten, "b1 b2 b3 b4 b5\n");
     }
 
     #[test]

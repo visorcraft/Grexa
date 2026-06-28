@@ -1,7 +1,7 @@
 # Grex Audit Inventory
 
 This inventory records the Grex files used as the behavioral source of truth for
-Grexa. It was captured from `/work/repos/visorcraft/grex` with:
+Grexa. It was captured from a local Grex checkout (`<grex-checkout>`) with:
 
 ```bash
 rg --files -g '!bin/**' -g '!obj/**' -g '!backup/**' -g '!__pycache__/**' | sort

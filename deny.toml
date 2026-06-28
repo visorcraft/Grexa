@@ -32,6 +32,8 @@ allow = [
     "Unlicense",
     "Zlib",
     "0BSD",
+    # CC0-1.0 — public-domain dedication (used by `notify`); GPL-compatible per FSF.
+    "CC0-1.0",
 ]
 confidence-threshold = 0.93
 
@@ -46,4 +48,5 @@ deny = []
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = []
+# grexa-db is a first-party workspace sibling published as a git dependency.
+allow-git = ["https://github.com/visorcraft/grexa-db"]

@@ -27,6 +27,10 @@
 /CLAUDE.md
 /GEMINI.md
 
+# Peer-review scratch: `opencode run` diff/context must live inside the repo
+# (the build agent sandbox auto-rejects external paths). Transient — never commit.
+/_review_diff.txt
+
 # Local design/planning scratch (kept local, not committed)
 /docs/superpowers/
 
