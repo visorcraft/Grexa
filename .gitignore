@@ -66,3 +66,6 @@ packaging/arch/pkg/
 packaging/arch/src/
 **/*.pkg.tar.zst
 packaging/**/*.tar.gz
+
+# Local release-artifact cache kept by clean_visorcraft_repos
+/_releases/
