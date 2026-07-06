@@ -684,7 +684,7 @@ dependencies = [
  "cxx",
  "cxx-qt-build",
  "cxx-qt-macro",
- "qt-build-utils",
+ "qt-build-utils 0.8.1",
  "static_assertions",
  "thiserror 1.0.69",
 ]
@@ -700,7 +700,7 @@ dependencies = [
  "cxx-gen",
  "cxx-qt-gen",
  "proc-macro2",
- "qt-build-utils",
+ "qt-build-utils 0.8.1",
  "quote",
  "serde",
  "serde_json",
@@ -730,7 +730,7 @@ dependencies = [
  "cxx",
  "cxx-qt",
  "cxx-qt-build",
- "qt-build-utils",
+ "qt-build-utils 0.8.1",
 ]
 
 [[package]]
@@ -1205,7 +1205,7 @@ dependencies = [
  "grexa-db",
  "grexa-i18n",
  "notify",
- "qt-build-utils",
+ "qt-build-utils 0.9.1",
  "regex",
  "serde_json",
  "tempfile",
@@ -2102,6 +2102,19 @@ dependencies = [
  "semver",
  "serde",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "qt-build-utils"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e575368c069f599b9918e592ce6eb6b4bc04d52b6825f7fcc89500f9e1de96b"
+dependencies = [
+ "anyhow",
+ "cc",
+ "semver",
+ "thiserror 1.0.69",
+ "which",
 ]
 
 [[package]]
@@ -3104,6 +3117,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf85cb06032201fa7c6f829d7db5a7e5aa45bcc0655327713065f6f0576731bf"
 dependencies = [
  "rustls-pki-types",
+]
+
+[[package]]
+name = "which"
+version = "8.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48d7cd18d4acb58fb3cdfe9ea54e6cd96a4e7d4cc45c56338b236e82dad47248"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
