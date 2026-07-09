@@ -29,10 +29,10 @@ Source evidence:
 
 All three return an `EncodingDetectionResult` with:
 
-- `Encoding Encoding` — a `System.Text.Encoding` instance.
-- `double Confidence` — clamped to `[0.0, 1.0]` in the constructor.
-- `bool HasBom` — only set to `true` by the BOM branch.
-- `string DetectionMethod` — a human-readable trace line such as
+- `Encoding Encoding` - a `System.Text.Encoding` instance.
+- `double Confidence` - clamped to `[0.0, 1.0]` in the constructor.
+- `bool HasBom` - only set to `true` by the BOM branch.
+- `string DetectionMethod` - a human-readable trace line such as
   `BOM detected: UTF-8 with BOM`, `Statistical analysis: Western European (Windows)`,
   `Heuristic: UTF-16 LE detected by null byte pattern`, `Heuristic: Defaulting to UTF-8`,
   `Statistical analysis failed, using UTF-8 fallback`, `Empty file`, or
@@ -55,9 +55,9 @@ corresponds to the 35 candidate encodings below.
 Unconditional (always present even without code-page providers):
 
 1. `UTF-8` (`Encoding.UTF8`)
-2. `Unicode` — UTF-16 Little Endian (`Encoding.Unicode`)
-3. `BigEndianUnicode` — UTF-16 Big Endian
-4. `UTF-32` — UTF-32 Little Endian (`Encoding.UTF32`)
+2. `Unicode` - UTF-16 Little Endian (`Encoding.Unicode`)
+3. `BigEndianUnicode` - UTF-16 Big Endian
+4. `UTF-32` - UTF-32 Little Endian (`Encoding.UTF32`)
 
 Looked up by name (verbatim strings from `EncodingDetectionService.cs`):
 
@@ -143,9 +143,9 @@ is a latent bug. Grexa already fixes it in
 `CalculateEncodingConfidence` is a weighted sum of four factors, then clamped
 with `Math.Min(1.0, sum)`:
 
-- `CheckValidCharacterSequences` x 0.4 — ratio of decoded characters that are
+- `CheckValidCharacterSequences` x 0.4 - ratio of decoded characters that are
   not invalid control characters (CR, LF, TAB are allowed).
-- `CheckCharacterFrequency` x 0.3 — fraction of the first 10 000 bytes that
+- `CheckCharacterFrequency` x 0.3 - fraction of the first 10 000 bytes that
   appear in a frequency table for the encoding's `EncodingName`. The frequency
   table store is bootstrapped with only two entries:
   - `UTF-8`: every byte `0..127` mapped to `0.1`.
@@ -155,14 +155,14 @@ with `Math.Min(1.0, sum)`:
   the table. The `Dictionary<string, ...>` is keyed on
   `encoding.EncodingName`, which is locale-dependent on .NET, so even
   `Encoding.UTF8` may miss the table when the host locale renames it.
-- `CheckFileNameHints` x 0.1 — pattern matches on the lower-cased file name:
+- `CheckFileNameHints` x 0.1 - pattern matches on the lower-cased file name:
   - `shift_jis` or `sjis` boosts Shift-encodings to `0.8`
   - `gb2312`, `gbk`, or `chinese` boosts GB-/Chinese-named encodings to `0.8`
   - `euc-kr` or `korean` boosts EUC-KR to `0.8`
   - `koi8`, `cyrillic`, or `russian` boosts KOI8/Cyrillic encodings to `0.8`
   - otherwise returns the neutral `0.5`
   - empty file name returns `0.5`
-- `CheckCommonTextPatterns` x 0.2 — examined on the first 1 000 characters of
+- `CheckCommonTextPatterns` x 0.2 - examined on the first 1 000 characters of
   the decoded string. Adds `0.2` for whitespace, `0.3` for any letter, `0.1`
   for any digit, `0.2` for any of the keywords `function`, `class`, `import`,
   `export`, `public`, `private`, `var`, `let`, `const` (case-insensitive),
@@ -172,17 +172,17 @@ with `Math.Min(1.0, sum)`:
 
 The hard-coded thresholds are:
 
-- `0.1` — minimum to keep a statistical candidate (anything below is dropped
+- `0.1` - minimum to keep a statistical candidate (anything below is dropped
   before sorting).
-- `0.3` — confidence below which the heuristic stage runs. **This is the
+- `0.3` - confidence below which the heuristic stage runs. **This is the
   practical "cutoff" the audit asks about.**
-- `0.95` — fixed confidence for every BOM hit.
-- `0.6` — fixed confidence for UTF-16 LE/BE inferred by null-byte heuristic.
-- `0.5` — fixed confidence for Shift-JIS, GB2312, and EUC-KR inferred by
+- `0.95` - fixed confidence for every BOM hit.
+- `0.6` - fixed confidence for UTF-16 LE/BE inferred by null-byte heuristic.
+- `0.5` - fixed confidence for Shift-JIS, GB2312, and EUC-KR inferred by
   heuristic byte-pattern scans.
-- `0.4` — fixed confidence for the UTF-8 heuristic default.
-- `0.2` — confidence stamped on the "no statistical winner" UTF-8 fallback.
-- `0.1` — confidence used for empty input and read-error fallbacks.
+- `0.4` - fixed confidence for the UTF-8 heuristic default.
+- `0.2` - confidence stamped on the "no statistical winner" UTF-8 fallback.
+- `0.1` - confidence used for empty input and read-error fallbacks.
 
 `EncodingDetectionResult` clamps the constructor argument to `[0.0, 1.0]`, so
 out-of-range values do not propagate.
@@ -206,7 +206,7 @@ buffer. For a 100 MB log this means the buffer is held in memory and decoded
 roughly 35 times.
 
 `TabViewModel.DetectFileEncoding(string)` (the separate, simpler BOM-only
-helper used for the result row label) is the only path that reads a prefix —
+helper used for the result row label) is the only path that reads a prefix -
 it opens a `FileStream`, reads `min(4096, length)` bytes, and inspects only
 the first three.
 
@@ -242,7 +242,7 @@ The BOM message strings (used in `DetectionMethod`, not in the column) are
 
 Grexa's `DetectedEncoding::label` already standardises on the short forms
 `UTF-8`, `UTF-8 BOM`, `UTF-16 LE`, `UTF-16 BE`, `UTF-32 LE`, `UTF-32 BE`.
-That matches the user-facing `TabViewModel` labels with a single difference —
+That matches the user-facing `TabViewModel` labels with a single difference -
 Grexa uses `UTF-8 BOM` where Grex uses plain `UTF-8` for BOM-decorated files
 in the result table. We adopt the Grexa labels and update parity tests
 accordingly.
@@ -375,45 +375,45 @@ should target the `chardetng` path.
 
 From `Tests/Services/EncodingDetectionServiceTests.cs`:
 
-1. `DetectEncoding_WithUTF8BOM_ReturnsUTF8WithHighConfidence` — BOM prefix
+1. `DetectEncoding_WithUTF8BOM_ReturnsUTF8WithHighConfidence` - BOM prefix
    `EF BB BF` plus ASCII payload returns UTF-8, `HasBom = true`, confidence
    above 0.9, `DetectionMethod` contains `"BOM"`. Rust port: covered by
    `encoding::tests::detect_utf8_bom` and `read_utf8_with_bom_strips_marker`;
    add an explicit confidence assertion once Grexa carries a confidence field.
-2. `DetectEncoding_WithUTF16LEBOM_ReturnsUTF16LEWithHighConfidence` — BOM
+2. `DetectEncoding_WithUTF16LEBOM_ReturnsUTF16LEWithHighConfidence` - BOM
    prefix `FF FE` returns UTF-16 LE, `HasBom = true`, confidence above 0.9.
    Rust port: extends `detect_utf16_le` / `read_utf16_le_decodes_correctly`.
-3. `DetectEncoding_WithUTF8WithoutBOM_ReturnsUTF8WithReasonableConfidence` —
+3. `DetectEncoding_WithUTF8WithoutBOM_ReturnsUTF8WithReasonableConfidence` -
    plain ASCII bytes return UTF-8, `HasBom = false`, confidence above 0.
    Rust port: `detect_plain_utf8`. Add: `chardetng` confirms UTF-8 for ASCII.
-4. `DetectEncoding_WithEmptyBytes_ReturnsUTF8WithLowConfidence` — empty
+4. `DetectEncoding_WithEmptyBytes_ReturnsUTF8WithLowConfidence` - empty
    buffer returns UTF-8, confidence below 0.2, `DetectionMethod` contains
    `"Empty"`. Rust port: new test, expect Grexa to short-circuit and report
    UTF-8 with no decoder error.
-5. `DetectEncoding_WithNullBytes_ReturnsUTF8WithLowConfidence` — null buffer
+5. `DetectEncoding_WithNullBytes_ReturnsUTF8WithLowConfidence` - null buffer
    returns UTF-8 low-confidence. Rust port: Rust signatures take `&[u8]`, so
    the equivalent is `detect_from_bytes(&[])`.
-6. `DetectFileEncoding_WithValidFile_ReturnsEncoding` — round-trip via a
+6. `DetectFileEncoding_WithValidFile_ReturnsEncoding` - round-trip via a
    temp file. Rust port: exercised through `read_text`, the file-level
    BOM → strict-UTF-8 → chardetng cascade. (The standalone `detect_from_path`
    helper was removed as unused; file callers use `read_text`.)
-7. `DetectFileEncoding_WithNonExistentFile_ReturnsUTF8Fallback` — Grex
+7. `DetectFileEncoding_WithNonExistentFile_ReturnsUTF8Fallback` - Grex
    swallows IO errors and reports UTF-8 with `DetectionMethod`
    `Error reading file: ...`. **Behavior change for Grexa**: `read_text`
    surfaces the `io::Error` to the caller rather than masking it as a
    low-confidence UTF-8 result; the GUI/CLI decide how to present the failure.
-8. `DetectEncoding_WithFileNameHint_CanUseHintForDetection` — accepts a file
+8. `DetectEncoding_WithFileNameHint_CanUseHintForDetection` - accepts a file
    name hint without throwing. **Not ported**: the hint stage is `0.1` of the
    weight and is largely cosmetic in Grex; Grexa relies on `chardetng` instead.
-9. `DetectEncoding_WithASCIIOnlyText_ReturnsUTF8` — pure ASCII returns
+9. `DetectEncoding_WithASCIIOnlyText_ReturnsUTF8` - pure ASCII returns
    UTF-8. Rust port: equivalent to `detect_plain_utf8`.
-10. `DetectEncoding_WithTextContainingNullBytes_MayDetectUTF16` — alternating
+10. `DetectEncoding_WithTextContainingNullBytes_MayDetectUTF16` - alternating
     null bytes from `Encoding.Unicode.GetBytes("Hello")` should produce a
     sensible result. Rust port: feed the same bytes into the BOM-less
     `chardetng` path and assert it returns UTF-16 LE.
-11. `EncodingDetectionResult_Constructor_ClampsConfidenceBetween0And1` — only
+11. `EncodingDetectionResult_Constructor_ClampsConfidenceBetween0And1` - only
     meaningful if Grexa adds a confidence type. Track as a TODO.
-12. `DetectEncoding_WithWindows1252Text_CanDetectEncoding` — accent-bearing
+12. `DetectEncoding_WithWindows1252Text_CanDetectEncoding` - accent-bearing
     Windows-1252 bytes should return a non-null encoding. Rust port: assert
     `chardetng` returns `windows-1252` (or one of its aliases).
 

@@ -132,8 +132,8 @@ Defaults match the `Default` impl.
 | `files_*_column_visible` | bool | `true` | Files table column visibility (Size / Matches / Path / Ext / Encoding / Modified). |
 | `window_width` | u32? | `1100` | GUI dimension; window position is intentionally not persisted. |
 | `window_height` | u32? | `700` | |
-| `context_preview_lines_before` | u8 | `5` | Clamp 1–20. |
-| `context_preview_lines_after` | u8 | `5` | Clamp 1–20. |
+| `context_preview_lines_before` | u8 | `5` | Clamp 1-20. |
+| `context_preview_lines_after` | u8 | `5` | Clamp 1-20. |
 | `ai_search_endpoint` | string | `"https://api.openai.com/v1"` | Trim on write. |
 | `ai_search_model` | string | `"gpt-4o-mini"` | Trim on write. |
 | `ai_search_enabled` | bool | `false` | Explicit opt-in gate. |

@@ -43,7 +43,7 @@ importer accepts a directory argument).
 | `DefaultExcludeDirs` | `default_exclude_dirs` |
 | `Content*ColumnVisible` | `content_*_column_visible` |
 | `Files*ColumnVisible` | `files_*_column_visible` |
-| `ContextPreviewLines*` | `context_preview_lines_*` (clamped to 1–20) |
+| `ContextPreviewLines*` | `context_preview_lines_*` (clamped to 1-20) |
 | `WindowWidth`/`WindowHeight` | `window_width`/`window_height` (when ≥ 400px each) |
 | `AiSearchEndpoint`/`AiSearchModel` | trimmed and saved |
 | `ThemePreference` | `theme_preference` (integer round-trip preserved) |
@@ -65,8 +65,8 @@ silently:
 - Anything WSL-related: `\\wsl$`, `\\wsl.localhost`, `/mnt/<drive>/…`
   paths in recent-paths or profiles. Marked unavailable rather than
   deleted, so the user can curate.
-- UNC paths (`\\server\share\…`) — same treatment.
-- Windows drive-letter paths (`C:\Users\…`) — the importer offers a
+- UNC paths (`\\server\share\…`) - same treatment.
+- Windows drive-letter paths (`C:\Users\…`) - the importer offers a
   one-time `C:\Users\<u>` → `$HOME` remap.
 - Windows toast / system tray / WinUI-specific settings.
 - `Properties.AssemblyInfo` style metadata.
@@ -120,7 +120,7 @@ secret-tool lookup service com.visorcraft.Grexa.ai account \
 
 If `secret-tool` finds the API key, the import succeeded. If it
 returns nothing and you previously had an API key configured in
-Grex, the keyring backend was unavailable — see
+Grex, the keyring backend was unavailable - see
 [SECURITY.md](SECURITY.md#api-key-handling).
 
 ## Bringing translations forward

@@ -18,8 +18,8 @@ acceleration on representative source-code trees.
 1. **Baloo's index excludes source code by default.** The default
    include list is `$HOME` minus `.cache`, `.local/share`, hidden dotdirs,
    `*.git`, and a long binary-extension list. Code repositories with
-   `.git` siblings are silently skipped. Source-code search — Grexa's
-   primary use case — gets no benefit from Baloo until the user
+   `.git` siblings are silently skipped. Source-code search - Grexa's
+   primary use case - gets no benefit from Baloo until the user
    manually adds their `~/code/...` paths to the indexer's include list.
 
 2. **Indexer freshness is loose.** Baloo updates on `inotify` events,
@@ -33,10 +33,10 @@ acceleration on representative source-code trees.
    `baloo-search` symlink. The CLI flags differ across versions
    (`-d <dir>` vs `--directory <dir>`), and structured output isn't
    stable. We'd need either:
-   - A D-Bus client against `org.kde.baloo.searchIndex` — adds a
+   - A D-Bus client against `org.kde.baloo.searchIndex` - adds a
      `zbus`-shaped runtime dependency on the Rust side. Worth doing
      only after the spike proves the headline acceleration is real.
-   - A C wrapper around `KFileMetaData` — pulls in KDE Frameworks at
+   - A C wrapper around `KFileMetaData` - pulls in KDE Frameworks at
      build time, which is fine for distros but heavy for AppImage /
      CI.
 
@@ -57,11 +57,11 @@ acceleration on representative source-code trees.
 - `crates/grexa-core/src/baloo.rs`:
   - `BalooAdapter` trait with `is_available`, `is_path_indexed`,
     `candidates_for`.
-  - `NullBalooAdapter` — always reports unavailable.
-  - `BaloosearchCliAdapter` — probes `baloosearch6` / `baloosearch` on
+  - `NullBalooAdapter` - always reports unavailable.
+  - `BaloosearchCliAdapter` - probes `baloosearch6` / `baloosearch` on
     `$PATH` and shells out for candidates. Used only when the GUI
     explicitly opts in.
-  - `StubBalooAdapter` — canned candidate lists for tests.
+  - `StubBalooAdapter` - canned candidate lists for tests.
 - `--use-index` / `--no-index` CLI flags (Phase 12) flow into
   `SearchOptions::use_file_index`. Today the search engine ignores the
   field; a future change wires the engine through `BalooAdapter` when
@@ -72,7 +72,7 @@ acceleration on representative source-code trees.
 
 Re-evaluate this spike when:
 
-1. We have telemetry — even opt-in — from real Grexa users showing the
+1. We have telemetry - even opt-in - from real Grexa users showing the
    median search exceeds 1 second on a tree Baloo could conceivably
    accelerate (`$HOME` documents, not source repos).
 2. Plasma 7 lands with a documented D-Bus contract for the search
@@ -85,9 +85,9 @@ above is the source of truth for "why isn't Baloo used?"
 
 ## Mocked test plan
 
-- `null_adapter_reports_unavailable` — sanity check the no-op path.
-- `stub_adapter_returns_canned_candidates` — pins the trait contract.
-- `baloosearch_cli_adapter_reports_unavailable_when_binary_missing` —
+- `null_adapter_reports_unavailable` - sanity check the no-op path.
+- `stub_adapter_returns_canned_candidates` - pins the trait contract.
+- `baloosearch_cli_adapter_reports_unavailable_when_binary_missing` -
   pins behavior on systems without KDE so CI doesn't depend on a live
   indexer.
 

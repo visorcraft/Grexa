@@ -54,15 +54,15 @@ Grexa targets:
 Phases referenced below come from the Grex-to-Grexa PLAN (see
 `linux-decisions.md` for cross-references):
 
-- Phase 2 — Settings, history, profiles, ICU/locale.
-- Phase 3 — Search engine core (results, summary, sort).
-- Phase 4 — GUI scaffolding (Qt/QML/Kirigami).
-- Phase 5 — Preview, encoding detection.
-- Phase 7 — Container runtimes (Docker/Podman).
-- Phase 8 — AI search client, KWallet/Secret Service.
-- Phase 10 — Importer for Grex backups.
-- Phase 12 — CLI.
-- Phase 13 — Baloo seeding spike.
+- Phase 2 - Settings, history, profiles, ICU/locale.
+- Phase 3 - Search engine core (results, summary, sort).
+- Phase 4 - GUI scaffolding (Qt/QML/Kirigami).
+- Phase 5 - Preview, encoding detection.
+- Phase 7 - Container runtimes (Docker/Podman).
+- Phase 8 - AI search client, KWallet/Secret Service.
+- Phase 10 - Importer for Grex backups.
+- Phase 12 - CLI.
+- Phase 13 - Baloo seeding spike.
 
 ## Summary Table
 
@@ -86,8 +86,8 @@ Phases referenced below come from the Grex-to-Grexa PLAN (see
 | 16 | `UnicodeNormalizationMode` | enum | `grexa_core::models::UnicodeNormalizationMode` | Ported | Variant set identical. The `ToNormalizationForm` extension is replaced by ICU in Phase 2. |
 
 Additional Grex-derived types that live outside `Models/` but are reachable
-from the same audits — `DefaultSettings`, `ThemePreference`, `SearchSummary`,
-`SearchOptions`, `OutputFormat` — are tracked in their own audits and are not
+from the same audits - `DefaultSettings`, `ThemePreference`, `SearchSummary`,
+`SearchOptions`, `OutputFormat` - are tracked in their own audits and are not
 duplicated in this map.
 
 ### Counts
@@ -101,7 +101,7 @@ duplicated in this map.
   `SearchResultSortField`).
 - Non-applicable: **1** (`DockerContainerOption`; see row 5).
 - Pending: **1** (`PathSuggestion`; Phase 4 GUI scaffolding).
-- Linux-specific replacement: 0 of the model classes themselves — the only
+- Linux-specific replacement: 0 of the model classes themselves - the only
   Linux-specific rewrite (`UseWindowsSearchIndex` → `use_file_index`) lives on
   `SearchProfile`/`DefaultSettings` and is recorded in the storage audit.
 
@@ -144,7 +144,7 @@ Source: `Models/ContextPreviewResult.cs:1-56`.
 | `FileName` | `string` | `string.Empty` | `file_name: String` | Same. |
 | `FullPath` | `string` | `string.Empty` | `full_path: PathBuf` | Typed path on Linux. |
 | `MatchLineNumber` | `int` | `0` | `match_line_number: usize` | Same. |
-| _(none)_ | — | — | `encoding: DetectedEncoding` | New: Grexa surfaces the detected encoding so the GUI can show it without re-reading the file. |
+| _(none)_ | - | - | `encoding: DetectedEncoding` | New: Grexa surfaces the detected encoding so the GUI can show it without re-reading the file. |
 
 ### `ContextLine` fields
 
@@ -167,7 +167,7 @@ Source: `Models/DockerContainerInfo.cs:1-37`.
 | `Image` | `string` | `string.Empty` | `image: String` | Same. |
 | `Status` | `string` | `string.Empty` | `status: String` | Same. |
 | `State` | `string` | `string.Empty` | `state: String` | Same. |
-| _(none)_ | — | — | `runtime: ContainerRuntimeKind` | New: distinguishes Docker from Podman (rootful or rootless). |
+| _(none)_ | - | - | `runtime: ContainerRuntimeKind` | New: distinguishes Docker from Podman (rootful or rootless). |
 | `ShortId` | computed `string` | n/a | _(none)_ | GUI helper; reproduce in Qt view-model. |
 | `DisplayName` | computed `string` | n/a | _(none)_ | GUI helper. |
 
@@ -209,7 +209,7 @@ Source: `Models/DockerMirrorInfo.cs:1-13`.
 | `LocalMirrorPath` | `string` | `string.Empty` | `local_mirror_path: PathBuf` | Typed path. |
 | `LocalSearchPath` | `string` | `string.Empty` | `local_search_path: PathBuf` | Typed path. |
 | `CreatedUtc` | `DateTime` | `DateTime.UtcNow` | `created_unix: u64` | Same encoding rule as `RecentSearch::timestamp_unix`. |
-| _(none)_ | — | — | `runtime: ContainerRuntimeKind` | New: required for Podman parity. |
+| _(none)_ | - | - | `runtime: ContainerRuntimeKind` | New: required for Podman parity. |
 
 **Status**: Renamed (`ContainerMirrorInfo` in `grexa-containers`).
 
@@ -341,7 +341,7 @@ Source: `Models/SearchResultSortField.cs:1-14`.
 **Status**: Renamed. See `crates/grexa-core/src/models.rs:37-47`.
 
 **Import note (Phase 10)**: settings backups serialize `SearchResultSortField`
-only inside column-visibility state, not as a top-level field — so the
+only inside column-visibility state, not as a top-level field - so the
 variant rename does not require an importer translation table.
 
 ## 12. `SizeLimitType`
@@ -435,7 +435,7 @@ Grexa equivalent: `grexa_core::models::SearchSummary` (lines 138-149 of
 ## Cross-Cutting: SearchOptions
 
 `SearchOptions` is referenced by `SearchProfile`. It is not a separate Grex
-model file — Grex flattens it onto `SearchProfile` — but Grexa folds the
+model file - Grex flattens it onto `SearchProfile` - but Grexa folds the
 options into a reusable struct.
 
 Grexa shape (`crates/grexa-core/src/models.rs:56-78`):
@@ -484,7 +484,7 @@ The following renamings carry semantic changes rather than mechanical port:
 Compared with `docs/grex-audit-inventory.md`, this map adds one
 non-applicable model that the inventory does not call out:
 
-- `DockerContainerOption` — Windows ComboBox adapter; no Rust analog. The
+- `DockerContainerOption` - Windows ComboBox adapter; no Rust analog. The
   audit inventory lists the file but does not classify it as
   non-applicable. Phase 4 supplies a QML list model that prepends the
   "Local filesystem" sentinel; no wire type is needed.
@@ -517,7 +517,7 @@ already landed.
       `DefaultSettings`) are referenced rather than re-tabulated.
 
 **Note on `ResultsListItem`**: the prompt named `ResultsListItem` as a
-focus model. No `Models/ResultsListItem.cs` exists in Grex —
+focus model. No `Models/ResultsListItem.cs` exists in Grex -
 `Controls/ResultsTemplateSelector.cs` selects between `SearchResult` and
 `FileSearchResult` as the displayed row type. Both row types are covered
 above (Sections 6 and 10). If a future Grex revision introduces a unified

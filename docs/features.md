@@ -21,9 +21,9 @@ the consumer-shaped view. The Grex ↔ Grexa parity matrix lives in
 
 ### Result modes
 
-- **Content** — one row per matching line: file name, line number,
+- **Content** - one row per matching line: file name, line number,
   column number, snippet, full path, match count.
-- **Files** — one row per matching file with aggregated counts plus
+- **Files** - one row per matching file with aggregated counts plus
   first-match preview, encoding label, size, modified time.
 
 ### Filters
@@ -94,7 +94,7 @@ crashes on malformed input.
   files stay UTF-8; legacy encodings detected via `chardetng` are
   re-encoded through `encoding_rs`.
 - **Crash-recovery journal** at `$XDG_STATE_HOME/grexa/replace-journal.json`
-  — every replaced file is logged before the operation completes, so
+  - every replaced file is logged before the operation completes, so
   a SIGKILL leaves an accurate "modified-so-far" list behind.
 - **No silent backup fallback**. If the user wants undo, they snapshot
   the tree before launching the replace.
@@ -107,10 +107,10 @@ crashes on malformed input.
   with CLI fallback when only the binary is on `$PATH`.
 - **Rootless Podman** detected via `$XDG_RUNTIME_DIR/podman/podman.sock`.
 - **Rootful Podman** via `/run/podman/podman.sock`, with CLI fallback.
-- **Direct grep** inside the container via argv-array `exec` —
+- **Direct grep** inside the container via argv-array `exec` -
   immune to shell-quoting bugs on paths / patterns containing spaces,
   colons, globs, or newlines.
-- **Archive mirror fallback** when the container has no `grep` —
+- **Archive mirror fallback** when the container has no `grep` -
   `docker cp` / `podman cp` to
   `$XDG_CACHE_HOME/grexa/container-mirrors/<runtime>/<id>/<unix-ts>`
   and run the local search engine over the mirrored tree.
@@ -164,7 +164,7 @@ crashes on malformed input.
 - Fluent (`.ftl`) catalog format. Three locales today: `en`, `de`,
   `ja`. Translation key parity enforced by
   `scripts/check_locale_sync.py` and a `cargo test`.
-- Plural-aware (ICU `select` ranges) — Grex's English-only
+- Plural-aware (ICU `select` ranges) - Grex's English-only
   `string.Format` plural failures don't survive the port.
 - Runtime locale switching via `Bundle::for_locale(Locale::from_tag(tag))`.
 

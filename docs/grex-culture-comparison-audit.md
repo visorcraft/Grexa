@@ -30,7 +30,7 @@ Source evidence:
 > "regex search ignores culture, normalization, and diacritic flags." This
 > audit verifies that claim against the source and finds one important
 > deviation: .NET's `Regex` *does* honor culture for case-insensitive
-> matching unless `RegexOptions.CultureInvariant` is set — and Grex does
+> matching unless `RegexOptions.CultureInvariant` is set - and Grex does
 > not set it. See section 4.
 
 ## 1. Comparison Mode Matrix
@@ -45,7 +45,7 @@ Source evidence:
 
 The mapping lives in `GetStringComparison(mode, caseSensitive, culture)` at
 `SearchService.cs:1626`. The `culture` argument is *not* consulted by
-`GetStringComparison` itself — it is only consulted by the explicit
+`GetStringComparison` itself - it is only consulted by the explicit
 `CompareInfo.IndexOf` fast path in `ContainsStringWithCultureAwareComparison`
 at lines 1581-1595 and only when `mode == CurrentCulture`. The implications:
 
@@ -53,7 +53,7 @@ at lines 1581-1595 and only when `mode == CurrentCulture`. The implications:
   comparison does only ASCII case folding for `[A-Z] <-> [a-z]`; all other
   codepoints are compared bit-for-bit. This is identical to what
   `s.eq_ignore_ascii_case` produces in Rust when restricted to ASCII, but
-  .NET extends this with simple casefold for the BMP via Unicode tables —
+  .NET extends this with simple casefold for the BMP via Unicode tables -
   see "Ordinal edge cases" below.
 - `InvariantCulture` uses the culture-invariant `CompareInfo` that .NET
   ships with. The casefold and collation tables come from .NET's bundled
@@ -75,13 +75,13 @@ at lines 1581-1595 and only when `mode == CurrentCulture`. The implications:
 `OrdinalIgnoreCase` in .NET uses `ToUpperInvariant`-equivalent simple
 casefold per character. Consequences relevant to test fixtures:
 
-- ASCII letters: bit-flip of bit 5 — `I <-> i`, `A <-> a`.
+- ASCII letters: bit-flip of bit 5 - `I <-> i`, `A <-> a`.
 - Unicode: lowercase Cyrillic, Greek, Latin Extended folds via
   `ToUpperInvariant`. So `É` -> `É` (matches `é` ignore-case).
 - Turkish capital dotless I (`İ`, U+0130) does *not* fold to `i` (U+0069)
-  under ordinal — `İ` only folds to `i + U+0307` if NFD is applied first.
+  under ordinal - `İ` only folds to `i + U+0307` if NFD is applied first.
   Under `OrdinalIgnoreCase` they do not match.
-- Sharp-s `ß` (U+00DF) does *not* fold to `SS` under ordinal — it only
+- Sharp-s `ß` (U+00DF) does *not* fold to `SS` under ordinal - it only
   folds to itself.
 
 ### Culture-sensitive surprises
@@ -118,10 +118,10 @@ plus an explicit `None`:
 | Mode   | Enum value | .NET `NormalizationForm` | Description                                  |
 | ------ | ---------- | ------------------------ | -------------------------------------------- |
 | None   | 0          | (not normalized)         | Strings compared as stored on disk           |
-| FormC  | 1          | `FormC`                  | NFC — canonical composition                  |
-| FormD  | 2          | `FormD`                  | NFD — canonical decomposition                |
-| FormKC | 3          | `FormKC`                 | NFKC — compatibility composition             |
-| FormKD | 4          | `FormKD`                 | NFKD — compatibility decomposition           |
+| FormC  | 1          | `FormC`                  | NFC - canonical composition                  |
+| FormD  | 2          | `FormD`                  | NFD - canonical decomposition                |
+| FormKC | 3          | `FormKC`                 | NFKC - compatibility composition             |
+| FormKD | 4          | `FormKD`                 | NFKD - compatibility decomposition           |
 
 The mapping is in `UnicodeNormalizationExtensions.ToNormalizationForm`. The
 default for legacy callers is `FormC` (note the `_ => FormC` fallback in
@@ -243,7 +243,7 @@ Findings:
    Turkish casefold rules. This contradicts the user-facing doc claim.
 
 **Parity recommendation for Grexa:** the Rust `regex` crate has no
-locale awareness at all — its `case_insensitive` flag uses Unicode simple
+locale awareness at all - its `case_insensitive` flag uses Unicode simple
 casefold derived from the Unicode standard, equivalent to .NET's
 `InvariantCulture`-ish behavior. We should:
 
@@ -254,7 +254,7 @@ casefold derived from the Unicode standard, equivalent to .NET's
 
 ## 5. Fixture Matrix for Rust Reproduction
 
-The Grex test suite is sparse on culture fixtures — only the two ordinal
+The Grex test suite is sparse on culture fixtures - only the two ordinal
 case-sensitivity tests in `SearchServiceTests.cs` exercise this code path
 end-to-end. Everything else mocks the comparator. To get meaningful
 parity coverage, Grexa must seed its own fixture set derived from the
@@ -368,7 +368,7 @@ To match the Grex matrix above, the candidate stacks are:
   crate, but that is the desired behavior (locale-invariant regex per
   the Grex docs claim).
 - Caveats: data size is significant (~4-7 MiB embedded when full CLDR
-  data is included). Build complexity is real — ICU4X requires
+  data is included). Build complexity is real - ICU4X requires
   `databake` or `provider` setup to bundle CLDR tables. API churn until
   ICU4X 2.0 stabilises.
 - Cost: medium-high integration effort; zero runtime dependency on a
@@ -395,13 +395,13 @@ To match the Grex matrix above, the candidate stacks are:
   combining-mark stripping (already done in `normalize_for_text_search`).
 - Reproduces: all of section 5.1 (Ordinal). Section 5.2 (Invariant)
   approximately matches because Unicode simple casefold is essentially
-  what InvariantCultureIgnoreCase does — but with edge cases on Turkish
+  what InvariantCultureIgnoreCase does - but with edge cases on Turkish
   dotless I and German eszett that differ. Section 5.4 matches
   perfectly. Section 5.3 (Turkish, German, Greek culture-specific
   rules) cannot be reproduced at all.
 - Caveats: forces us to ship Grexa without the Grex "selected culture"
   override feature, or to ship it as a no-op with a UI hint.
-- Cost: lowest — already implemented for the diacritic and
+- Cost: lowest - already implemented for the diacritic and
   normalization paths in `normalize_for_text_search`.
 
 ### Recommendation
@@ -422,14 +422,14 @@ the fallback compile path for embedded/minimal builds. Rationale:
 
 Concrete crate set for Option A:
 
-- `icu_normalizer` — NFC/NFD/NFKC/NFKD plus combining-mark utilities.
-- `icu_collator` — culture-aware `IndexOf`-style substring search via
+- `icu_normalizer` - NFC/NFD/NFKC/NFKD plus combining-mark utilities.
+- `icu_collator` - culture-aware `IndexOf`-style substring search via
   `Collator::compare_utf8` and a custom needle scanner (ICU4X does not
   ship a one-shot `index_of`; we will need a small Boyer-Moore-style
   loop on top of collation keys, or a linear scan for the v1 cut).
-- `icu_casemap` — locale-aware uppercase/lowercase/titlecase/fold for
+- `icu_casemap` - locale-aware uppercase/lowercase/titlecase/fold for
   the case-folded fast path when collation is overkill.
-- `icu_locid` — parsing `tr-TR`, `de-DE`, `el-GR` user input.
+- `icu_locid` - parsing `tr-TR`, `de-DE`, `el-GR` user input.
 - `icu_provider_blob` or compiled data via `icu_provider_baked` for
   shipping CLDR tables. Plan for ~4 MiB binary increase.
 
@@ -468,7 +468,7 @@ Memory:
 - NFD/NFKD allocates a new `String`. For a 4-KiB line with average
   combining-mark density, the decomposed form is ~1.3x. Worst case is
   Hangul or pre-composed Vietnamese at ~3x. Cap line length before
-  normalising — the existing `MATCH_PREVIEW_MAX_CHARS = 400` only
+  normalising - the existing `MATCH_PREVIEW_MAX_CHARS = 400` only
   governs the preview, not the comparison; we should add an internal
   `MAX_COMPARE_LINE_BYTES` (suggest 1 MiB) and skip normalisation for
   lines beyond it, falling back to Ordinal with a logged warning.
@@ -481,14 +481,14 @@ Memory:
    Grexa-on-Linux running against ICU4X CLDR will match the Linux build
    of Grex (if any) but not the Windows build. **Decision:** document as
    a known acceptable drift; do not try to ship NLS tables.
-2. .NET regex with `IgnoreCase` and no `CultureInvariant` flag — the
-   actual Grex behavior — cannot be reproduced in the Rust `regex` crate
+2. .NET regex with `IgnoreCase` and no `CultureInvariant` flag - the
+   actual Grex behavior - cannot be reproduced in the Rust `regex` crate
    because `regex` has no locale parameter. **Decision:** do not try;
    document as a deliberate change because the Grex behavior contradicts
    Grex's own user-facing documentation.
 3. The bogus-culture fallback at `SearchService.cs:1591` catches
    `CultureNotFoundException` and proceeds with `GetStringComparison`,
-   which then uses `StringComparison.CurrentCulture` — i.e., the thread
+   which then uses `StringComparison.CurrentCulture` - i.e., the thread
    culture, not Ordinal. Fixture #27 above captures this. The Rust port
    should match: if the user supplies `xx-XX`, fall back to the host
    locale via `sys-locale`, not to Ordinal.
@@ -513,16 +513,16 @@ For the Grexa cut over this audit drives:
 - [ ] Replace `normalize_for_text_search` with a `Comparator` trait that
   takes `StringComparisonMode`, `UnicodeNormalizationMode`, and an
   optional `Locale` from `icu_locid`.
-- [ ] Implement `OrdinalComparator` (byte and ASCII-case-fold paths) —
+- [ ] Implement `OrdinalComparator` (byte and ASCII-case-fold paths) -
   covers fixtures 1-10, 29-38.
 - [ ] Implement `InvariantComparator` via `icu_collator::Collator` with
-  the `und` (undetermined) locale — covers 11-16.
+  the `und` (undetermined) locale - covers 11-16.
 - [ ] Implement `LocaleComparator(locale)` via
-  `icu_collator::Collator::try_new(locale)` — covers 17-26.
+  `icu_collator::Collator::try_new(locale)` - covers 17-26.
 - [ ] Implement the bogus-culture fallback (try the locale, on error
-  fall back to host locale, not Ordinal) — covers 27-28.
+  fall back to host locale, not Ordinal) - covers 27-28.
 - [ ] Wire the diacritic-insensitive transform via `icu_normalizer::
-  ComposingNormalizer::new_nfd()` + `Mn`-only filter — match fixture
+  ComposingNormalizer::new_nfd()` + `Mn`-only filter - match fixture
   33's expectation.
 - [ ] Add `grexa-culture-icu` feature flag wrapping all ICU usage; the
   default `cfg(feature = "grexa-culture-icu")` path enables sections

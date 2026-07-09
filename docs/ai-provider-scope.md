@@ -32,7 +32,7 @@ Servers that ship this shape, validated against
 Grexa does **not** implement provider-native wire formats:
 
 - **Anthropic Messages API** (`/v1/messages` with `tool_use` and
-  `content: [{type: text}]` blocks) — proxy through LiteLLM if you need it.
+  `content: [{type: text}]` blocks) - proxy through LiteLLM if you need it.
 - **Google Gemini** native JSON shape.
 - **Cohere `/v1/chat`** native shape.
 - **xAI Grok** native API.
@@ -49,7 +49,7 @@ The full chat client lives behind the implicit `ai` Cargo path in
 `grexa-ai`. Privacy-conscious distributions can omit the entire crate
 from a build without losing search, replace, CLI, or container support:
 nothing else depends on it. The GUI presents the AI tab only when the
-crate is linked — that wiring lives in the GUI crate's Cargo features.
+crate is linked - that wiring lives in the GUI crate's Cargo features.
 
 ## Opt-in
 
@@ -67,6 +67,6 @@ endpoints.
 If the keyring backend is unavailable (no D-Bus session, no
 secret-service daemon), `grexa-ai::store_api_key` returns
 `SecretError::Backend(_)`. The Settings UI surfaces this verbatim and
-**refuses to fall back to plaintext** — that's the
+**refuses to fall back to plaintext** - that's the
 `docs/linux-decisions.md` rule and `docs/grex-storage-services-audit.md`
 import contract working together.

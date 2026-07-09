@@ -71,8 +71,8 @@ grexa-cli replace <path> <term> <replacement> [flags]
 Replaces every match of `<term>` with `<replacement>` across all
 matching files. Supports every search-behavior flag with identical
 semantics (matching, filtering, size limits, Unicode comparison,
-indexing, `--max-results`) — see the
-[flag reference](reference.md#flags) — so the file set it rewrites is
+indexing, `--max-results`) - see the
+[flag reference](reference.md#flags) - so the file set it rewrites is
 exactly the set the equivalent search previews. Add `--dry-run` to
 preview which files and matches would be affected without writing
 anything.
@@ -126,12 +126,12 @@ The GUI ships an in-tab AI chat panel
 Enable it in Settings → AI Search; pick an endpoint and (optionally)
 a model. API keys are stored in the system keyring, never on disk.
 
-The same client is also available as a library — from a script:
+The same client is also available as a library - from a script:
 
 ```rust
 use grexa_ai::{AiSearchClient, AiSearchConfig, AiSearchContext, AiConversationTurn, AiRole, store_api_key};
 
-// 1. Store the key once — uses the system keyring.
+// 1. Store the key once - uses the system keyring.
 store_api_key("https://api.openai.com/v1", "sk-…")?;
 
 // 2. Build the config + client.
@@ -168,8 +168,8 @@ Grexa can talk to (any OpenAI-compatible endpoint).
 ### Summarize results
 
 Once a search has matches, the AI panel shows a **Summarize results** button.
-It packs the on-screen matches — each with a few lines of surrounding context,
-the hit line flagged — into the model prompt, budget-bounded and breadth-first
+It packs the on-screen matches - each with a few lines of surrounding context,
+the hit line flagged - into the model prompt, budget-bounded and breadth-first
 across files, so the model answers *about the matched code* instead of only
 suggesting filters. The summary lands in the chat as an assistant message; if
 the matches don't contain the answer, the model is told to say so rather than
@@ -179,7 +179,7 @@ slider in **Settings → AI Search**.
 
 The same capability is in the library: `AiSearchClient::send_chat_with_evidence`
 takes `&[grexa_ai::EvidenceMatch]` (each `{ path, snippets: [{ lines: [{ line,
-text, is_match }] }] }` — a match plus its context lines) and a character budget,
+text, is_match }] }] }` - a match plus its context lines) and a character budget,
 packs them breadth-first with `grexa_ai::pack_evidence`, and hands the model
 cited excerpts. A local endpoint (Ollama on `localhost:11434`) gives a fully
 offline summary.
@@ -213,7 +213,7 @@ These are persisted under XDG paths and consumed by the GUI:
 - `$XDG_DATA_HOME/grexa/search_history.json`
 - `$XDG_DATA_HOME/grexa/search_profiles.json`
 
-The CLI doesn't read or write these — every CLI invocation is a
+The CLI doesn't read or write these - every CLI invocation is a
 one-shot. Use the GUI to manage stored entries.
 
 ## Logging

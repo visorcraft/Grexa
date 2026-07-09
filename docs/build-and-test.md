@@ -29,8 +29,8 @@ cargo build --workspace --release
 
 Binaries land at:
 
-- `target/release/grexa-cli` — headless CLI
-- `target/release/grexa` — Qt 6 / Kirigami GUI built via cxx-qt 0.8.
+- `target/release/grexa-cli` - headless CLI
+- `target/release/grexa` - Qt 6 / Kirigami GUI built via cxx-qt 0.8.
   On a host with the Kirigami 6 runtime installed, smoke-test with
   `QT_QPA_PLATFORM=offscreen target/release/grexa`.
 
@@ -137,14 +137,14 @@ flatpak install --user -y flathub \
     org.freedesktop.Sdk.Extension.rust-stable//25.08
 ```
 
-The `rust-stable//25.08` extension ships Rust 1.95.0 — one minor behind
+The `rust-stable//25.08` extension ships Rust 1.95.0 - one minor behind
 the workspace `rust-toolchain.toml` pin (now 1.96.0). The Flatpak SDK
 provides `cargo`/`rustc` directly (no rustup in the sandbox), so the pin
 is not honored there and the build compiles against 1.95.0. **Keep the
 code 1.95-compatible** (no 1.96-only language or stdlib features) until
 the freedesktop SDK ships a matching 1.96 `rust-stable` extension, and
 verify the Flatpak build after any toolchain bump. The build itself runs
-**with no network access** —
+**with no network access** -
 `just flatpak-vendor` populates `target/flatpak/vendor` first and the
 manifest's `cargo --offline build --release --workspace --frozen`
 reads only from that directory.
@@ -154,7 +154,7 @@ reads only from that directory.
 Newer librsvg releases on Arch (≥ 2.62) dropped the gdk-pixbuf SVG
 loader, so `flatpak build-export` rejects `com.visorcraft.Grexa.svg`
 with "Format not recognized" on those hosts. The Flatpak manifest
-intentionally installs only the PNG hicolor set (16..512 px) — KDE
+intentionally installs only the PNG hicolor set (16..512 px) - KDE
 Plasma scales the closest PNG cleanly at HiDPI. The .deb / .rpm /
 Arch / AppImage targets all still ship the SVG.
 
@@ -208,7 +208,7 @@ cargo watch -x 'run -p grexa'
 
 Note: QML files are bundled into the binary as Qt resources at
 build time via `cxx-qt-build`'s `qrc_resources`. Editing a `.qml`
-file requires a `cargo build` — there is no filesystem hot-reload
+file requires a `cargo build` - there is no filesystem hot-reload
 path. New `.qml` files must be added to the `qml_files` list in
 `apps/grexa-gui/build.rs` or they won't ship.
 

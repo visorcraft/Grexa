@@ -199,7 +199,7 @@ Linux equivalent:
 - `just i18n-status` recipe in the `Justfile`.
 - If Grexa adopts `gettext` instead of an `.resw`-shaped XML, the per-entry
   status check switches from "`<comment>` element text" to "is the `msgstr`
-  empty or marked `fuzzy`" — the report format stays the same.
+  empty or marked `fuzzy`" - the report format stays the same.
 
 ## `Scripts/translate_remaining_entries.py`
 
@@ -267,13 +267,13 @@ Linux equivalent:
 What it does: Accepts a `X.Y` version string and edits four hard-coded files
 via regex-on-bytes:
 
-- `Controls/AboutView.xaml.cs` — replaces the literal
+- `Controls/AboutView.xaml.cs` - replaces the literal
   `VersionTextBlock.Text = "Version X.X";`
-- `Package.appxmanifest` — replaces `Version="X.X.0.0"` on the
+- `Package.appxmanifest` - replaces `Version="X.X.0.0"` on the
   `<Identity>` element
-- `Properties/AssemblyInfo.cs` — replaces `AssemblyVersion`,
+- `Properties/AssemblyInfo.cs` - replaces `AssemblyVersion`,
   `AssemblyFileVersion`, and `AssemblyInformationalVersion` attributes
-- `app.manifest` — replaces `<assemblyIdentity version="X.X.0.0"`
+- `app.manifest` - replaces `<assemblyIdentity version="X.X.0.0"`
 
 After a successful pass it prints the suggested follow-up `git add`,
 `git commit`, `git tag`, and `git push --tags` commands but does not execute
@@ -282,12 +282,12 @@ them.
 Windows dependence: Conceptually total. Every file the script touches is a
 Microsoft packaging or WinUI artifact:
 
-- `Package.appxmanifest` — UWP/MSIX manifest, only meaningful to MSBuild and
+- `Package.appxmanifest` - UWP/MSIX manifest, only meaningful to MSBuild and
   the Windows packaging tooling.
-- `Controls/AboutView.xaml.cs` — WinUI code-behind that does not survive the
+- `Controls/AboutView.xaml.cs` - WinUI code-behind that does not survive the
   Avalonia / GTK port.
-- `Properties/AssemblyInfo.cs` — .NET Framework / .NET assembly metadata.
-- `app.manifest` — Win32 side-by-side assembly manifest, irrelevant on Linux.
+- `Properties/AssemblyInfo.cs` - .NET Framework / .NET assembly metadata.
+- `app.manifest` - Win32 side-by-side assembly manifest, irrelevant on Linux.
 
 Decision: `drop` (replace-with-just-target). The workflow ("bump the version
 in one place and let the build see it everywhere") is retained, but the
@@ -299,7 +299,7 @@ Linux equivalent:
   that:
   1. Edits `[workspace.package].version` in
      `Cargo.toml` via `cargo set-version`
-     (`cargo install cargo-edit`) — Cargo's workspace inheritance then
+     (`cargo install cargo-edit`) - Cargo's workspace inheritance then
      propagates to every member crate without a regex sweep.
   2. Stamps `packaging/com.visorcraft.Grexa.metainfo.xml`
      with a new `<release version="X.Y.Z" date="YYYY-MM-DD"/>` row. This is

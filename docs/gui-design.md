@@ -5,7 +5,7 @@
 PLAN.md Phase 1 called for a Rust ⇄ Qt bridge spike before
 committing to the GUI stack. Two paths were evaluated.
 
-**`cxx-qt` 0.8** — accepted, pure-Cargo. The crate generates the
+**`cxx-qt` 0.8** - accepted, pure-Cargo. The crate generates the
 QObject's C++ side at build time, registers `#[qml_element]`
 QObjects under a `QmlModule` URI specified in `build.rs`, and
 bundles `.qml` files into the binary via Qt's resource system.
@@ -22,7 +22,7 @@ and `SearchController`'s Rust-side snapshot map.
 
 A previous spike rejected cxx-qt after the link step failed with
 `undefined symbol: cxx_qt_init_crate_cxx_qt_lib`. That failure
-turned out to be cache state from a partial attempt — a fresh
+turned out to be cache state from a partial attempt - a fresh
 checkout with `CxxQtBuilder::new_qml_module(...)` (the API used
 when the crate IS a QML module) plus `cxx_qt::init_crate!` calls in
 `main.rs` links cleanly on cxx-qt 0.8.1 against system Qt 6.11.
@@ -42,9 +42,9 @@ What ships today:
    real `grexa-core` search engine drives it; the recent-paths
    store records every path; shared stores are accessed through a
    thread-local `Workspace` so QML instances see the same state.
-3. **A complete QML page set** at `apps/grexa-gui/qml/` — Main +
+3. **A complete QML page set** at `apps/grexa-gui/qml/` - Main +
    Search + Regex Builder + Settings + About + Credits + Licenses +
-   Context Preview + AiChatPanel + DesignTokens — bundled into the binary
+   Context Preview + AiChatPanel + DesignTokens - bundled into the binary
    via Qt's resource system at `qrc:/qt/qml/com/visorcraft/Grexa/...`.
 4. **Unit tests** that exercise the Rust-side QObject backing state
    without instantiating Qt, including search streaming, recent-path JSON,
@@ -59,7 +59,7 @@ What ships today:
 ```
 apps/grexa-gui/
 ├── Cargo.toml          # depends on every other Grexa crate + cxx-qt + cxx-qt-lib
-├── build.rs            # CxxQtBuilder::new_qml_module(...) — registers QML module + files
+├── build.rs            # CxxQtBuilder::new_qml_module(...) - registers QML module + files
 ├── src/
 │   ├── main.rs         # logging + workspace install + QGuiApplication + QQmlApplicationEngine
 │   ├── qobjects/       # cxx-qt QObjects + workspace TLS handle
@@ -88,7 +88,7 @@ apps/grexa-gui/
     ├── AppComboBox.qml         # themed ComboBox (same pattern)
     ├── AppCheckBox.qml         # themed CheckBox (replaces indicator delegate too)
     ├── AppSpinBox.qml          # themed SpinBox (same pattern)
-    ├── AppFlatButton.qml       # themed flat Button — sets `flat: true` + Button colorSet overrides + icon.color
+    ├── AppFlatButton.qml       # themed flat Button - sets `flat: true` + Button colorSet overrides + icon.color
     └── DesignTokens.qml        # spacing / radius / colors / typography / a11y
 ```
 
@@ -196,5 +196,5 @@ qmetaobject build.
 
 QML files load from `qrc:/qt/qml/com/visorcraft/Grexa/...` at
 runtime. Editing a QML file requires a `cargo build` cycle because
-the file is baked into the binary at build time — that is the
+the file is baked into the binary at build time - that is the
 cxx-qt-native flow.

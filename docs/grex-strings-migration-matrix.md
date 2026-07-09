@@ -35,15 +35,15 @@ Source evidence:
 
 Status legend:
 
-- `keep` — string carries forward into Grexa with the same key and the same
+- `keep` - string carries forward into Grexa with the same key and the same
   English text. The translation file content can be reused.
-- `rename-key` — concept survives but the key is renamed to drop a Windows
+- `rename-key` - concept survives but the key is renamed to drop a Windows
   reference (for example, `UseWindowsSearchCheckBox.Content` →
   `UseFileIndexCheckBox.Content`). Translations are re-keyed on import.
-- `remove-windows-only` — the entire string is dropped because the underlying
+- `remove-windows-only` - the entire string is dropped because the underlying
   UI element or behavior is gone (WSL, Windows toast diagnostics, Windows
   shell verbs, MSIX runtime troubleshooting).
-- `add-linux-only` — Grexa needs a new string that Grex never had (Baloo
+- `add-linux-only` - Grexa needs a new string that Grex never had (Baloo
   status, KIO-FUSE warning, Podman socket diagnostics, Open in Kate, etc.).
   These are listed in their own section at the bottom and not in the main
   table.
@@ -215,7 +215,7 @@ Placeholder convention:
 | `CopyPathMenuItem` | Copy Path | Copy Path | keep |  |
 | `CopyFileNameMenuItem` | Copy File Name | Copy File Name | keep |  |
 
-## Settings — General, UI Language, Theme
+## Settings - General, UI Language, Theme
 
 | Key | English text | Linux equivalent text | Status | Notes |
 | --- | --- | --- | --- | --- |
@@ -259,7 +259,7 @@ Placeholder convention:
 | `RestartApplicationButton.Content` | Restart Application | Restart Application | keep |  |
 | `Controls.SettingsView.RestartApplicationButton.ToolTip` | Restart the application to apply changes. | Restart the application to apply changes. | keep |  |
 
-## Settings — Defaults
+## Settings - Defaults
 
 | Key | English text | Linux equivalent text | Status | Notes |
 | --- | --- | --- | --- | --- |
@@ -283,7 +283,7 @@ Placeholder convention:
 | `Controls.SettingsView.DefaultIncludeSymbolicLinksCheckBox.ToolTip` | Follow symbolic links and junctions by default. | Follow symbolic links by default. | keep | drop "junctions" |
 | `Controls.SettingsView.DefaultSearchCaseSensitiveCheckBox.ToolTip` | Make new searches case-sensitive by default. | Make new searches case-sensitive by default. | keep |  |
 
-## Settings — String Comparison
+## Settings - String Comparison
 
 | Key | English text | Linux equivalent text | Status | Notes |
 | --- | --- | --- | --- | --- |
@@ -312,7 +312,7 @@ Placeholder convention:
 | `CultureComboBox.PlaceholderText` | Select culture or enter custom culture code | Select locale or enter custom locale code | rename-key | new key `LocaleComboBox.PlaceholderText` matching ICU naming |
 | `CultureComboBoxToolTip.Content` | Used for string comparison settings during search operations, not for the application UI language. | Used for string comparison settings during search operations, not for the application UI language. | keep |  |
 
-## Settings — Context Preview
+## Settings - Context Preview
 
 | Key | English text | Linux equivalent text | Status | Notes |
 | --- | --- | --- | --- | --- |
@@ -320,7 +320,7 @@ Placeholder convention:
 | `ContextPreviewLinesBeforeLabelTextBlock.Text` | Lines before match | Lines before match | keep |  |
 | `ContextPreviewLinesAfterLabelTextBlock.Text` | Lines after match | Lines after match | keep |  |
 
-## Settings — Docker (becomes Containers on Linux)
+## Settings - Docker (becomes Containers on Linux)
 
 | Key | English text | Linux equivalent text | Status | Notes |
 | --- | --- | --- | --- | --- |
@@ -344,7 +344,7 @@ Placeholder convention:
 | `DockerUnavailableMessage` | Docker is unavailable. Make sure Docker Desktop is running and that you have permission to run docker commands. | Container runtime is unavailable. Make sure the Docker or Podman socket is reachable and that your user has permission to run container commands. | rename-key | new key `ContainerUnavailableMessage`; Docker Desktop is Windows-specific (`linux-decisions.md`, Containers) |
 | `DockerContainerNotSelectedMessage` | Select a Docker container before starting the search. | Select a container before starting the search. | rename-key | new key `ContainerNotSelectedMessage` |
 
-## Settings — Backup, Restore, Export
+## Settings - Backup, Restore, Export
 
 | Key | English text | Linux equivalent text | Status | Notes |
 | --- | --- | --- | --- | --- |
@@ -381,7 +381,7 @@ Placeholder convention:
 | `CopyErrorTitle` | Copy Failed | Copy Failed | keep |  |
 | `CopyErrorMessage` | Failed to copy results: {0} | Failed to copy results: {0} | keep | uses {0} placeholder |
 
-## Settings — Debug / Notifications / Localization Self-test
+## Settings - Debug / Notifications / Localization Self-test
 
 | Key | English text | Linux equivalent text | Status | Notes |
 | --- | --- | --- | --- | --- |
@@ -416,7 +416,7 @@ Placeholder convention:
 | `LocalizationTestErrorTitle` | Localization Test Error | Localization Test Error | keep |  |
 | `LocalizationTestErrorMessage` | An error occurred while testing localization: {0} | An error occurred while testing localization: {0} | keep | uses {0} placeholder |
 
-## Settings — AI Search Endpoint
+## Settings - AI Search Endpoint
 
 | Key | English text | Linux equivalent text | Status | Notes |
 | --- | --- | --- | --- | --- |
@@ -553,7 +553,7 @@ Placeholder convention:
 | `TimeHourSingular` | hour | hour | keep | **fold singular/plural pair into ICU plural** |
 | `TimeHourPlural` | hours | hours | keep | **fold singular/plural pair into ICU plural** |
 
-## Dialogs — Generic Titles And Buttons
+## Dialogs - Generic Titles And Buttons
 
 | Key | English text | Linux equivalent text | Status | Notes |
 | --- | --- | --- | --- | --- |
@@ -652,7 +652,7 @@ related audits.
 | `EnableContainerSearchToggleSwitch.OnContent` | Enabled | Settings | rename |
 | `EnableContainerSearchToggleSwitch.OffContent` | Disabled | Settings | rename |
 | `Controls.SettingsView.EnableContainerSearchToggleSwitch.ToolTip` | Show available Docker and Podman containers next to the search path so you can target them directly. | Settings | rename |
-| `ContainerRuntimeLabelTextBlock.Text` | Container Runtime: | Settings | new — selects Docker / rootless Podman / rootful Podman |
+| `ContainerRuntimeLabelTextBlock.Text` | Container Runtime: | Settings | new - selects Docker / rootless Podman / rootful Podman |
 | `ContainerRuntimeAutoComboBoxItem.Content` | Auto-detect | Settings | new |
 | `ContainerRuntimeDockerComboBoxItem.Content` | Docker | Settings | new |
 | `ContainerRuntimePodmanRootlessComboBoxItem.Content` | Podman (rootless) | Settings | new |
@@ -666,49 +666,49 @@ related audits.
 | `ContainerSearchErrorTitle` | Container Search Error | Errors | rename |
 | `ContainerUnavailableMessage` | Container runtime is unavailable. Make sure the Docker or Podman socket is reachable and that your user has permission to run container commands. | Errors | rename |
 | `ContainerNotSelectedMessage` | Select a container before starting the search. | Errors | rename |
-| `PodmanSocketUnreachableMessage` | Podman socket is not reachable. Start `podman.socket` with `systemctl --user start podman.socket` or set `DOCKER_HOST`. | Errors | new — Linux Podman diagnostic |
-| `DockerSocketUnreachableMessage` | Docker socket is not reachable. Verify `docker.service` is running and that you are in the `docker` group, or set `DOCKER_HOST`. | Errors | new — Linux Docker diagnostic |
-| `ContainerRootlessPermissionMessage` | Rootless Podman cannot read this path because of user-namespace mapping. Try `podman unshare chown ...` or use rootful Podman for this search. | Errors | new — replaces the Windows-symlink message |
+| `PodmanSocketUnreachableMessage` | Podman socket is not reachable. Start `podman.socket` with `systemctl --user start podman.socket` or set `DOCKER_HOST`. | Errors | new - Linux Podman diagnostic |
+| `DockerSocketUnreachableMessage` | Docker socket is not reachable. Verify `docker.service` is running and that you are in the `docker` group, or set `DOCKER_HOST`. | Errors | new - Linux Docker diagnostic |
+| `ContainerRootlessPermissionMessage` | Rootless Podman cannot read this path because of user-namespace mapping. Try `podman unshare chown ...` or use rootful Podman for this search. | Errors | new - replaces the Windows-symlink message |
 | `OpenInFileManagerMenuItem` | Show in file manager | Tooltips / Context menu | rename of `OpenInExplorerMenuItem`; uses `org.freedesktop.FileManager1.ShowItems` |
-| `OpenInDolphinMenuItem` | Reveal in Dolphin | Tooltips / Context menu | new — KDE-specific accelerator |
-| `OpenInNautilusMenuItem` | Reveal in Files | Tooltips / Context menu | new — GNOME-specific accelerator |
-| `OpenInKateMenuItem` | Open in Kate | Tooltips / Context menu | new — explicit editor preset (`linux-decisions.md`, Editor And File Manager Integration) |
+| `OpenInDolphinMenuItem` | Reveal in Dolphin | Tooltips / Context menu | new - KDE-specific accelerator |
+| `OpenInNautilusMenuItem` | Reveal in Files | Tooltips / Context menu | new - GNOME-specific accelerator |
+| `OpenInKateMenuItem` | Open in Kate | Tooltips / Context menu | new - explicit editor preset (`linux-decisions.md`, Editor And File Manager Integration) |
 | `OpenInVsCodeMenuItem` | Open in VS Code | Tooltips / Context menu | new |
 | `OpenInVscodiumMenuItem` | Open in VSCodium | Tooltips / Context menu | new |
 | `OpenInNeovimMenuItem` | Open in Neovim | Tooltips / Context menu | new |
-| `OpenInXdgMenuItem` | Open with default application | Tooltips / Context menu | new — `xdg-open` fallback |
-| `RootWarningTitle` | Running as root | Dialogs | new — replaces `AdminWarningTitle`; only shown if `geteuid() == 0` and the user did not opt out |
-| `RootWarningMessage` | Grexa is running as the root user.\n\nRunning as root can cause issues with:\n• Wayland/Xorg session ownership\n• Desktop portal access (file pickers, notifications)\n• File ownership of created mirror directories\n\nIt is recommended you run Grexa as a regular user. | Dialogs | new — replaces `AdminWarningMessage` |
-| `RootWarningIgnoreButton` | Ignore (Unsafe) | Dialogs | new — replaces `AdminWarningIgnoreButton` |
-| `RootWarningExitButton` | Exit | Dialogs | new — replaces the typo'd `AdminWarningrexitButton` |
-| `GvfsMountRequiredTitle` | Remote Path Not Mounted | Dialogs | new — for `smb://`, `fish://`, `mtp://` (`linux-decisions.md`, File Systems And Paths) |
+| `OpenInXdgMenuItem` | Open with default application | Tooltips / Context menu | new - `xdg-open` fallback |
+| `RootWarningTitle` | Running as root | Dialogs | new - replaces `AdminWarningTitle`; only shown if `geteuid() == 0` and the user did not opt out |
+| `RootWarningMessage` | Grexa is running as the root user.\n\nRunning as root can cause issues with:\n• Wayland/Xorg session ownership\n• Desktop portal access (file pickers, notifications)\n• File ownership of created mirror directories\n\nIt is recommended you run Grexa as a regular user. | Dialogs | new - replaces `AdminWarningMessage` |
+| `RootWarningIgnoreButton` | Ignore (Unsafe) | Dialogs | new - replaces `AdminWarningIgnoreButton` |
+| `RootWarningExitButton` | Exit | Dialogs | new - replaces the typo'd `AdminWarningrexitButton` |
+| `GvfsMountRequiredTitle` | Remote Path Not Mounted | Dialogs | new - for `smb://`, `fish://`, `mtp://` (`linux-decisions.md`, File Systems And Paths) |
 | `GvfsMountRequiredMessage` | The path "{0}" is a remote URL. Mount it via GVFS, KIO-FUSE, or a file manager bookmark before searching. | Dialogs | new; uses {0} placeholder |
 | `KioFuseHintMessage` | This path is provided by KIO-FUSE. Some operations (rename, replace) may be slower or unavailable. | Errors | new |
-| `WslPathImportedMessage` | The imported path "{0}" referenced WSL and is not available on Linux. | Dialogs | new — surfaces during Grex backup import (`linux-decisions.md`, Imports From Grex Backups); uses {0} placeholder |
-| `DriveLetterImportedMessage` | The imported path "{0}" referenced a Windows drive letter. Pick a Linux replacement directory or skip this entry. | Dialogs | new — Grex backup import; uses {0} placeholder |
-| `UncPathImportedMessage` | The imported path "{0}" is a UNC path. Mount the share via GVFS or `cifs-utils` before using it. | Dialogs | new — Grex backup import; uses {0} placeholder |
-| `SecretStoreUnavailableTitle` | Keyring Unavailable | Dialogs | new — if KWallet and Secret Service both fail |
+| `WslPathImportedMessage` | The imported path "{0}" referenced WSL and is not available on Linux. | Dialogs | new - surfaces during Grex backup import (`linux-decisions.md`, Imports From Grex Backups); uses {0} placeholder |
+| `DriveLetterImportedMessage` | The imported path "{0}" referenced a Windows drive letter. Pick a Linux replacement directory or skip this entry. | Dialogs | new - Grex backup import; uses {0} placeholder |
+| `UncPathImportedMessage` | The imported path "{0}" is a UNC path. Mount the share via GVFS or `cifs-utils` before using it. | Dialogs | new - Grex backup import; uses {0} placeholder |
+| `SecretStoreUnavailableTitle` | Keyring Unavailable | Dialogs | new - if KWallet and Secret Service both fail |
 | `SecretStoreUnavailableMessage` | KWallet and the freedesktop Secret Service are both unavailable. The AI API key cannot be stored securely. Provide the key per session instead. | Dialogs | new |
-| `FlatpakPortalDeniedTitle` | Portal Permission Denied | Dialogs | new — Flatpak file-chooser denied |
+| `FlatpakPortalDeniedTitle` | Portal Permission Denied | Dialogs | new - Flatpak file-chooser denied |
 | `FlatpakPortalDeniedMessage` | The Flatpak portal denied access to "{0}". Grant access with Flatseal or `flatpak override`. | Dialogs | new; uses {0} placeholder |
-| `SystemPathScanWarningTitle` | Scanning Pseudo-filesystem | Dialogs | new — `/proc`, `/sys`, `/dev`, `/run` (`linux-decisions.md`, System path auto-exclusions) |
+| `SystemPathScanWarningTitle` | Scanning Pseudo-filesystem | Dialogs | new - `/proc`, `/sys`, `/dev`, `/run` (`linux-decisions.md`, System path auto-exclusions) |
 | `SystemPathScanWarningMessage` | The path "{0}" is a kernel pseudo-filesystem. Scanning it can hang or return non-files. Proceed anyway? | Dialogs | new; uses {0} placeholder |
-| `CliExitCodeHintReady` | Exit codes: 0 = matches, 1 = no matches, 2 = error. | About / CLI help | new — documents the preserved exit code semantics (`linux-decisions.md`, CLI) |
+| `CliExitCodeHintReady` | Exit codes: 0 = matches, 1 = no matches, 2 = error. | About / CLI help | new - documents the preserved exit code semantics (`linux-decisions.md`, CLI) |
 
 ## Windows-only Strings Being Dropped (summary)
 
 Reason categories:
 
-- **W/N (notification)** — Windows toast / WinAppSDK content. Linux uses
+- **W/N (notification)** - Windows toast / WinAppSDK content. Linux uses
   KNotifications and freedesktop notifications.
-- **W/A (admin)** — "Running as administrator" content. Linux equivalent is
+- **W/A (admin)** - "Running as administrator" content. Linux equivalent is
   the new `RootWarning*` family.
-- **W/W (WSL)** — WSL paths and dialogs. Grexa never accesses WSL.
-- **W/S (Windows Search)** — Windows Search index references. Linux uses
+- **W/W (WSL)** - WSL paths and dialogs. Grexa never accesses WSL.
+- **W/S (Windows Search)** - Windows Search index references. Linux uses
   Baloo.
-- **W/F (Windows file manager)** — "Show in Explorer" / shell verbs. Linux
+- **W/F (Windows file manager)** - "Show in Explorer" / shell verbs. Linux
   uses `org.freedesktop.FileManager1.ShowItems` and `xdg-open`.
-- **W/L (Windows symlink privilege)** — the Docker symlink message that
+- **W/L (Windows symlink privilege)** - the Docker symlink message that
   references Windows symbolic-link privileges.
 
 | Key | Reason |
@@ -754,29 +754,29 @@ Per-bucket cross-check by area (approximate):
 | --- | --- | --- | --- |
 | Search Tab | 105 | 5 | 0 |
 | Results Columns / Header Menu | 28 | 1 | 0 |
-| Settings — General / UI Language / Theme | 35 | 5 | 0 |
-| Settings — Defaults | 17 | 2 | 0 |
-| Settings — String Comparison | 21 | 1 | 0 |
-| Settings — Context Preview | 3 | 0 | 0 |
-| Settings — Docker → Containers | 3 | 15 | 1 |
-| Settings — Backup / Export | 33 | 0 | 0 |
-| Settings — Debug / Notifications / Localization | 18 | 4 | 4 |
-| Settings — AI Search Endpoint | 14 | 0 | 0 |
+| Settings - General / UI Language / Theme | 35 | 5 | 0 |
+| Settings - Defaults | 17 | 2 | 0 |
+| Settings - String Comparison | 21 | 1 | 0 |
+| Settings - Context Preview | 3 | 0 | 0 |
+| Settings - Docker → Containers | 3 | 15 | 1 |
+| Settings - Backup / Export | 33 | 0 | 0 |
+| Settings - Debug / Notifications / Localization | 18 | 4 | 4 |
+| Settings - AI Search Endpoint | 14 | 0 | 0 |
 | AI Search Chat | 15 | 0 | 0 |
 | Regex Builder | 62 | 0 | 0 |
 | About | 6 | 0 | 0 |
 | Time Units | 6 | 0 | 0 |
-| Dialogs — Generic Titles And Buttons | 15 | 0 | 0 |
+| Dialogs - Generic Titles And Buttons | 15 | 0 | 0 |
 | Errors / Confirmation Dialogs | 15 | 0 | 0 |
 | Windows-only Dialogs | 0 | 0 | 9 |
 | Context Preview | 6 | 0 | 0 |
 | Main Window Chrome | 3 | 0 | 0 |
 
 (The per-area totals are approximate because four keys are listed in two
-sections — `SystemThemeRadio.Content` and the `SystemThemeComboBoxItem.Content`
+sections - `SystemThemeRadio.Content` and the `SystemThemeComboBoxItem.Content`
 pair, `SearchResultsTextBlock.Text` vs `SearchResultsLabelTextBlock.Text`, the
 `SearchTypeTextBlock.Text` vs `SearchTypeLabelTextBlock.Text` pair, and the
-two `StringComparisonMode*` rows — each pair is a Grex duplicate kept for XAML
+two `StringComparisonMode*` rows - each pair is a Grex duplicate kept for XAML
 binding parity and counted once.)
 
 ## Localization Recommendation For Counts And Plurals

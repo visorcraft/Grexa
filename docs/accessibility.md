@@ -84,6 +84,6 @@ The QML shell must:
 - [ ] Verify the CLI's `--quiet` and exit codes match documented
   behavior.
 
-This doc is intentionally short — the heavy lifting lives in the GUI
+This doc is intentionally short - the heavy lifting lives in the GUI
 phase. The point is to capture today's promises so the GUI authors
 have a contract to test against.

@@ -22,13 +22,13 @@ A future "diagnostics" feature, if added, must:
 
 Grexa makes network requests in exactly two situations:
 
-1. **AI Search Chat** — only when `ai_search_enabled` is true AND
+1. **AI Search Chat** - only when `ai_search_enabled` is true AND
    the user clicks the AI button AND they've supplied an endpoint +
    key. The HTTP body is described in
    [grex-ai-search-service-audit.md](grex-ai-search-service-audit.md).
    The set of allowed endpoints is OpenAI-compatible servers; see
    [ai-provider-scope.md](ai-provider-scope.md).
-2. **Endpoint test** (`Settings → AI Search → Test endpoint`) —
+2. **Endpoint test** (`Settings → AI Search → Test endpoint`) -
    a single `GET /v1/models` against the user-supplied endpoint.
 
 Both call paths are gated by `DefaultSettings.ai_search_enabled`.
@@ -68,7 +68,7 @@ No other Grexa subsystem opens a socket.
 ## Container runtime sockets
 
 Mounting a container socket grants substantial privileges. Grexa never
-needs root to use these sockets — it relies on the user's existing
+needs root to use these sockets - it relies on the user's existing
 membership in `docker` / `podman` groups (or the rootless Podman
 session). Grexa never installs helpers, never writes to a container
 during a search, and never elevates privileges on its own.
@@ -78,7 +78,7 @@ when the user enables `enable_container_search`.
 
 ## External helper binaries and `$PATH`
 
-Grexa shells out to a few helper programs — `pdftotext` (PDF text
+Grexa shells out to a few helper programs - `pdftotext` (PDF text
 extraction), `docker`/`podman` (container search), `xdg-open` and the
 configured editor (opening results), and `baloosearch` (optional KDE
 index). These are resolved by name from `$PATH`, which is the expected
@@ -90,7 +90,7 @@ The security implication: **Grexa trusts its inherited `$PATH`.** Launch
 it the normal way (desktop entry, or a shell with a trusted `PATH`). Do
 not run Grexa with a `PATH` that includes attacker-writable directories
 ahead of the system ones, since a planted `pdftotext`/`xdg-open` would
-then run with your privileges — the same caveat that applies to any
+then run with your privileges - the same caveat that applies to any
 program that calls helpers by name. Subprocess arguments are always
 passed as an argv vector (never via a shell) and untrusted positional
 arguments are guarded with a `--` terminator, so this is the only
@@ -126,7 +126,7 @@ API keys are excluded from:
 
 `grexa-cli` logs to `$XDG_STATE_HOME/grexa/grexa.log`. The default
 fields are search path, query, regex flag, case sensitivity, gitignore
-flag — none of which would be considered a secret by themselves.
+flag - none of which would be considered a secret by themselves.
 
 If a user enables a privacy mode (a future GUI toggle), the logger
 will redact:

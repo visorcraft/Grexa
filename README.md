@@ -46,14 +46,14 @@ Grexa can:
 
 ## Plain files all the way down
 
-Most apps bury your data in an opaque blob — a SQLite file, a settings
-database, a binary cache — that only the app can read. Grexa does the
+Most apps bury your data in an opaque blob - a SQLite file, a settings
+database, a binary cache - that only the app can read. Grexa does the
 opposite. Its storage layer is **[grexa-db](https://github.com/visorcraft/grexa-db)**,
 a standalone (`Apache-2.0`) flat-file database engine where **every record is a
 plain Markdown file** and **a query is just the filesystem**. That one decision
 shows up in Grexa two ways.
 
-### It remembers everything — in files you own
+### It remembers everything - in files you own
 
 Your **recent folders**, **search history**, and **saved search profiles**
 aren't trapped in a binary blob. Each is a human-readable Markdown record under
@@ -68,16 +68,16 @@ added_at: 1718706000000000000
 ```
 
 So your own data is greppable, diffable, versionable, and portable with the
-tools you already have — `grep` it, track it in `git`, back it up with `cp`,
+tools you already have - `grep` it, track it in `git`, back it up with `cp`,
 sync it with Syncthing. **If Grexa vanished tomorrow, every byte is still
 readable.** No export step, no proprietary format, no lock-in. (Grexa writes
-these records atomically — temp file + rename — so a crash never leaves a torn
+these records atomically - temp file + rename - so a crash never leaves a torn
 entry.)
 
 ### A database browser, built in
 
 Open **Tools → Database** in the desktop app and point it at *any* grexa-db
-directory — including Grexa's own. From there you can list collections, run
+directory - including Grexa's own. From there you can list collections, run
 typed filter queries, validate records against their schema, and **materialize
 a query as a real directory of symlinks** you can open in any file manager.
 Point it at `~/.local/share/grexa/db` and you'll browse the very history and
@@ -85,7 +85,7 @@ profiles the app has been quietly writing.
 
 ### Benchmarks: where flat files beat a binary database
 
-grexa-db is not trying to out-race SQLite on a million-row `JOIN` — its own
+grexa-db is not trying to out-race SQLite on a million-row `JOIN` - its own
 [design spec](https://github.com/visorcraft/grexa-db/blob/master/docs/grexa-db-design.md)
 says a real database wins past ~250k records. What the flat-file design *buys*
 you is everything below. Every number is measured by a deterministic,
@@ -95,20 +95,20 @@ records, as a SQLite database, and as a single JSON blob (what Grexa used
 
 | # | Property | grexa-db | The "standard" way |
 |---|----------|----------|--------------------|
-| 1 | Records readable with **zero database software** | **5,000 / 5,000** (`cat note.md`) | SQLite: **0** — it's a binary blob |
-| 2 | Tools that can query it with **no driver** | **7** — `grep` `rg` `awk` `find` `git` `sed` `fzf` | SQLite: **1** (`sqlite3`, SQL only) |
-| 3 | A one-field edit is a **human-reviewable diff** | **2-line** `git diff` | SQLite: `Binary files differ` — **0** reviewable lines |
-| 4 | **Incremental backup** of that one-field edit | **195 bytes** re-transmitted | SQLite: **4,064 bytes** — ≈ **21× more** |
+| 1 | Records readable with **zero database software** | **5,000 / 5,000** (`cat note.md`) | SQLite: **0** - it's a binary blob |
+| 2 | Tools that can query it with **no driver** | **7** - `grep` `rg` `awk` `find` `git` `sed` `fzf` | SQLite: **1** (`sqlite3`, SQL only) |
+| 3 | A one-field edit is a **human-reviewable diff** | **2-line** `git diff` | SQLite: `Binary files differ` - **0** reviewable lines |
+| 4 | **Incremental backup** of that one-field edit | **195 bytes** re-transmitted | SQLite: **4,064 bytes** - ≈ **21× more** |
 | 5 | **Blast radius** of one corrupted byte | **1 record** lost; **4,999** still readable | SQLite: header byte → **whole DB unreadable** (0/5,000) |
 | 6 | Engine **footprint / supply chain** | **19** pure-Rust crates, **0** C libraries | SQLite: a ~1.6 MB C library linked in + a C build step |
-| 7 | **Peak RAM** to scan-filter **40,000** records | **7.7 MB** — streams one record at a time | Load-the-blob: **53 MB** — ≈ **7× more** |
-| 8 | **Open + first answer** | **0.8 ms** | Parse-the-blob: **30 ms** — ≈ **37× slower** |
+| 7 | **Peak RAM** to scan-filter **40,000** records | **7.7 MB** - streams one record at a time | Load-the-blob: **53 MB** - ≈ **7× more** |
+| 8 | **Open + first answer** | **0.8 ms** | Parse-the-blob: **30 ms** - ≈ **37× slower** |
 | 9 | **Crash mid-write** (`SIGKILL`) | **0** partial records across **47,000** writes | In-place JSON rewrite: file truncated to **0 bytes** |
-| 10 | **Merge** two datasets | `cp -r` — **0** lines of SQL, ~2 ms | SQLite: `ATTACH` + `INSERT…SELECT`, or dump + reload |
+| 10 | **Merge** two datasets | `cp -r` - **0** lines of SQL, ~2 ms | SQLite: `ATTACH` + `INSERT…SELECT`, or dump + reload |
 | 11 | Query results are **real directories** | **983** symlinks in `views/by-rating/5/`, usable by `ls`/`find`/`du`/`fzf` | SQL views: **0** filesystem objects |
 | 12 | **Add a new field** | **0** `ALTER TABLE`, **0** rows rewritten; old records still query | SQLite: `ALTER TABLE` + a migration |
 
-Reproduce all of it (deterministic — fixed seed, writes `bench-results.json`):
+Reproduce all of it (deterministic - fixed seed, writes `bench-results.json`):
 
 ```bash
 git clone https://github.com/visorcraft/grexa-db && cd grexa-db
@@ -117,7 +117,7 @@ python3 scripts/bench.py          # optional: N=20000 N_BIG=100000 python3 scrip
 ```
 
 > Absolute numbers are from one CachyOS / AMD box (5,000 records; the memory
-> test uses 40,000). Your machine's numbers will differ — the **ratios** are
+> test uses 40,000). Your machine's numbers will differ - the **ratios** are
 > the point, and the script regenerates them on your hardware.
 
 ### Scaling
@@ -134,9 +134,9 @@ byte-identical to the serial path, verified). Measured on **200,000 records**
 | list all records | 992 ms | **375 ms** | **2.6×** |
 | `order_by` (sort 200k) | 1669 ms | **851 ms** | **2.0×** |
 
-A **secondary index** is also shipped — and wired into the **Database browser**,
+A **secondary index** is also shipped - and wired into the **Database browser**,
 which holds it in memory and keeps it fresh via `inotify`. It's a derived
-`.grexa-index/` sidecar (rebuildable — delete it and every record is still
+`.grexa-index/` sidecar (rebuildable - delete it and every record is still
 intact). Held that way, a **selective query drops from 188 ms to 0.63 ms
 (297×)**, byte-identical to a scan, with verify-on-read so a stale index can
 never return a wrong match and a selectivity guard so broad queries fall back to
@@ -304,15 +304,15 @@ changes, update relevant docs, and make sure `just ci` passes.
 
 ## Documentation
 
-- [docs/features.md](docs/features.md) — feature inventory
-- [docs/usage.md](docs/usage.md) — user workflows
-- [docs/reference.md](docs/reference.md) — settings and CLI reference
-- [docs/build-and-test.md](docs/build-and-test.md) — build, test, and packaging guide
-- [docs/architecture.md](docs/architecture.md) — workspace architecture
-- [docs/gui-design.md](docs/gui-design.md) — Qt / cxx-qt bridge design
-- [docs/translations.md](docs/translations.md) — localization workflow
-- [docs/SECURITY.md](docs/SECURITY.md) — threat model and disclosure policy
-- [docs/feature-parity.md](docs/feature-parity.md) — Grex / Grexa parity matrix
+- [docs/features.md](docs/features.md) - feature inventory
+- [docs/usage.md](docs/usage.md) - user workflows
+- [docs/reference.md](docs/reference.md) - settings and CLI reference
+- [docs/build-and-test.md](docs/build-and-test.md) - build, test, and packaging guide
+- [docs/architecture.md](docs/architecture.md) - workspace architecture
+- [docs/gui-design.md](docs/gui-design.md) - Qt / cxx-qt bridge design
+- [docs/translations.md](docs/translations.md) - localization workflow
+- [docs/SECURITY.md](docs/SECURITY.md) - threat model and disclosure policy
+- [docs/feature-parity.md](docs/feature-parity.md) - Grex / Grexa parity matrix
 
 ## License
 

@@ -1,7 +1,7 @@
 # Grex StatusText Audit
 
 This document records the behavior of the status strip in Grex's search
-tabs — `TabViewModel.StatusText`, the resource keys it formats, the
+tabs - `TabViewModel.StatusText`, the resource keys it formats, the
 elapsed-time pluralization rules, and the search-within filtered summary.
 Grexa must either preserve these strings 1:1, reword them for Linux
 semantics, or replace `string.Format` placeholders with ICU MessageFormat
@@ -59,7 +59,7 @@ else if (statusText.StartsWith("Found ", ...) || statusText.StartsWith("Replaced
 }
 ```
 
-This is a latent localization bug — the classifier only recognizes English
+This is a latent localization bug - the classifier only recognizes English
 prefixes and the literal `"matches"` token. Any localized status breaks the
 bucketing and falls through to `Informational`. Grexa must replace this
 with a typed severity field rather than parsing the rendered string.
@@ -82,7 +82,7 @@ and the `OperationCanceledException` branch in both `PerformSearchAsync` and
 
 `SetStatus("SearchingStatus")` at the top of `PerformSearchAsync` after the
 result lists are cleared. The trailing ellipsis is ASCII three-dot, not
-U+2026 — Grexa should canonicalize to `…`.
+U+2026 - Grexa should canonicalize to `…`.
 
 ```xml
 <data name="SearchingStatus"><value>Searching...</value></data>
@@ -219,7 +219,7 @@ elapsed string is non-deterministic across runs.
 Edge cases:
 
 - When the filter text is whitespace, `UpdateResultsStatusForFilter` falls
-  back to `SetStatus(_resultsSummaryKey, ...)` — trimming to empty restores
+  back to `SetStatus(_resultsSummaryKey, ...)` - trimming to empty restores
   `FoundMatchesStatus` rather than displaying `Showing X of X`.
 - After a successful search, both result-mode branches call
   `ApplyResultsFilter()`, so a filter typed before pressing Search renders
@@ -248,7 +248,7 @@ return $"{totalSeconds:F2} {secondUnit}";
 ```
 
 Examples: `"0.04 seconds"`, `"12.43 seconds"`, `"29.99 seconds"`. The
-singular branch is effectively unreachable — floating-point equality against
+singular branch is effectively unreachable - floating-point equality against
 `1.0` makes every subsecond render plural. Decimal precision is hard-coded
 `F2`.
 
@@ -297,7 +297,7 @@ Examples: `"1 hour"`, `"1 hour 1 minute"`, `"1 hour 9 minutes"`,
 - The subsecond branch's `totalSeconds == 1.0` check is floating-point
   equality and effectively dead code.
 - `$"{hours} {hourUnit} {minutes} {minuteUnit}"` is a hand-rolled
-  conjunction that drops the word for "and" — locales such as DE/FR
+  conjunction that drops the word for "and" - locales such as DE/FR
   expect "1 Stunde und 9 Minuten" / "1 heure et 9 minutes". The bare-space
   form is incidentally fine for RU but wrong elsewhere.
 - Numbers are interpolated with no `IFormatProvider`; `string.Format` in
@@ -315,9 +315,9 @@ Examples: `"1 hour"`, `"1 hour 1 minute"`, `"1 hour 9 minutes"`,
 | `ReplacingStatus`       | 0    | n/a           | n/a              |
 | `NoMatchesStatus`       | 0    | n/a           | n/a              |
 | `ErrorStatus`           | 1    | no            | string `{0}`     |
-| `FoundMatchesStatus`    | 3    | **no** — `matches`/`files` baked in | culture-dep int |
-| `ReplacedMatchesStatus` | 3    | **no** — same                       | culture-dep int |
-| `FilteredMatchesStatus` | 5    | **no** — four count slots baked in  | culture-dep int |
+| `FoundMatchesStatus`    | 3    | **no** - `matches`/`files` baked in | culture-dep int |
+| `ReplacedMatchesStatus` | 3    | **no** - same                       | culture-dep int |
+| `FilteredMatchesStatus` | 5    | **no** - four count slots baked in  | culture-dep int |
 | `TimeSecondSingular`    | 0    | chosen at call site                 | n/a              |
 | `TimeSecondPlural`      | 0    | chosen at call site                 | n/a              |
 | `TimeMinuteSingular`    | 0    | chosen at call site                 | n/a              |
@@ -335,12 +335,12 @@ Key observations:
   match the count.
 - The `Time*` family is the only locus where Grex acknowledges plurality,
   and it's a binary singular/plural switch driven from C#.
-- No status key carries `{0:N0}` or `{0:#,##0}` — number formatting is
+- No status key carries `{0:N0}` or `{0:#,##0}` - number formatting is
   whatever `string.Format(format, intValue)` defaults to under the current
   thread culture.
 - `RefreshLocalization` re-evaluates from the cached `_statusResourceKey`
   and `_statusResourceArgs`, which works for static args but **loses
-  fidelity** for the elapsed slot — the cached arg is the already-formatted
+  fidelity** for the elapsed slot - the cached arg is the already-formatted
   English string `"12.43 seconds"`, not the underlying `TimeSpan`.
   Switching language after a search leaves a stale English duration
   embedded in an otherwise translated summary.

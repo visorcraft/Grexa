@@ -130,13 +130,13 @@ AiSearchClient<UreqTransport>
 - **Unit tests** live in each module's `#[cfg(test)]` block. 279
   tests passing across the workspace as of v1.0.
 - **Integration tests** are in `crates/<crate>/tests/*.rs`:
-  - `grexa-core/tests/gitignore_parity.rs` — 61 cases mirroring
+  - `grexa-core/tests/gitignore_parity.rs` - 61 cases mirroring
     `docs/grex-gitignore-audit.md`.
-  - `grexa-core/tests/property.rs` — proptest properties for globs,
+  - `grexa-core/tests/property.rs` - proptest properties for globs,
     exclude dirs, determinism, snippet caps.
-  - `grexa-core/tests/root_safety.rs` — auto-exclusion of pseudo
+  - `grexa-core/tests/root_safety.rs` - auto-exclusion of pseudo
     filesystems.
-  - `grexa-cli/tests/cli.rs` — 16 spawned-process integration tests
+  - `grexa-cli/tests/cli.rs` - 16 spawned-process integration tests
     via `assert_cmd`.
 - **Mocked HTTP / process** via `MockTransport` and `MockCommandRunner`
   so neither AI nor container tests require a live daemon.

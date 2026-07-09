@@ -16,7 +16,7 @@ Source evidence:
   `SearchWorkflow_WithRootRelativeGitIgnorePattern_OnlyMatchesFromRoot`)
 - `Tests/Services/SearchServiceTests.cs`
   (`SearchAsync_WithGitIgnoreEnabled_RespectsGitIgnoreRules`)
-- `Services/SearchService.cs` (line 341, 1286, 2064 — gitignore integration
+- `Services/SearchService.cs` (line 341, 1286, 2064 - gitignore integration
   call sites)
 - `crates/grexa-core/src/search.rs` lines 158-167 (WalkBuilder wiring)
 - `crates/grexa-core/Cargo.toml` declares `ignore = "0.4"` indirectly via
@@ -46,7 +46,7 @@ For Grexa, the public contract is satisfied implicitly by
 `WalkBuilder::git_ignore(true).git_exclude(true).git_global(true).ignore(true)`
 in `search.rs`. The crate returns a filtered iterator rather than a
 per-file boolean, so Grexa never needs to expose a `should_ignore_file`
-function — but if the GUI ever needs to render an ignored-but-revealed
+function - but if the GUI ever needs to render an ignored-but-revealed
 diagnostic, a wrapper around `ignore::gitignore::GitignoreBuilder` is the
 intended fit.
 
@@ -152,12 +152,12 @@ malformed bracket class survives the pattern translator.
 The pattern is then anchored:
 
 - Patterns starting with `**/` (translated to `.*/`) become
-  `^(<tail>$|.*/<tail>$)` — match at root or anywhere below.
-- Patterns starting with `/` become `^<rest>$` — strict root anchor.
-- Patterns with no wildcards become `(^<lit>$|/<lit>$)` — match the
+  `^(<tail>$|.*/<tail>$)` - match at root or anywhere below.
+- Patterns starting with `/` become `^<rest>$` - strict root anchor.
+- Patterns with no wildcards become `(^<lit>$|/<lit>$)` - match the
   whole relative path or any path ending with that literal at a path
   boundary. This is what stops `.env` from matching `.env.docker`.
-- Patterns with wildcards but no leading slash become `.*<body>$` —
+- Patterns with wildcards but no leading slash become `.*<body>$` -
   trailing anchor only.
 
 Matching is case-insensitive (`RegexOptions.IgnoreCase`). On Windows and
@@ -298,7 +298,7 @@ Features that match Grex 1-for-1 in the `ignore` crate (or exceed it):
 - `.git/info/exclude` and global excludes.
 - `.ignore` and `.rgignore` fallback files.
 
-Features where Grex and the `ignore` crate diverge — Grexa must pick a
+Features where Grex and the `ignore` crate diverge - Grexa must pick a
 side:
 
 - **Case sensitivity**. Grex is unconditionally case-insensitive. The
@@ -311,11 +311,11 @@ side:
   ignores `nested/dir/.env`. The `ignore` crate follows canonical git: a
   bare `.env` is only matched against the filename anywhere below the
   `.gitignore` directory. The two produce identical results for this
-  case, but the algorithms differ — Grex would also match `nested/.env`
+  case, but the algorithms differ - Grex would also match `nested/.env`
   on a pattern of `dir/.env`, which the `ignore` crate would not.
 - **Empty pattern body after `!`**. Grex skips `!` (the negation marker
   with empty body) silently after the trim. The `ignore` crate also
-  skips it, so this is consistent — but it deserves a regression test.
+  skips it, so this is consistent - but it deserves a regression test.
 - **Malformed character class graceful fallback**. Grex falls back to
   `SimpleMatch`. The `ignore` crate returns a parse error from
   `GitignoreBuilder::add_line`; `WalkBuilder` then logs the error and
@@ -356,7 +356,7 @@ Observations:
 - `case_insensitive` is not set on the underlying `Gitignore` builders.
   This is the largest behavioral gap with Grex.
 - `.ignore` and `.rgignore` are enabled by `ignore(true)`. Grex has no
-  equivalent — files that are excluded by `.ignore` but not `.gitignore`
+  equivalent - files that are excluded by `.ignore` but not `.gitignore`
   would be filtered in Grexa but not in Grex. Mostly a non-issue because
   almost no project ships a `.ignore` without also covering it in
   `.gitignore`.
@@ -371,7 +371,7 @@ the search root. Tests should be implemented as Rust unit tests inside
 module) that materialize the listed `.gitignore` file in a `tempdir`
 and assert the file is or is not present in the walker output.
 
-Group A — Basic literal and wildcard patterns
+Group A - Basic literal and wildcard patterns
 
 1. `*.log` ⇒ `error.log` ⇒ ignored.
 2. `*.log` ⇒ `error.txt` ⇒ kept.
@@ -386,7 +386,7 @@ Group A — Basic literal and wildcard patterns
 11. `test?.txt` ⇒ `test.txt` ⇒ kept.
 12. `test?.txt` ⇒ `test12.txt` ⇒ kept.
 
-Group B — Directory-only patterns
+Group B - Directory-only patterns
 
 13. `build/` ⇒ `build/output.txt` ⇒ ignored.
 14. `build/` ⇒ `src/build.rs` ⇒ kept (file, not directory).
@@ -396,7 +396,7 @@ Group B — Directory-only patterns
     `ignore` crate treats this as a directory pattern, so the bare file
     is kept; document this if Grex parity is required.
 
-Group C — Root-relative patterns
+Group C - Root-relative patterns
 
 18. `/storage/app/` ⇒ `storage/app/file.txt` ⇒ ignored.
 19. `/storage/app/` ⇒ `app/file.txt` ⇒ kept (the regression in
@@ -406,7 +406,7 @@ Group C — Root-relative patterns
 22. `/secrets.txt` ⇒ `secrets.txt` ⇒ ignored.
 23. `/secrets.txt` ⇒ `sub/secrets.txt` ⇒ kept.
 
-Group D — Double-asterisk patterns
+Group D - Double-asterisk patterns
 
 24. `**/test.txt` ⇒ `test.txt` ⇒ ignored.
 25. `**/test.txt` ⇒ `subdir/test.txt` ⇒ ignored.
@@ -418,7 +418,7 @@ Group D — Double-asterisk patterns
 30. `a/**/b` ⇒ `a/x/y/b` ⇒ ignored.
 31. `a/**/b` ⇒ `c/a/b` ⇒ kept.
 
-Group E — Negation
+Group E - Negation
 
 32. `*.log\n!important.log` ⇒ `app.log` ⇒ ignored.
 33. `*.log\n!important.log` ⇒ `important.log` ⇒ kept.
@@ -426,7 +426,7 @@ Group E — Negation
 35. Same body ⇒ `test_backup.txt` ⇒ kept.
 36. Same body ⇒ `cache.tmp` ⇒ ignored.
 
-Group F — Character classes
+Group F - Character classes
 
 37. `test[12].txt` ⇒ `test1.txt` ⇒ ignored.
 38. `test[12].txt` ⇒ `test2.txt` ⇒ ignored.
@@ -437,21 +437,21 @@ Group F — Character classes
 43. `[!a-z]*.txt` ⇒ `Readme.txt` ⇒ ignored (negated class).
 44. `[!a-z]*.txt` ⇒ `notes.txt` ⇒ kept.
 
-Group G — Nested `.gitignore`
+Group G - Nested `.gitignore`
 
 45. Root `.gitignore`: `*.txt`. `subdir/.gitignore`: `!subdir.txt`. File
     `subdir/subdir.txt` ⇒ kept.
 46. Same setup. File `subdir/other.txt` ⇒ ignored (no negation for it).
 47. Same setup. File `root.txt` ⇒ ignored.
 
-Group H — Comments and blanks
+Group H - Comments and blanks
 
 48. `# ignore logs\n*.log` ⇒ `app.log` ⇒ ignored.
 49. `# ignore logs\n*.log\n\n` ⇒ `app.log` ⇒ ignored (trailing blank).
 50. `# only comments` ⇒ `anything.txt` ⇒ kept.
 51. Empty `.gitignore` ⇒ `anything.txt` ⇒ kept.
 
-Group I — Escape sequences (deviation from Grex)
+Group I - Escape sequences (deviation from Grex)
 
 52. `\#config` ⇒ `#config` ⇒ ignored in `ignore` crate, kept in Grex.
     Mark as a known-divergence test; both implementations should be
@@ -461,27 +461,27 @@ Group I — Escape sequences (deviation from Grex)
     kept in Grex.
 55. `\[abc].txt` ⇒ `[abc].txt` ⇒ ignored in `ignore` crate, kept in Grex.
 
-Group J — Malformed patterns
+Group J - Malformed patterns
 
 56. `[unterminated\n*.txt\n!keep.txt` (mixed malformed + valid lines)
     plus a file `app.txt` ⇒ ignored. Tests that malformed lines do not
     poison the rest of the file.
 57. Same body, file `keep.txt` ⇒ kept.
 
-Group K — Case sensitivity (deviation from Grex)
+Group K - Case sensitivity (deviation from Grex)
 
 58. `*.LOG` ⇒ `app.log` ⇒ kept in `ignore` crate (case-sensitive on
     Linux), ignored in Grex. Mark as a divergence test; pick one and
     pin it.
 59. `BUILD/` ⇒ `build/x.txt` ⇒ same divergence.
 
-Group L — Out-of-tree files
+Group L - Out-of-tree files
 
 60. File path outside the search root: `..` ⇒ should never be reachable
     by the walker; test that no file outside `root` is enumerated at
     all, with or without `.gitignore`.
 
-Group M — Search integration
+Group M - Search integration
 
 61. Search root contains both `.gitignore` and a matching file. Running
     a search with `respect_gitignore = true` must not return the
@@ -504,7 +504,7 @@ Grex either tests partially or not at all.
    against a `tempdir`. Lock the case-sensitivity policy by either
    flipping `case_insensitive` on the builder or pinning the test
    expectations to canonical (case-sensitive) git semantics. The
-   recommended default is canonical Linux behavior — case-sensitive —
+   recommended default is canonical Linux behavior - case-sensitive -
    with an opt-in setting to mirror Grex's Windows-native default for
    imported workspaces.
 2. Surface ignore-file parse errors as a new `SkipReason::IgnoreParse`

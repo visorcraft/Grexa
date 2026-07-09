@@ -123,7 +123,7 @@ Gaps:
 - Keep the pure-text formatting methods (`ExportContent*ToCsv`,
   `ExportFile*ToCsv`, `ExportContent*ToJson`, `ExportFile*ToJson`,
   `ExportContent*ToClipboard`, `ExportFile*ToClipboard`, and `EscapeCsvField`)
-  unchanged — they have no Windows dependencies and are already covered by
+  unchanged - they have no Windows dependencies and are already covered by
   unit tests.
 - Define an `IClipboard` interface and inject a Linux implementation that
   prefers a Qt `QClipboard` or `KSystemClipboard` when running inside the
@@ -167,29 +167,29 @@ WinRT `StorageFolder` plus a `MenuFlyout` with hard-coded items
 
 Private helpers wired into the menu items:
 
-- `OpenFile(string)` — `Process.Start` with `UseShellExecute = true`.
-- `OpenFileWith(string)` — shells out to
+- `OpenFile(string)` - `Process.Start` with `UseShellExecute = true`.
+- `OpenFileWith(string)` - shells out to
   `rundll32.exe shell32.dll,OpenAs_RunDLL <path>`.
-- `CopyPath(string)` — writes the path string to the WinRT clipboard.
-- `CopyFile(string)` — uses `StorageFile.GetFileFromPathAsync` /
+- `CopyPath(string)` - writes the path string to the WinRT clipboard.
+- `CopyFile(string)` - uses `StorageFile.GetFileFromPathAsync` /
   `StorageFolder.GetFolderFromPathAsync` synchronously (via
   `.GetAwaiter().GetResult()`) and puts the storage item into the clipboard
   as a CF_HDROP-style payload.
-- `RenameFile(string)` — launches `explorer.exe /select,"<path>"`. This
+- `RenameFile(string)` - launches `explorer.exe /select,"<path>"`. This
   highlights the file; it does **not** trigger F2/rename.
-- `DeleteFile(string)` — `File.Delete` / `Directory.Delete(_, true)`. No
+- `DeleteFile(string)` - `File.Delete` / `Directory.Delete(_, true)`. No
   Recycle Bin, no confirmation.
-- `ShowProperties(string)` — same `explorer.exe /select` shell-out; the
+- `ShowProperties(string)` - same `explorer.exe /select` shell-out; the
   code comment acknowledges `shell32.dll,ShellExec_RunDLL` would be
   required for a real properties dialog.
-- `NormalizeWslPath(string)` — accepts `\\wsl.localhost\<distro>\...`,
+- `NormalizeWslPath(string)` - accepts `\\wsl.localhost\<distro>\...`,
   `\\wsl$\<distro>\...`, and raw `/home/...` or `/mnt/...` paths (forward
   or back slashes). Throws `NotSupportedException` for WSL1 paths matching
   `\AppData\Local\lxss\`.
-- `ConvertLinuxPathToWsl(string)` — runs `wsl wslpath -w "<path>"`,
+- `ConvertLinuxPathToWsl(string)` - runs `wsl wslpath -w "<path>"`,
   fallback synthesizes `\\wsl$\<default-distro>\...` (defaulting to
   `Ubuntu-24.04`).
-- `static void Log(string)` — appends to `Path.GetTempPath()/Grex.log`.
+- `static void Log(string)` - appends to `Path.GetTempPath()/Grex.log`.
 
 ### Side Effects
 
@@ -205,7 +205,7 @@ Private helpers wired into the menu items:
 
 ### Windows-specific Behavior and Linux Equivalents
 
-This service is the most Windows-coupled of the five — almost every concrete
+This service is the most Windows-coupled of the five - almost every concrete
 operation needs replacement.
 
 - `Microsoft.UI.Xaml` `MenuFlyout` is WinUI-only. Replace with a native
@@ -233,7 +233,7 @@ operation needs replacement.
 - Clipboard for `CopyPath` / `CopyFile` should funnel through the shared
   `IClipboard` shim. For file copy, put a `text/uri-list` payload of
   `file:///...` URIs plus `x-special/gnome-copied-files` onto the
-  clipboard — Dolphin/Nautilus/Thunar all accept this as a file copy.
+  clipboard - Dolphin/Nautilus/Thunar all accept this as a file copy.
 - The log file should move out of `Path.GetTempPath()` to
   `$XDG_STATE_HOME/grexa/grexa.log` (falling back to
   `$HOME/.local/state/grexa/grexa.log`).
@@ -291,7 +291,7 @@ Gaps:
 `Services/NotificationService.cs` is a singleton that sends transient
 notifications ("toasts") to the user for errors, warnings, info, and success
 states. It is the only service in the supporting set that has no return value
-flowing back to the UI — it is a fire-and-forget side channel.
+flowing back to the UI - it is a fire-and-forget side channel.
 
 ### Public API
 
@@ -350,7 +350,7 @@ timestamped lines to `Path.GetTempPath()/Grex.log`.
   sound, urgency, and history behaviors the freedesktop spec omits.
 - Drop the XML payload. The freedesktop API takes `app_name`,
   `replaces_id`, `app_icon`, `summary`, `body`, `actions[]`, `hints{}`,
-  `expire_timeout` — strings, not XML.
+  `expire_timeout` - strings, not XML.
 - Remove the unpackaged-app workaround in `EnsureRegistration`; D-Bus has
   no analogous registration step.
 - Keep `EscapeXml` only if Grexa opts into KDE's small HTML-like body
@@ -372,7 +372,7 @@ Gaps:
 - No test verifies that the rendered XML payload escapes special characters
   (it only verifies the call does not throw).
 - No test asserts the 200-character truncation behavior.
-- No test exercises `EnsureRegistration` failure modes — the registration
+- No test exercises `EnsureRegistration` failure modes - the registration
   is global state and cannot easily be reset between tests.
 - No assertion on what is written to `Grex.log`.
 
@@ -446,7 +446,7 @@ with `QualifierValues["Language"] = culture` and throws
 `IsValidCulture(string)` is a `try`/`catch` around
 `CultureInfo.GetCultureInfo`. `ClearResourceContextCache()` empties the
 context dictionary on culture change. `UpdateDefaultResourceContext(string)`
-is effectively a no-op — its own comment admits WinUI 3 exposes no API to
+is effectively a no-op - its own comment admits WinUI 3 exposes no API to
 set a process-wide default `ResourceContext` for `x:Uid` resolution.
 
 ### Side Effects
@@ -493,7 +493,7 @@ set a process-wide default `ResourceContext` for `x:Uid` resolution.
 
 ### Test Coverage Observations
 
-`Tests/Services/LocalizationServiceTests.cs` is mostly skipped — the
+`Tests/Services/LocalizationServiceTests.cs` is mostly skipped - the
 fixture comments call this out explicitly:
 
 > Note: LocalizationService tests are limited because Windows ResourceLoader
@@ -520,7 +520,7 @@ indirectly.
 Gaps:
 
 - No active integration test loads a real resource file and asserts a
-  translation round-trip — this is a major coverage gap that the Linux
+  translation round-trip - this is a major coverage gap that the Linux
   port should fix.
 - No test exercises the `BuildKeyVariants` fallback chain.
 - No test exercises `SetCulture` actually changing returned strings.
@@ -602,15 +602,15 @@ Private members:
 - `FrameworkElement`, `ToolTipService`, `AutomationProperties`, and
   `DispatcherQueue` are all WinUI 3 APIs with no Linux equivalents.
 - Linux replacement depends on the chosen UI toolkit:
-  - **Qt Widgets/QML** — `QWidget::setToolTip` (Widgets) or the
+  - **Qt Widgets/QML** - `QWidget::setToolTip` (Widgets) or the
     `ToolTip.text` attached property (QML); accessibility via
     `QAccessibleWidget::setDescription` or QML `Accessible.description`.
-  - **GTK4** — `Gtk.Widget.SetTooltipText`;
+  - **GTK4** - `Gtk.Widget.SetTooltipText`;
     `gtk_accessible_update_property` for accessibility metadata.
 - `DispatcherQueue.HasThreadAccess` / `TryEnqueue(...)` become
   `QMetaObject::invokeMethod(..., Qt::QueuedConnection)` (Qt) or
   `g_main_context_invoke` (GTK).
-- `System.WeakReference<T>` stays as-is — it is BCL, not Windows.
+- `System.WeakReference<T>` stays as-is - it is BCL, not Windows.
 - Keep the registry static (or process-singleton) so XAML/QML code-behind
   can register without DI plumbing.
 
@@ -645,7 +645,7 @@ Gaps:
   `g_main_context_invoke` equivalent. Keep the "if already on UI thread,
   apply synchronously" optimization.
 - Keep the weak-reference + lock model. Add a periodic prune that runs
-  even when culture never changes — e.g., trigger a cleanup pass every
+  even when culture never changes - e.g., trigger a cleanup pass every
   `N` registrations to keep the static list bounded.
 - Add tests: register an element, observe tooltip text changes when
   `LocalizationService.SetCulture` is called; let the element go out of

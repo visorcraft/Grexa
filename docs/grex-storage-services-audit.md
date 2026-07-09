@@ -260,7 +260,7 @@ Grexa replacement:
   change channel exposed by the controller, but the storage layer should
   remain pure value-in / value-out.
 - The semantic guarantee to preserve is "no-op writes do not fire change
-  notifications" — owners of the GUI signal must diff old and new values
+  notifications" - owners of the GUI signal must diff old and new values
   before emitting.
 
 ## RecentPathsService Contract
@@ -505,7 +505,7 @@ From `SearchProfilesServiceTests.cs`:
 - `Exists` is case-insensitive
 - delete → removed
 - null / empty-name profile → not added
-- `SecondaryText` truncates path and term — UI test, not storage
+- `SecondaryText` truncates path and term - UI test, not storage
 
 ## Import From Grex Backups
 

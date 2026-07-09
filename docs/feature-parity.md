@@ -9,11 +9,11 @@ Last refreshed: v1.0.0.
 
 Status legend:
 
-- ✅ **Done** — shipped in Grexa.
-- 🟡 **Partial** — present at the contract level; some refinement
+- ✅ **Done** - shipped in Grexa.
+- 🟡 **Partial** - present at the contract level; some refinement
   scheduled for a later release.
-- ⏸ **Deferred** — explicit deferral with a recorded reason.
-- 🟥 **N/A** — Windows-only or otherwise out of scope for Linux.
+- ⏸ **Deferred** - explicit deferral with a recorded reason.
+- 🟥 **N/A** - Windows-only or otherwise out of scope for Linux.
 
 ## Search
 
@@ -79,7 +79,7 @@ Status legend:
 | Podman rootful detection | ✅ | `detect_podman_rootful`. |
 | List containers (`ps --format json`) | ✅ | `CliRuntime::list_containers` (Docker + Podman shapes). |
 | `grep` availability probe | ✅ | `has_grep`. |
-| Direct exec grep with argv array | ✅ | `direct_grep` — quoting-safe. |
+| Direct exec grep with argv array | ✅ | `direct_grep` - quoting-safe. |
 | BusyBox / distroless fallback | ✅ | `grep -rnH` is portable across distros; missing-grep falls through to mirror. |
 | Archive mirror fallback | ✅ | `archive_path` + `search_container` mirror branch. |
 | Container path display | ✅ | `rewrite_path` keeps the container path intact. |
@@ -109,7 +109,7 @@ Status legend:
 
 | Grex feature | Status | Implementation |
 | ------------ | ------ | -------------- |
-| Configurable before/after (1–20) | ✅ | `crates/grexa-core/src/preview.rs::context_preview`. |
+| Configurable before/after (1-20) | ✅ | `crates/grexa-core/src/preview.rs::context_preview`. |
 | 1-based line numbers | ✅ | Same module. |
 | Encoding-aware reader | ✅ | Inherits `encoding::read_text`. |
 | Match-line index | ✅ | `match_line_index` field. |
@@ -156,7 +156,7 @@ Status legend:
 | FileManager1 reveal | ✅ | `qobjects/search.rs::reveal_in_file_manager` (D-Bus `org.freedesktop.FileManager1.ShowItems`) with `grexa_core::desktop::reveal_with_xdg_open` fallback. |
 | User path classifier (abstract URLs) | 🟡 | The standalone classifier was removed as unused. The search bar accepts typed/pasted paths and the portal picker returns local `file://` paths; abstract URLs (`smb://`, `sftp://`, …) are not specially classified and currently fail as nonexistent local paths. |
 | KNotifications | ✅ | `notify_desktop` in `qobjects/search.rs` shells `notify-send` (which routes via `org.freedesktop.Notifications` / KNotifications). |
-| Portal file picker | ✅ | `QtQuick.Dialogs.FolderDialog` — Breeze on KDE, XDG desktop portal under Wayland / Flatpak. Recent-path store integrated. |
+| Portal file picker | ✅ | `QtQuick.Dialogs.FolderDialog` - Breeze on KDE, XDG desktop portal under Wayland / Flatpak. Recent-path store integrated. |
 | KDE color scheme + accent | 🟡 | Kirigami picks up the user's accent + theme today; full Qt palette swap via `KColorSchemeManager` still needs a cxx-qt-lib binding and is tracked as future GUI work. |
 
 ## Localization
@@ -177,7 +177,7 @@ Status legend:
 | ------------- | ----------- |
 | `%LocalAppData%\Grex\...` | `$XDG_*_HOME/grexa/...` |
 | Windows Search index | Baloo (optional, deferred) |
-| WSL / `\\wsl$\` / `\\wsl.localhost\` paths | None — Linux is native |
+| WSL / `\\wsl$\` / `\\wsl.localhost\` paths | None - Linux is native |
 | UNC paths (`\\server\share`) | Mounted shares via gvfs / kio-fuse |
 | Windows toasts | KNotifications / `org.freedesktop.Notifications` |
 | Windows clipboard | QClipboard / wl-copy / xclip |

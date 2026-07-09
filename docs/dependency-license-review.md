@@ -82,7 +82,7 @@ distribution:
 | Component | License |
 | --------- | ------- |
 | Qt 6 (Core, Qml, Gui, Quick) | LGPL-3.0 |
-| KDE Frameworks 6 — Kirigami | LGPL-2.1+ |
+| KDE Frameworks 6 - Kirigami | LGPL-2.1+ |
 | Poppler (`pdftotext`) | GPL-2.0+ |
 | Docker / Podman CLI | Apache-2.0 |
 | Secret Service backends (KWallet / GNOME Keyring) | various |

@@ -21,7 +21,7 @@ The struct is in `crates/grexa-core/src/models.rs`. A typical row holds:
 | `full_path`                 | `PathBuf` | 64            |
 | `relative_path`             | `PathBuf` | 24            |
 | `match_count`               | `usize`   | 8             |
-| **Total per row (~average)**| —         | **≈ 280 bytes** |
+| **Total per row (~average)**| -         | **≈ 280 bytes** |
 
 `SearchResult` heap allocations are dominated by the four `String` /
 `PathBuf` fields; the `line_content` cap at 400 chars means worst case
@@ -34,15 +34,15 @@ is ~1.6 kB (UTF-8 bytes) per row.
 | Average dev tree   | 1k        | ~300 kB         | comfortably under any sensible cap |
 | Large monorepo     | 100k      | ~30 MB          | acceptable; matches Grex's WPF heap behavior |
 | Pathological scan  | 1M        | ~300 MB         | hard ceiling for v1.0 |
-| Above 1M           | —         | —               | the GUI surfaces a "truncated, refine your search" status; CLI keeps streaming |
+| Above 1M           | -         | -               | the GUI surfaces a "truncated, refine your search" status; CLI keeps streaming |
 
 The numbers are deliberate over-estimates. Real-world dev trees scanned
-during development land at 50–80 bytes per `SearchResult` once short
+during development land at 50-80 bytes per `SearchResult` once short
 file names + short snippets are factored in.
 
 ## Back-pressure
 
-The Rust core never imposes a row cap — `search_with` keeps emitting
+The Rust core never imposes a row cap - `search_with` keeps emitting
 into `SearchSummary.results` regardless of size. The constraints live
 in two layers above:
 
@@ -60,7 +60,7 @@ Files-mode rows aggregate every `SearchResult` for one file. A file
 with N matches keeps every preview row plus a head/best summary; budget
 roughly `N × 280 bytes + 200 bytes (header)`. The aggregator runs in
 `search.rs::aggregate_file_results` after the main loop completes, so
-the peak memory cost is the union of `results` + `file_results` —
+the peak memory cost is the union of `results` + `file_results` -
 double the per-row estimate above when the user has selected Files mode.
 
 ## Result-cap policy
