@@ -188,6 +188,12 @@ const REGEX_PER_FILE_BUDGET: Duration = Duration::from_secs(5);
 /// ceiling.
 const MAX_MATCHES_PER_FILE: usize = 1_000_000;
 
+/// Cooperative-cancel poll stride for the per-file literal / normalized match
+/// collectors. Checking the token on every iteration would add measurable
+/// overhead across a dense haystack; every 1024 keeps worst-case overshoot
+/// tiny while staying cheap.
+const CANCEL_POLL_STRIDE: usize = 1024;
+
 /// Safety brake: refuse to rewrite more than this many files in a single
 /// replace operation. A 1M-row search can map to many unique files; without a
 /// cap the operation could run for hours and leave temp files across the tree.
@@ -262,7 +268,10 @@ pub fn load_residual_journal() -> Result<Option<ReplaceJournalEntry>, ReplaceErr
 /// Returns the number of matches replaced (0 if the file was unchanged).
 pub fn replace_file(path: &Path, options: &ReplaceOptions) -> Result<usize, ReplaceError> {
     let substitution = SubstitutionContext::build(options)?;
-    match rewrite_one_pre_read(path, options, &substitution) {
+    // Single-file entry point has no caller-supplied cancel token; a fresh
+    // (never-cancelled) token lets the shared rewrite path poll uniformly.
+    let cancel = CancelToken::new();
+    match rewrite_one_pre_read(path, options, &substitution, &cancel) {
         Ok(FileResult::Unchanged) => Ok(0),
         Ok(FileResult::Replaced { matches, .. }) => Ok(matches),
         Err(err) => Err(ReplaceError::Io(err)),
@@ -326,7 +335,7 @@ pub fn replace_with(
         }
         journal.flush_if_due(idx);
 
-        match rewrite_one_pre_read(&path, options, &substitution) {
+        match rewrite_one_pre_read(&path, options, &substitution, cancel) {
             Ok(FileResult::Unchanged) => summary.files_unchanged += 1,
             Ok(FileResult::Replaced { matches, encoding }) => {
                 summary.files_modified += 1;
@@ -428,6 +437,7 @@ fn rewrite_one_pre_read(
     path: &Path,
     options: &ReplaceOptions,
     substitution: &SubstitutionContext,
+    cancel: &CancelToken,
 ) -> Result<FileResult, io::Error> {
     ensure_within_root(path, &options.search.path)?;
 
@@ -439,7 +449,8 @@ fn rewrite_one_pre_read(
     }
 
     let (text, encoding, original_metadata) = read_regular_text(path)?;
-    let (new_text, matches) = apply_substitution(&text, options, substitution);
+    let (new_text, matches) =
+        apply_substitution(&text, options, substitution, cancel, MAX_MATCHES_PER_FILE);
     if matches == 0 || new_text == text {
         return Ok(FileResult::Unchanged);
     }
@@ -531,6 +542,8 @@ fn apply_substitution(
     text: &str,
     options: &ReplaceOptions,
     substitution: &SubstitutionContext,
+    cancel: &CancelToken,
+    cap: usize,
 ) -> (String, usize) {
     if let Some(engine) = substitution.regex_engine.as_ref() {
         // Collect raw matches with both a CPU deadline and a memory cap so a
@@ -538,27 +551,26 @@ fn apply_substitution(
         // matches) cannot peg a core or build an unbounded vector — same
         // guards the search hot path enforces per line. `whole_word` filtering
         // only shrinks the set, so it is applied to the bounded collection.
-        // The replacement then goes through `expand_matches`, which re-queries
-        // captures in the full-haystack context (correct for lookaround) and
-        // stays consistent with the bounded count.
-        let collect_cap = MAX_MATCHES_PER_FILE + 1;
+        // The replacement then goes through `expand_matches_bounded`, which
+        // re-queries captures in the full-haystack context (correct for
+        // lookaround) under the same per-file CPU budget, and stays consistent
+        // with the bounded count.
+        let collect_cap = cap.saturating_add(1);
         let mut matches = engine.find_iter_with_budget(text, REGEX_PER_FILE_BUDGET, collect_cap);
-        if matches.len() > MAX_MATCHES_PER_FILE {
-            tracing::warn!(
-                "regex replace hit the per-file match cap ({}); truncating",
-                MAX_MATCHES_PER_FILE
-            );
-            matches.truncate(MAX_MATCHES_PER_FILE);
-        }
+        cap_file_matches(&mut matches, "regex", cap);
         if options.search.whole_word {
             matches.retain(|(start, end)| is_whole_word_match(text, *start, *end));
         }
-        let count = matches.len();
-        if count == 0 {
+        if matches.is_empty() {
             return (text.to_string(), 0);
         }
-        let replaced = engine.expand_matches(text, &matches, &options.replacement);
-        return (replaced, count);
+        // Capture expansion re-queries the pattern on the full haystack once
+        // per match, so it shares the per-file CPU budget with the find pass;
+        // a pathological extended-engine pattern otherwise re-pins a core here.
+        let deadline = Instant::now().checked_add(REGEX_PER_FILE_BUDGET);
+        let (replaced, expanded) =
+            engine.expand_matches_bounded(text, &matches, &options.replacement, cancel, deadline);
+        return (replaced, expanded);
     }
 
     let needle = &options.search.search_term;
@@ -573,11 +585,13 @@ fn apply_substitution(
             norm_ctx,
             &options.search,
             &options.replacement,
+            cancel,
+            cap,
         );
     }
 
     if options.search.case_sensitive {
-        let matches = collect_literal_matches(text, needle, options.search.whole_word);
+        let matches = collect_literal_matches(text, needle, options.search.whole_word, cancel, cap);
         if matches.is_empty() {
             return (text.to_string(), 0);
         }
@@ -587,15 +601,24 @@ fn apply_substitution(
             return (text.to_string(), 0);
         };
         // Filter through `is_whole_word_match` instead of `\b` so the
-        // whole-word semantics stay identical to search and the other
-        // replace paths for needles with non-word edge characters.
-        let matches: Vec<(usize, usize)> = re
-            .find_iter(text)
-            .map(|m| (m.start(), m.end()))
-            .filter(|&(start, end)| {
-                !options.search.whole_word || is_whole_word_match(text, start, end)
-            })
-            .collect();
+        // whole-word semantics stay identical to search and the other replace
+        // paths for needles with non-word edge characters. The per-file match
+        // cap and the cancel token bound collection so a dense haystack cannot
+        // materialize an unbounded vector or run past cancellation.
+        let mut matches: Vec<(usize, usize)> = Vec::new();
+        for (iterations, m) in re.find_iter(text).enumerate() {
+            if iterations.is_multiple_of(CANCEL_POLL_STRIDE) && cancel.is_cancelled() {
+                break;
+            }
+            let (start, end) = (m.start(), m.end());
+            if !options.search.whole_word || is_whole_word_match(text, start, end) {
+                matches.push((start, end));
+                if matches.len() > cap {
+                    break;
+                }
+            }
+        }
+        cap_file_matches(&mut matches, "case-insensitive literal", cap);
         if matches.is_empty() {
             return (text.to_string(), 0);
         }
@@ -617,17 +640,44 @@ fn splice_replacements(text: &str, matches: &[(usize, usize)], replacement: &str
     result
 }
 
-fn collect_literal_matches(text: &str, needle: &str, whole_word: bool) -> Vec<(usize, usize)> {
+/// Truncate a collected match vector to the per-file cap, mirroring the regex
+/// replace branch: collectors gather at most `cap + 1` so overflow is
+/// detectable, then this warns and truncates so the operation continues over a
+/// bounded set instead of materializing an unbounded vector. Production passes
+/// [`MAX_MATCHES_PER_FILE`]; tests pass a small cap to exercise the logic.
+fn cap_file_matches(matches: &mut Vec<(usize, usize)>, kind: &str, cap: usize) {
+    if matches.len() > cap {
+        tracing::warn!("{kind} replace hit the per-file match cap ({cap}); truncating");
+        matches.truncate(cap);
+    }
+}
+
+fn collect_literal_matches(
+    text: &str,
+    needle: &str,
+    whole_word: bool,
+    cancel: &CancelToken,
+    cap: usize,
+) -> Vec<(usize, usize)> {
     let mut matches = Vec::new();
     let mut offset = 0;
+    let mut iterations = 0usize;
     while let Some(index) = text[offset..].find(needle) {
+        if iterations.is_multiple_of(CANCEL_POLL_STRIDE) && cancel.is_cancelled() {
+            break;
+        }
+        iterations += 1;
         let start = offset + index;
         let end = start + needle.len();
         if !whole_word || is_whole_word_match(text, start, end) {
             matches.push((start, end));
+            if matches.len() > cap {
+                break;
+            }
         }
         offset = end;
     }
+    cap_file_matches(&mut matches, "literal", cap);
     matches
 }
 
@@ -637,6 +687,8 @@ fn apply_normalized_substitution(
     norm_ctx: &NormalizationContext,
     options: &SearchOptions,
     replacement: &str,
+    cancel: &CancelToken,
+    cap: usize,
 ) -> (String, usize) {
     if normalized_needle.is_empty() {
         return (text.to_string(), 0);
@@ -646,15 +698,24 @@ fn apply_normalized_substitution(
 
     let mut norm_matches = Vec::new();
     let mut offset = 0;
+    let mut iterations = 0usize;
     while let Some(index) = normalized[offset..].find(normalized_needle) {
+        if iterations.is_multiple_of(CANCEL_POLL_STRIDE) && cancel.is_cancelled() {
+            break;
+        }
+        iterations += 1;
         let norm_start = offset + index;
         let norm_end = norm_start + normalized_needle.len();
         let (orig_start, orig_end) = map_normalized_span(&mapping, norm_start, norm_end);
         if !options.whole_word || is_whole_word_match(text, orig_start, orig_end) {
             norm_matches.push((orig_start, orig_end));
+            if norm_matches.len() > cap {
+                break;
+            }
         }
         offset = norm_end;
     }
+    cap_file_matches(&mut norm_matches, "normalized", cap);
 
     if norm_matches.is_empty() {
         return (text.to_string(), 0);
@@ -1402,5 +1463,73 @@ mod tests {
         assert_eq!(summary.files_modified, MAX_FILES_PER_REPLACE);
 
         set_journal_path_override(None);
+    }
+
+    /// Drive [`apply_substitution`] directly so the per-file match cap can be
+    /// exercised with a small value instead of the production
+    /// [`MAX_MATCHES_PER_FILE`] (1,000,000), which is far too large to
+    /// materialize in a unit test.
+    fn substitute_with_cap(
+        text: &str,
+        search: SearchOptions,
+        replacement: &str,
+        cap: usize,
+    ) -> (String, usize) {
+        let options = ReplaceOptions {
+            search,
+            replacement: replacement.to_string(),
+        };
+        let substitution = SubstitutionContext::build(&options).unwrap();
+        apply_substitution(text, &options, &substitution, &CancelToken::new(), cap)
+    }
+
+    #[test]
+    fn literal_replace_caps_dense_matches() {
+        // Six literal matches with a cap of three: the collector gathers
+        // `cap + 1` to detect overflow, then truncates to `cap` — mirroring
+        // the regex branch's warn-and-truncate behavior. The rewrite must
+        // touch only the first `cap` matches and report that count.
+        let search = SearchOptions::new(Path::new("."), "x");
+        let (rewritten, count) = substitute_with_cap("x x x x x x", search, "Y", 3);
+        assert_eq!(count, 3, "only `cap` matches should be reported as replaced");
+        assert_eq!(rewritten, "Y Y Y x x x");
+    }
+
+    #[test]
+    fn case_insensitive_literal_replace_caps_dense_matches() {
+        // Same cap contract on the regex-backed case-insensitive literal path.
+        let mut search = SearchOptions::new(Path::new("."), "todo");
+        search.case_sensitive = false;
+        let (rewritten, count) = substitute_with_cap("TODO todo TODO todo", search, "done", 2);
+        assert_eq!(count, 2);
+        assert_eq!(rewritten, "done done TODO todo");
+    }
+
+    #[test]
+    fn normalized_substitution_honors_cap() {
+        // Diacritic-insensitive matching routes through
+        // `apply_normalized_substitution`: "cafe" matches every "café". With
+        // four matches and a cap of two, only the first two are rewritten.
+        let mut search = SearchOptions::new(Path::new("."), "cafe");
+        search.diacritic_sensitive = false;
+        let (rewritten, count) = substitute_with_cap("café café café café", search, "CAFE", 2);
+        assert_eq!(count, 2);
+        assert_eq!(rewritten, "CAFE CAFE café café");
+    }
+
+    #[test]
+    fn literal_collector_stops_when_cancelled() {
+        // The collector polls the cancel token on a stride. An uncancelled
+        // token scans the whole haystack; a pre-cancelled token stops at the
+        // first poll (iteration 0) and collects nothing — proving the token
+        // gates collection instead of being ignored.
+        let text = "a ".repeat(4096);
+        let full = collect_literal_matches(&text, "a", false, &CancelToken::new(), usize::MAX);
+        assert_eq!(full.len(), 4096);
+
+        let cancelled = CancelToken::new();
+        cancelled.cancel();
+        let stopped = collect_literal_matches(&text, "a", false, &cancelled, usize::MAX);
+        assert_eq!(stopped.len(), 0, "a cancelled token must stop collection at the first poll");
     }
 }

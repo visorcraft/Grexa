@@ -127,6 +127,12 @@ Kirigami.Page {
     }
     property int activeTab: 0
     property int nextTabId: 2
+    // Hard ceiling on in-session search tabs. Each tab can retain up
+    // to the Rust-side row cap, so an unbounded tab count is the
+    // primary driver of the "slows over a session" freeze. The count
+    // cap is enforced here in openNewTab; aggregate snapshot memory is
+    // bounded Rust-side by SNAPSHOT_ROW_BUDGET.
+    readonly property int maxTabs: 8
 
     function activeTabId() {
         if (activeTab < 0 || activeTab >= tabsModel.count) return 0
@@ -180,6 +186,7 @@ Kirigami.Page {
     }
 
     function openNewTab() {
+        if (tabsModel.count >= page.maxTabs) return
         persistActiveTab()
         const id = nextTabId
         nextTabId += 1
@@ -423,6 +430,7 @@ Kirigami.Page {
                     display: Controls.AbstractButton.IconOnly
                     Layout.preferredWidth: 26
                     Layout.preferredHeight: 26
+                    enabled: tabsModel.count < page.maxTabs
                     Controls.ToolTip.text: app.i18n("ui-new-search-tab-ctrlt")
                     Controls.ToolTip.visible: hovered
                     onClicked: page.openNewTab()
@@ -862,6 +870,13 @@ Kirigami.Page {
                 focus: true
                 keyNavigationEnabled: true
                 keyNavigationWraps: false
+                // Recycle delegates that scroll off-screen instead of
+                // destroying/recreating them — important once batches
+                // stream in during a search. cacheBuffer keeps a small
+                // margin of delegates above/below the viewport so fast
+                // scrolling doesn't blank rows.
+                reuseItems: true
+                cacheBuffer: 600
                 Accessible.role: Accessible.List
                 Accessible.name: app.i18n("ui-search-results")
 
@@ -886,9 +901,16 @@ Kirigami.Page {
                     }
                 }
 
+                // The fade/slide `add` transition runs once per inserted
+                // row; during streaming that's two NumberAnimations per
+                // batched insert and a major jank source. Collapse its
+                // duration to 0 while a search is busy so inserts are
+                // instant, restoring the polished enter animation once
+                // the search settles. Keyboard nav + delegate bindings
+                // are unaffected.
                 add: Transition {
-                    NumberAnimation { property: "opacity"; from: 0; to: 1; duration: app.tokens.durationSnap }
-                    NumberAnimation { property: "y"; from: 6; duration: app.tokens.durationSnap; easing.type: Easing.OutCubic }
+                    NumberAnimation { property: "opacity"; from: 0; to: 1; duration: page.controller.busy ? 0 : app.tokens.durationSnap }
+                    NumberAnimation { property: "y"; from: 6; duration: page.controller.busy ? 0 : app.tokens.durationSnap; easing.type: Easing.OutCubic }
                 }
 
                 delegate: ResultRow {

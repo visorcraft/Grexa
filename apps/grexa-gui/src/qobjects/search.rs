@@ -18,6 +18,7 @@
 
 use std::path::PathBuf;
 use std::pin::Pin;
+use std::time::{Duration, Instant};
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
@@ -50,15 +51,44 @@ fn expand_tilde(path: &str) -> String {
     path.to_string()
 }
 
-/// How many matches the worker collects before queueing a batch hop to
-/// the GUI thread. Tuned for 16ms render budget at typical match
-/// preview widths.
+/// Initial capacity for the worker's per-flush row buffer. Streaming
+/// is no longer flushed on a fixed row count — see `ROW_FLUSH_INTERVAL`
+/// — but this remains a cheap starting size so small searches avoid
+/// reallocation.
 const BATCH_SIZE: usize = 64;
 
 /// Maximum number of result rows the GUI will keep in memory for the
 /// active tab. Searches that exceed this cap stop adding rows but keep
 /// scanning so file/match counters remain accurate.
 const MAX_RESULT_ROWS: usize = 1_000_000;
+
+/// Aggregate snapshot-row budget across ALL inactive tabs. The active
+/// tab holds its own `MAX_RESULT_ROWS`; inactive tabs together may
+/// retain up to this many rows before `snapshot_save` evicts the
+/// oldest inactive snapshot to make room. `2× MAX_RESULT_ROWS` keeps
+/// worst-case GUI result memory at roughly three active-tab buffers.
+/// (The tab COUNT cap lives QML-side as `SearchPage.maxTabs`.)
+const SNAPSHOT_ROW_BUDGET: usize = 2 * MAX_RESULT_ROWS;
+
+/// Minimum wall-clock gap between GUI-thread row hops while a search
+/// streams. The worker accumulates matches and flushes at most this
+/// often (≈ one 60 fps frame) instead of once per 64-match batch,
+/// which was flooding the UI thread with `begin/endInsertRows` and
+/// property-change storms.
+const ROW_FLUSH_INTERVAL: Duration = Duration::from_millis(16);
+
+/// Safety cap on a single worker-side accumulation buffer. If matches
+/// arrive faster than the GUI can drain them, the worker flushes when
+/// the buffer hits this size even if `ROW_FLUSH_INTERVAL` hasn't
+/// elapsed — bounds worker memory if the GUI thread stalls.
+const WORKER_BATCH_CAP: usize = 4096;
+
+/// Minimum wall-clock gap between counter qproperty emissions
+/// (`match_count` / `files_scanned` / `files_matched`) during
+/// streaming. Rows still stream at `ROW_FLUSH_INTERVAL`; the cheaper
+/// counters tick ~4×/sec. `finish_search` always emits the
+/// authoritative final values regardless of this throttle.
+const COUNTER_EMIT_INTERVAL: Duration = Duration::from_millis(250);
 
 /// Snapshot of one tab's result buffer plus the qproperty-shaped
 /// state the tab depends on. Created on tab-switch-away and
@@ -505,6 +535,61 @@ impl Default for WithinCache {
     }
 }
 
+/// Cadence controller for the streaming search worker. Tracks when
+/// rows were last hopped to the GUI and when the counter qproperties
+/// were last emitted, so a fast search coalesces to ≈ one row hop per
+/// `ROW_FLUSH_INTERVAL` and ≈ one counter emission per
+/// `COUNTER_EMIT_INTERVAL` instead of one of each per 64-match batch.
+///
+/// Pure (no Qt) so the cadence is unit-testable; the worker feeds it
+/// events and acts on the returned flags.
+struct StreamThrottle {
+    last_rows_flush: Instant,
+    last_counters_flush: Instant,
+}
+
+impl StreamThrottle {
+    fn new() -> Self {
+        let now = Instant::now();
+        Self {
+            last_rows_flush: now,
+            last_counters_flush: now,
+        }
+    }
+
+    /// A match (or the final drain) produced `batch_len` pending rows.
+    /// Returns `(flush_rows, emit_counters)`. Rows flush when the
+    /// batch is non-empty AND (the row interval elapsed OR the batch
+    /// hit the safety cap). Counters emit when the counter interval
+    /// elapsed. Each timestamp advances only when its action fires.
+    fn on_rows(&mut self, batch_len: usize, now: Instant) -> (bool, bool) {
+        let emit_counters = now.duration_since(self.last_counters_flush) >= COUNTER_EMIT_INTERVAL;
+        let rows_due = now.duration_since(self.last_rows_flush) >= ROW_FLUSH_INTERVAL
+            || batch_len >= WORKER_BATCH_CAP;
+        let flush_rows = batch_len > 0 && rows_due;
+        if flush_rows {
+            self.last_rows_flush = now;
+        }
+        if emit_counters {
+            self.last_counters_flush = now;
+        }
+        (flush_rows, emit_counters)
+    }
+
+    /// A file-scan advanced the counters but produced no row. Emit a
+    /// counters-only hop when the counter interval elapsed so the
+    /// scanned/files counters still tick during a sparse or
+    /// zero-match stretch.
+    fn on_counter_event(&mut self, now: Instant) -> bool {
+        if now.duration_since(self.last_counters_flush) >= COUNTER_EMIT_INTERVAL {
+            self.last_counters_flush = now;
+            true
+        } else {
+            false
+        }
+    }
+}
+
 fn compute_within_context(within: &str, use_regex: bool) -> WithinContext {
     let trimmed = within.trim();
     if trimmed.is_empty() {
@@ -553,12 +638,24 @@ pub struct SearchControllerRust {
     last_search_options: Option<SearchOptions>,
     within_cache: WithinCache,
     /// Per-tab result-row snapshots keyed by the QML-side monotonic
-    /// tab id. Switching to a different tab calls
-    /// `save_tab_snapshot(prev)` then `restore_tab_snapshot(next)`
-    /// so each tab keeps its full result buffer. Memory cost scales
-    /// with `tabs × rows-per-tab`, which is the price of real
-    /// per-tab isolation; closing a tab drops its snapshot.
+    /// tab id. Only INACTIVE tabs live here — `restore_tab_snapshot`
+    /// removes the entry so the active tab's rows are not also held in
+    /// the map. Aggregate size is bounded by `SNAPSHOT_ROW_BUDGET`
+    /// (see `snapshot_save`); `tab_snapshot_rows` tracks the running
+    /// total and `tab_snapshot_order` records recency (oldest at the
+    /// front) so eviction drops the least-recently-saved inactive tab
+    /// first. Closing a tab drops its snapshot via `snapshot_drop`.
     tab_snapshots: std::collections::HashMap<i32, TabSnapshot>,
+    /// Running total of `rows.len()` across every entry in
+    /// `tab_snapshots`. Maintained by `snapshot_save` /
+    /// `snapshot_restore` / `snapshot_drop` so the aggregate budget
+    /// check is O(1) instead of a full map scan on every save.
+    tab_snapshot_rows: usize,
+    /// Recency queue of snapshot tab ids, oldest at the front,
+    /// most-recently-saved at the back. `snapshot_save` moves the
+    /// saved id to the back; eviction walks from the front, skipping
+    /// the id currently being saved.
+    tab_snapshot_order: std::collections::VecDeque<i32>,
     cancel_token: Option<CancelToken>,
     active_generation: u64,
     seen_paths: std::collections::HashSet<std::path::PathBuf>,
@@ -757,6 +854,83 @@ impl SearchControllerRust {
         self.has_searched = false;
         self.status_text = QString::default();
     }
+
+    /// Core of `save_tab_snapshot`: snapshot the live buffer under
+    /// `tab_id`, enforcing the aggregate inactive-snapshot budget by
+    /// evicting the oldest *other* inactive snapshots until the new
+    /// one fits. Production passes `SNAPSHOT_ROW_BUDGET`; tests pass a
+    /// small budget to exercise eviction without materialising
+    /// millions of rows.
+    fn snapshot_save(&mut self, tab_id: i32) {
+        self.snapshot_save_with_budget(tab_id, SNAPSHOT_ROW_BUDGET);
+    }
+
+    fn snapshot_save_with_budget(&mut self, tab_id: i32, budget: usize) {
+        let snapshot = TabSnapshot {
+            rows: std::mem::take(&mut self.rows),
+            last_search_options: self.last_search_options.take(),
+            status_text: self.status_text.to_string(),
+            match_count: self.match_count,
+            files_matched: self.files_matched,
+            files_scanned: self.files_scanned,
+            has_searched: self.has_searched,
+            result_mode: self.result_mode,
+            within_filter: self.within_filter.to_string(),
+            within_regex: self.within_regex,
+            target_kind: self.target_kind,
+            selected_container_id: self.selected_container_id.to_string(),
+            busy: self.busy,
+            replacing: self.replacing,
+            last_replace_summary: self.last_replace_summary.to_string(),
+        };
+        self.visible.clear();
+        let new_rows = snapshot.rows.len();
+        // Replacing an existing snapshot for the same id: subtract its
+        // old contribution so a re-save doesn't double-count.
+        if let Some(old) = self.tab_snapshots.get(&tab_id) {
+            self.tab_snapshot_rows = self.tab_snapshot_rows.saturating_sub(old.rows.len());
+        }
+        // Evict oldest inactive snapshots (never the id being saved)
+        // until the new snapshot fits the budget.
+        while self.tab_snapshot_rows + new_rows > budget {
+            let victim = self
+                .tab_snapshot_order
+                .iter()
+                .copied()
+                .find(|id| *id != tab_id);
+            let Some(victim_id) = victim else { break };
+            if let Some(removed) = self.tab_snapshots.remove(&victim_id) {
+                self.tab_snapshot_rows = self.tab_snapshot_rows.saturating_sub(removed.rows.len());
+            }
+            self.tab_snapshot_order.retain(|id| *id != victim_id);
+        }
+        self.tab_snapshot_rows += new_rows;
+        self.tab_snapshot_order.retain(|id| *id != tab_id);
+        self.tab_snapshot_order.push_back(tab_id);
+        self.tab_snapshots.insert(tab_id, snapshot);
+    }
+
+    /// Core of `restore_tab_snapshot`: take the snapshot OUT of the
+    /// map so the active tab's rows are not also retained in the map
+    /// (the previous `get().cloned()` doubled the active tab's memory
+    /// for the whole session). Returns a default empty snapshot for a
+    /// missing id (fresh tab / budget-evicted) so the caller clears
+    /// the model.
+    fn snapshot_restore(&mut self, tab_id: i32) -> TabSnapshot {
+        let snap = self.tab_snapshots.remove(&tab_id).unwrap_or_default();
+        self.tab_snapshot_rows = self.tab_snapshot_rows.saturating_sub(snap.rows.len());
+        self.tab_snapshot_order.retain(|id| *id != tab_id);
+        snap
+    }
+
+    /// Core of `drop_tab_snapshot`: remove and keep the aggregate
+    /// counter + recency queue in sync.
+    fn snapshot_drop(&mut self, tab_id: i32) {
+        if let Some(removed) = self.tab_snapshots.remove(&tab_id) {
+            self.tab_snapshot_rows = self.tab_snapshot_rows.saturating_sub(removed.rows.len());
+        }
+        self.tab_snapshot_order.retain(|id| *id != tab_id);
+    }
 }
 
 impl ffi::SearchController {
@@ -871,17 +1045,33 @@ impl ffi::SearchController {
             let mut files_matched: u32 = 0;
             let mut rows_emitted: usize = 0;
             let mut gui_capped = false;
+            let mut throttle = StreamThrottle::new();
 
             let outcome = {
-                let emit_batch = |events: &mut Vec<ResultRow>, scanned: u32, matched: u32| {
-                    if events.is_empty() {
+                // Hop the pending batch to the GUI. `emit_counters`
+                // decides whether the counter qproperties fire on this
+                // hop (throttled) or are deferred to a later hop /
+                // `finish_search`. No-ops when there are no rows and
+                // no counter emission is due.
+                let flush = |events: &mut Vec<ResultRow>,
+                             scanned: u32,
+                             matched: u32,
+                             matches_total: usize,
+                             emit_counters: bool| {
+                    if events.is_empty() && !emit_counters {
                         return;
                     }
                     let rows = std::mem::take(events);
                     if let Err(err) = thread.queue(move |pin| {
-                        let scanned_i32 = scanned as i32;
-                        let matched_i32 = matched as i32;
-                        push_rows(pin, generation, rows, scanned_i32, matched_i32);
+                        push_rows(
+                            pin,
+                            generation,
+                            rows,
+                            scanned as i32,
+                            matched as i32,
+                            matches_total as i32,
+                            emit_counters,
+                        );
                     }) {
                         tracing::debug!("batch queue failed (window closed): {err}");
                     }
@@ -895,8 +1085,16 @@ impl ffi::SearchController {
                         }
                         rows_emitted += 1;
                         batch.push(ResultRow::from(&r));
-                        if batch.len() >= BATCH_SIZE {
-                            emit_batch(&mut batch, files_scanned, files_matched);
+                        let now = Instant::now();
+                        let (flush_rows, emit_counters) = throttle.on_rows(batch.len(), now);
+                        if flush_rows {
+                            flush(
+                                &mut batch,
+                                files_scanned,
+                                files_matched,
+                                rows_emitted,
+                                emit_counters,
+                            );
                         }
                     }
                     ProgressEvent::FileScanned { matches, .. } => {
@@ -904,13 +1102,22 @@ impl ffi::SearchController {
                         if matches > 0 {
                             files_matched += 1;
                         }
+                        // Tick the scanned/files counters even when a
+                        // file produced no match, throttled to the
+                        // counter cadence.
+                        if throttle.on_counter_event(Instant::now()) {
+                            flush(&mut batch, files_scanned, files_matched, rows_emitted, true);
+                        }
                     }
                     ProgressEvent::FileSkipped { .. } => {}
                 };
 
                 let result = search_with(&options, &cancel, Some(&mut sink));
-                // Flush remaining batch even if search errored mid-way.
-                emit_batch(&mut batch, files_scanned, files_matched);
+                // Final drain: push any remaining rows and force one
+                // last counter emission so the GUI's last streaming
+                // values are current before `finish_search` writes the
+                // authoritative summary.
+                flush(&mut batch, files_scanned, files_matched, rows_emitted, true);
                 result
             };
 
@@ -1207,38 +1414,17 @@ impl ffi::SearchController {
     }
 
     fn save_tab_snapshot(mut self: Pin<&mut Self>, tab_id: i32) {
-        let snapshot = TabSnapshot {
-            rows: std::mem::take(&mut self.as_mut().rust_mut().rows),
-            last_search_options: self.as_mut().rust_mut().last_search_options.take(),
-            status_text: self.as_ref().rust().status_text.to_string(),
-            match_count: self.as_ref().rust().match_count,
-            files_matched: self.as_ref().rust().files_matched,
-            files_scanned: self.as_ref().rust().files_scanned,
-            has_searched: self.as_ref().rust().has_searched,
-            result_mode: self.as_ref().rust().result_mode,
-            within_filter: self.as_ref().rust().within_filter.to_string(),
-            within_regex: self.as_ref().rust().within_regex,
-            target_kind: self.as_ref().rust().target_kind,
-            selected_container_id: self.as_ref().rust().selected_container_id.to_string(),
-            busy: self.as_ref().rust().busy,
-            replacing: self.as_ref().rust().replacing,
-            last_replace_summary: self.as_ref().rust().last_replace_summary.to_string(),
-        };
-        self.as_mut().rust_mut().visible.clear();
-        self.as_mut()
-            .rust_mut()
-            .tab_snapshots
-            .insert(tab_id, snapshot);
+        self.as_mut().rust_mut().snapshot_save(tab_id);
     }
 
     fn restore_tab_snapshot(mut self: Pin<&mut Self>, tab_id: i32) {
-        // Clone the snapshot rather than removing it so the contract
-        // is idempotent — a double-restore (or a restore-before-save
-        // on session bootstrap) doesn't wipe the buffer. The snapshot
-        // is dropped explicitly on tab close via `drop_tab_snapshot`.
-        let snap_opt = self.as_ref().rust().tab_snapshots.get(&tab_id).cloned();
-
-        let snap = snap_opt.unwrap_or_default();
+        // Take the snapshot out of the map so the active tab's rows
+        // live in exactly one place (the live `rows` buffer) rather
+        // than duplicated across the map. A missing snapshot (fresh
+        // tab, or one evicted by `SNAPSHOT_ROW_BUDGET`) falls back to
+        // an empty default — the "fresh tab" case — and the next
+        // `save_tab_snapshot` on switch-away repopulates it.
+        let snap = self.as_mut().rust_mut().snapshot_restore(tab_id);
         let TabSnapshot {
             rows,
             last_search_options,
@@ -1296,7 +1482,7 @@ impl ffi::SearchController {
     }
 
     fn drop_tab_snapshot(mut self: Pin<&mut Self>, tab_id: i32) {
-        self.as_mut().rust_mut().tab_snapshots.remove(&tab_id);
+        self.as_mut().rust_mut().snapshot_drop(tab_id);
     }
 
     fn export_results(&self, dest_path: &QString, format: i32) -> QString {
@@ -1424,25 +1610,33 @@ fn push_rows(
     rows: Vec<ResultRow>,
     files_scanned: i32,
     files_matched: i32,
+    matches_total: i32,
+    emit_counters: bool,
 ) {
     // Drop hops from a prior search whose generation no longer
     // matches the controller's current one — see `start_search`.
     if pin.as_ref().rust().active_generation != generation {
         return;
     }
-    if rows.is_empty() {
-        // Still update the scan counters — they tick on every file
-        // even when no match comes out of it.
-        let raw_added = pin.as_ref().rust().match_count;
-        pin.as_mut().set_match_count(raw_added);
+    // Counter qproperties are throttled during streaming: rows land on
+    // every hop (so the visible list fills) but `match_count` /
+    // `files_scanned` / `files_matched` only emit when the worker
+    // flagged this hop (`emit_counters`), ~4×/sec. `finish_search`
+    // always writes the authoritative final values. `matches_total` is
+    // the worker's running absolute match count (= rows emitted), so
+    // re-emitting after a suppressed hop converges to the right value
+    // instead of drifting from a per-batch accumulation.
+    let emit = |pin: &mut Pin<&mut ffi::SearchController>| {
+        pin.as_mut().set_match_count(matches_total);
         pin.as_mut().set_files_scanned(files_scanned);
         pin.as_mut().set_files_matched(files_matched);
+    };
+    if rows.is_empty() {
+        if emit_counters {
+            emit(&mut pin);
+        }
         return;
     }
-    // Raw count is what we add to `match_count` (the user-facing
-    // "total matches" — never filtered) regardless of how many
-    // pass the view filter.
-    let raw_added = rows.len() as i32;
     // Filter first to learn how many visible rows we're really
     // inserting. The QAbstractListModel contract requires
     // begin/endInsertRows to bracket EXACTLY the number of rows
@@ -1450,18 +1644,13 @@ fn push_rows(
     // corrupts QML's ListView indexing.
     let kept = pin.as_mut().rust_mut().filter_batch_for_view(&rows);
     if kept.is_empty() {
-        // Match count still grows — we accumulate the raw matches
-        // even when the view filter hides them. Without this, the
-        // status counter would be wrong when a within-filter is
-        // active.
-        let new_count = pin.as_ref().rust().match_count + raw_added;
-        pin.as_mut().set_match_count(new_count);
-        pin.as_mut().set_files_scanned(files_scanned);
-        pin.as_mut().set_files_matched(files_matched);
         // Even though no row is visible, the raw rows still need to
         // land in `self.rows` so files-mode dedup against future
         // batches sees them.
         pin.as_mut().rust_mut().rows.extend(rows);
+        if emit_counters {
+            emit(&mut pin);
+        }
         return;
     }
 
@@ -1475,20 +1664,66 @@ fn push_rows(
     pin.as_mut().rust_mut().append_with_visible(rows, kept);
     unsafe { pin.as_mut().end_insert_rows() };
 
-    let new_count = pin.as_ref().rust().match_count + raw_added;
-    pin.as_mut().set_match_count(new_count);
-    pin.as_mut().set_files_scanned(files_scanned);
-    pin.as_mut().set_files_matched(files_matched);
+    if emit_counters {
+        emit(&mut pin);
+    }
+}
+
+/// Convert container grep hits into result rows, applying the GUI row
+/// cap and counting the distinct files on the way. The unique-file
+/// count is accumulated HERE (on the worker) during the single row
+/// build pass, so `finish_container_search` doesn't need a second
+/// O(n) `HashSet` walk over every row on the GUI thread — that walk
+/// was one of the sources of the end-of-search freeze on large
+/// container result sets.
+///
+/// Takes a generic iterator of `(container_path, line, column,
+/// content)` tuples rather than the concrete `ContainerSearchHit` so
+/// the row conversion, cap, and unique-file counting are
+/// unit-testable without a live container runtime.
+fn build_container_rows<I>(hits: I, row_cap: usize) -> (Vec<ResultRow>, bool, i32)
+where
+    I: IntoIterator<Item = (String, usize, usize, String)>,
+{
+    let hits = hits.into_iter();
+    let mut rows: Vec<ResultRow> = Vec::with_capacity(hits.size_hint().0.min(row_cap));
+    let mut capped = false;
+    let mut seen_files: std::collections::HashSet<std::path::PathBuf> =
+        std::collections::HashSet::new();
+    for (idx, (path, line, column, content)) in hits.enumerate() {
+        if idx >= row_cap {
+            capped = true;
+            break;
+        }
+        let path_buf = std::path::PathBuf::from(&path);
+        seen_files.insert(path_buf.clone());
+        let preview_before = String::new();
+        let preview_after = String::new();
+        let preview_line = format!("{preview_before}{content}{preview_after}");
+        rows.push(ResultRow {
+            full_path: path_buf.clone(),
+            relative_path: path_buf,
+            line: line as u32,
+            column: column as u32,
+            preview_before,
+            preview_match: content,
+            preview_after,
+            preview_line,
+        });
+    }
+    let files_matched = seen_files.len() as i32;
+    (rows, capped, files_matched)
 }
 
 /// Worker-thread entry point for container searches. Runs the
-/// grexa-containers pipeline synchronously and returns the formatted
-/// summary so the GUI-thread hop can populate the model in one shot.
+/// grexa-containers pipeline synchronously and returns the rows, the
+/// cap flag, and the worker-side unique-file count so the GUI-thread
+/// hop can populate the model in one shot.
 fn run_container_search(
     target_kind: i32,
     container_id: &str,
     options: grexa_containers::ContainerSearchOptions,
-) -> Result<(Vec<ResultRow>, bool), String> {
+) -> Result<(Vec<ResultRow>, bool, i32), String> {
     use grexa_containers::{
         ContainerRuntimeKind, LiveProbe, detect_runtimes,
         runtime::{CliRuntime, RuntimeOperations, SystemCommandRunner},
@@ -1522,45 +1757,31 @@ fn run_container_search(
     let summary = search_container(&cli, &info, &options)
         .map_err(|e| format!("container search failed: {e}"))?;
 
-    let mut rows = Vec::with_capacity(summary.hits.len().min(MAX_RESULT_ROWS));
-    // The engine may already have capped (row cap or grep-output truncation);
-    // the GUI applies its own row cap on top.
-    let mut capped = summary.capped;
-    for (idx, hit) in summary.hits.into_iter().enumerate() {
-        if idx >= MAX_RESULT_ROWS {
-            capped = true;
-            break;
-        }
-        let path_buf = std::path::PathBuf::from(&hit.container_path);
-        let preview_before = String::new();
-        let preview_after = String::new();
-        let preview_line = format!("{preview_before}{}{preview_after}", hit.line_content);
-        rows.push(ResultRow {
-            full_path: path_buf.clone(),
-            relative_path: path_buf,
-            line: hit.line_number as u32,
-            column: hit.column_number as u32,
-            preview_before,
-            preview_match: hit.line_content,
-            preview_after,
-            preview_line,
-        });
-    }
+    let (rows, row_capped, files_matched) = build_container_rows(
+        summary
+            .hits
+            .into_iter()
+            .map(|h| (h.container_path, h.line_number, h.column_number, h.line_content)),
+        MAX_RESULT_ROWS,
+    );
+    // The engine may already have capped (row cap or grep-output
+    // truncation); the GUI's own row cap (`row_capped`) sits on top.
+    let capped = summary.capped || row_capped;
     let _ = grexa_containers::prune_mirrors(3600);
-    Ok((rows, capped))
+    Ok((rows, capped, files_matched))
 }
 
 fn finish_container_search(
     mut pin: Pin<&mut ffi::SearchController>,
     generation: u64,
-    outcome: Result<(Vec<ResultRow>, bool), String>,
+    outcome: Result<(Vec<ResultRow>, bool, i32), String>,
 ) {
     if pin.as_ref().rust().active_generation != generation {
         return;
     }
     pin.as_mut().set_busy(false);
     match outcome {
-        Ok((rows, capped)) => {
+        Ok((rows, capped, files_matched)) => {
             let added = rows.len() as i32;
             // Reset model + reinstall the rows in one go.
             let parent = QModelIndex::default();
@@ -1576,17 +1797,10 @@ fn finish_container_search(
             let _ = parent;
 
             pin.as_mut().set_match_count(added);
-            // Files matched is the unique file count in the result set.
-            let unique_files: i32 = {
-                let pin_ref = pin.as_ref();
-                let rust = pin_ref.rust();
-                let mut seen = std::collections::HashSet::new();
-                for r in &rust.rows {
-                    seen.insert(&r.full_path);
-                }
-                seen.len() as i32
-            };
-            pin.as_mut().set_files_matched(unique_files);
+            // `files_matched` was counted on the worker during the row
+            // build — no second O(n) pass over the rows here on the
+            // GUI thread.
+            pin.as_mut().set_files_matched(files_matched);
             let status = if capped {
                 t_status(
                     "search-status-capped-container",
@@ -1597,7 +1811,7 @@ fn finish_container_search(
                     "search-status-found-container",
                     &[
                         ("matches", (added as i64).into()),
-                        ("files", (unique_files as i64).into()),
+                        ("files", (files_matched as i64).into()),
                     ],
                 )
             };
@@ -2630,5 +2844,179 @@ mod tests {
     #[test]
     fn evidence_json_empty_rows_serialize_to_empty_array() {
         assert_eq!(build_evidence_json(&[]), "[]");
+    }
+
+    #[test]
+    fn snapshot_restore_removes_snapshot_from_map() {
+        let mut state = SearchControllerRust {
+            rows: vec![row("/a", "m"), row("/b", "m"), row("/c", "m")],
+            ..Default::default()
+        };
+        state.snapshot_save(7);
+        assert_eq!(state.tab_snapshot_rows, 3);
+        assert!(state.tab_snapshots.contains_key(&7));
+
+        let snap = state.snapshot_restore(7);
+
+        assert_eq!(snap.rows.len(), 3, "restore hands back the rows");
+        assert!(
+            !state.tab_snapshots.contains_key(&7),
+            "restore removes the entry so the active tab's rows are not also held in the map"
+        );
+        assert_eq!(state.tab_snapshot_rows, 0, "aggregate counter decremented");
+        assert!(state.tab_snapshot_order.is_empty());
+    }
+
+    #[test]
+    fn snapshot_restore_missing_id_returns_empty_default() {
+        let mut state = SearchControllerRust::default();
+        let snap = state.snapshot_restore(999);
+        assert!(snap.rows.is_empty(), "missing snapshot restores to an empty buffer");
+        assert_eq!(state.tab_snapshot_rows, 0);
+        assert!(state.tab_snapshot_order.is_empty());
+    }
+
+    #[test]
+    fn snapshot_save_evicts_oldest_inactive_over_budget() {
+        let mut state = SearchControllerRust::default();
+        let budget = 10;
+        // tab 1: 4 rows → total 4
+        state.rows = vec![row("/a", "m"); 4];
+        state.snapshot_save_with_budget(1, budget);
+        // tab 2: 4 rows → total 8
+        state.rows = vec![row("/b", "m"); 4];
+        state.snapshot_save_with_budget(2, budget);
+        assert_eq!(state.tab_snapshot_rows, 8);
+        // tab 3: 4 rows → 8 + 4 = 12 > 10 → evict the oldest inactive
+        // snapshot other than the one being saved (tab 1).
+        state.rows = vec![row("/c", "m"); 4];
+        state.snapshot_save_with_budget(3, budget);
+
+        assert!(!state.tab_snapshots.contains_key(&1), "oldest inactive tab evicted");
+        assert!(state.tab_snapshots.contains_key(&2));
+        assert!(state.tab_snapshots.contains_key(&3));
+        assert_eq!(state.tab_snapshot_rows, 8);
+        assert_eq!(state.tab_snapshot_order.front().copied(), Some(2));
+        assert_eq!(state.tab_snapshot_order.back().copied(), Some(3));
+    }
+
+    #[test]
+    fn snapshot_save_resave_replaces_rows_and_refreshes_recency() {
+        let mut state = SearchControllerRust::default();
+        let budget = 10;
+        state.rows = vec![row("/a", "m"); 4];
+        state.snapshot_save_with_budget(1, budget);
+        state.rows = vec![row("/b", "m"); 4];
+        state.snapshot_save_with_budget(2, budget);
+        assert_eq!(state.tab_snapshot_rows, 8);
+        // Re-save tab 1 with a larger buffer: its old 4 rows are
+        // subtracted, the new 6 are added, and it moves to the
+        // most-recent end so it is NOT the eviction victim.
+        state.rows = vec![row("/a2", "m"); 6];
+        state.snapshot_save_with_budget(1, budget);
+
+        assert_eq!(state.tab_snapshots.get(&1).map(|s| s.rows.len()), Some(6));
+        assert_eq!(state.tab_snapshot_rows, 10, "4 (tab 2) + 6 (tab 1)");
+        assert_eq!(state.tab_snapshot_order.back().copied(), Some(1), "tab 1 is now most recent");
+        assert_eq!(state.tab_snapshot_order.front().copied(), Some(2));
+    }
+
+    #[test]
+    fn snapshot_drop_updates_bookkeeping() {
+        let mut state = SearchControllerRust {
+            rows: vec![row("/a", "m"); 5],
+            ..Default::default()
+        };
+        state.snapshot_save_with_budget(1, 100);
+        assert_eq!(state.tab_snapshot_rows, 5);
+
+        state.snapshot_drop(1);
+
+        assert!(!state.tab_snapshots.contains_key(&1));
+        assert_eq!(state.tab_snapshot_rows, 0);
+        assert!(state.tab_snapshot_order.is_empty());
+    }
+
+    #[test]
+    fn stream_throttle_coalesces_rows_within_row_interval() {
+        let mut t = StreamThrottle::new();
+        let start = Instant::now();
+        // First row: neither interval has elapsed → coalesce, no emit.
+        let (flush_rows, emit_counters) = t.on_rows(1, start);
+        assert!(!flush_rows, "rows coalesce within the row interval");
+        assert!(!emit_counters, "counters coalesce within the counter interval");
+        // Many more rows well within 16ms (and below the safety cap)
+        // still coalesce.
+        let (flush_rows, emit_counters) = t.on_rows(100, start + Duration::from_millis(5));
+        assert!(!flush_rows);
+        assert!(!emit_counters);
+    }
+
+    #[test]
+    fn stream_throttle_flushes_rows_after_interval() {
+        let mut t = StreamThrottle::new();
+        let start = Instant::now();
+        let (flush_rows, _) = t.on_rows(1, start + ROW_FLUSH_INTERVAL);
+        assert!(flush_rows, "rows flush once the row interval elapses");
+    }
+
+    #[test]
+    fn stream_throttle_safety_cap_flushes_immediately() {
+        let mut t = StreamThrottle::new();
+        let start = Instant::now();
+        let (flush_rows, _) = t.on_rows(WORKER_BATCH_CAP, start + Duration::from_millis(1));
+        assert!(flush_rows, "hitting the safety cap flushes even within the row interval");
+    }
+
+    #[test]
+    fn stream_throttle_throttles_counters_until_interval_then_emits() {
+        let mut t = StreamThrottle::new();
+        let start = Instant::now();
+        // Counters suppressed within the interval (rows and counter-only).
+        let (_, emit) = t.on_rows(1, start + Duration::from_millis(100));
+        assert!(!emit, "counters suppressed at 100ms");
+        assert!(
+            !t.on_counter_event(start + Duration::from_millis(200)),
+            "counter-only event suppressed at 200ms"
+        );
+        // Once the counter interval elapses the next event emits —
+        // this is the path the worker's forced final drain relies on,
+        // so the GUI's last streaming values land before
+        // `finish_search` writes the authoritative summary.
+        let (_, emit) = t.on_rows(1, start + COUNTER_EMIT_INTERVAL);
+        assert!(emit, "counters emit once the interval elapses (final-emit path)");
+    }
+
+    #[test]
+    fn build_container_rows_counts_unique_files() {
+        let hits = vec![
+            ("/a.rs".to_string(), 3usize, 1usize, "alpha".to_string()),
+            ("/b.rs".to_string(), 9, 1, "beta".to_string()),
+            ("/a.rs".to_string(), 7, 1, "gamma".to_string()), // duplicate file
+        ];
+        let (rows, capped, files_matched) = build_container_rows(hits, MAX_RESULT_ROWS);
+        assert_eq!(rows.len(), 3);
+        assert!(!capped);
+        assert_eq!(files_matched, 2, "two distinct files across three hits");
+        // Row conversion carries line/column and uses the content as
+        // the match preview with empty before/after fragments.
+        assert_eq!(rows[0].line, 3);
+        assert_eq!(rows[0].column, 1);
+        assert_eq!(rows[0].preview_match, "alpha");
+        assert_eq!(rows[0].preview_line, "alpha");
+        assert_eq!(rows[0].full_path, PathBuf::from("/a.rs"));
+    }
+
+    #[test]
+    fn build_container_rows_caps_and_counts_kept_files() {
+        let hits = vec![
+            ("/a.rs".to_string(), 1usize, 1usize, "x".to_string()),
+            ("/b.rs".to_string(), 2, 1, "x".to_string()),
+            ("/c.rs".to_string(), 3, 1, "x".to_string()), // beyond cap
+        ];
+        let (rows, capped, files_matched) = build_container_rows(hits, 2);
+        assert_eq!(rows.len(), 2, "row_cap honoured");
+        assert!(capped, "input beyond the cap sets capped");
+        assert_eq!(files_matched, 2, "only the kept rows contribute to the unique-file count");
     }
 }

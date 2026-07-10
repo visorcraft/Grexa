@@ -25,6 +25,7 @@ use std::time::{Duration, Instant};
 
 use thiserror::Error;
 
+use crate::cancel::CancelToken;
 use crate::models::RegexEngine;
 
 /// Upper bound on backtracking steps for the `fancy-regex` engine. The crate's
@@ -34,6 +35,12 @@ use crate::models::RegexEngine;
 /// worst case while leaving plenty of headroom for legitimate lookaround /
 /// backreference patterns.
 const FANCY_BACKTRACK_LIMIT: usize = 100_000;
+
+/// Cooperative-cancel / deadline poll stride for [`PatternEngine::expand_matches_bounded`].
+/// Re-querying captures on the full haystack once per match already dominates
+/// the cost, so polling the token and deadline only on this stride keeps
+/// overhead negligible while bounding overshoot to a thousand re-queries.
+const EXPAND_POLL_STRIDE: usize = 1024;
 
 #[derive(Debug, Error)]
 pub enum PatternError {
@@ -193,17 +200,50 @@ impl PatternEngine {
         matches: &[(usize, usize)],
         replacement: &str,
     ) -> String {
+        // Uncancelled, deadline-free entry point retained for callers (and the
+        // tests below) that do not need cooperative termination.
+        self.expand_matches_bounded(haystack, matches, replacement, &CancelToken::new(), None)
+            .0
+    }
+
+    /// Like [`expand_matches`], but stops early when `cancel` trips or
+    /// `deadline` elapses, leaving any not-yet-expanded matches as their
+    /// original text. Returns the rewritten string together with the number of
+    /// matches actually expanded so callers can report an honest count when
+    /// expansion stops short. The token and deadline are polled on
+    /// [`EXPAND_POLL_STRIDE`] to keep overhead negligible.
+    pub fn expand_matches_bounded(
+        &self,
+        haystack: &str,
+        matches: &[(usize, usize)],
+        replacement: &str,
+        cancel: &CancelToken,
+        deadline: Option<Instant>,
+    ) -> (String, usize) {
         let mut result = String::with_capacity(haystack.len());
         let mut prev_end = 0;
-        for &(start, end) in matches {
+        let mut expanded = 0usize;
+        for (i, &(start, end)) in matches.iter().enumerate() {
+            if i.is_multiple_of(EXPAND_POLL_STRIDE) {
+                if cancel.is_cancelled() {
+                    break;
+                }
+                if deadline.is_some_and(|d| Instant::now() >= d) {
+                    tracing::warn!(
+                        "regex replace capture-expansion budget exhausted; leaving remaining matches unexpanded"
+                    );
+                    break;
+                }
+            }
             result.push_str(&haystack[prev_end..start]);
             if !self.expand_capture_at(haystack, start, end, replacement, &mut result) {
                 result.push_str(&haystack[start..end]);
             }
             prev_end = end;
+            expanded += 1;
         }
         result.push_str(&haystack[prev_end..]);
-        result
+        (result, expanded)
     }
 
     /// Expand `replacement` for the match at `(start, end)` into `out`,

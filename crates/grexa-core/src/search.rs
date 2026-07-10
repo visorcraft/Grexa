@@ -308,6 +308,15 @@ pub fn search_with(
             continue;
         }
 
+        let budget = effective_max.saturating_sub(results.len());
+        if budget == 0 {
+            // A prior file already filled the row budget; stop the walk. Only
+            // the internal ENGINE_RESULT_CAP counts as "capped" — a
+            // user-supplied max_results truncating is expected.
+            capped = options.max_results.is_none();
+            break;
+        }
+
         files_scanned += 1;
         let scan = search_file(
             entry.path(),
@@ -317,6 +326,7 @@ pub fn search_with(
             cancel,
             normalized_needle.as_deref(),
             &norm_ctx,
+            budget,
         )?;
         if let Some(encoding) = scan.encoding {
             file_encodings.insert(entry.path().to_path_buf(), encoding);
@@ -534,6 +544,7 @@ struct FileScan {
     encoding: Option<DetectedEncoding>,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn search_file(
     path: &Path,
     root: &Path,
@@ -542,6 +553,7 @@ fn search_file(
     cancel: &CancelToken,
     normalized_needle: Option<&str>,
     norm_ctx: &NormalizationContext,
+    row_budget: usize,
 ) -> Result<FileScan, SearchError> {
     // Searchable-document path: handed off to extractors that decode OOXML,
     // ODF, ZIP, PDF, and RTF into plain text before line scanning. The
@@ -580,6 +592,7 @@ fn search_file(
                 cancel,
                 normalized_needle,
                 norm_ctx,
+                row_budget,
             },
             &extracted,
         );
@@ -599,6 +612,7 @@ fn search_file(
             cancel,
             normalized_needle,
             norm_ctx,
+            row_budget,
         },
         &text,
     );
@@ -618,6 +632,7 @@ struct ScanContext<'a> {
     cancel: &'a CancelToken,
     normalized_needle: Option<&'a str>,
     norm_ctx: &'a NormalizationContext,
+    row_budget: usize,
 }
 
 fn scan_text_buffer(ctx: &ScanContext, text: &str) -> Vec<SearchResult> {
@@ -626,6 +641,9 @@ fn scan_text_buffer(ctx: &ScanContext, text: &str) -> Vec<SearchResult> {
     for (idx, line) in text.lines().enumerate() {
         if idx % 64 == 0 && ctx.cancel.is_cancelled() {
             return results;
+        }
+        if results.len() >= ctx.row_budget {
+            break;
         }
 
         let line_number = idx + 1;
@@ -645,6 +663,7 @@ fn scan_text_buffer(ctx: &ScanContext, text: &str) -> Vec<SearchResult> {
             ctx.regex,
             ctx.normalized_needle,
             ctx.norm_ctx,
+            ctx.cancel,
         );
         if matches.is_empty() {
             continue;
@@ -682,6 +701,7 @@ fn find_line_matches(
     regex: Option<&PatternEngine>,
     normalized_needle: Option<&str>,
     norm_ctx: &NormalizationContext,
+    cancel: &CancelToken,
 ) -> Vec<(usize, usize)> {
     // Collect raw matches, bounded near MAX_MATCHES_PER_LINE at the source so
     // a dense line never materializes an unbounded match vector. We collect one
@@ -706,7 +726,12 @@ fn find_line_matches(
         let mut matches = Vec::new();
         if identity_mapping {
             let mut offset = 0;
+            let mut stride = 0usize;
             while let Some(index) = line[offset..].find(needle) {
+                if stride.is_multiple_of(1024) && cancel.is_cancelled() {
+                    break;
+                }
+                stride += 1;
                 let start = offset + index;
                 let end = start + needle.len();
                 matches.push((start, end));
@@ -944,7 +969,11 @@ fn preview_segments(line: &str, start: usize, end: usize) -> (String, String, St
     let matched = line.get(start..end).unwrap_or_default();
     let after = line.get(end..).unwrap_or_default();
 
-    (truncate_chars(before, 120), matched.to_string(), truncate_chars(after, 120))
+    (
+        truncate_chars(before, 120),
+        truncate_chars(matched, MATCH_PREVIEW_MAX_CHARS),
+        truncate_chars(after, 120),
+    )
 }
 
 fn truncate_chars(input: &str, max_chars: usize) -> String {
@@ -1194,6 +1223,85 @@ mod tests {
 
         assert_eq!(summary.matches, 1);
         assert_eq!(summary.results[0].line_number, 1);
+    }
+
+    #[test]
+    fn cap_stops_emission_in_dense_file() {
+        let dir = tempdir().unwrap();
+        // Every line matches, and there are far more lines than the budget.
+        let body = (0..2000)
+            .map(|i| format!("hit line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(dir.path().join("dense.txt"), body).unwrap();
+
+        let mut options = SearchOptions::new(dir.path(), "hit");
+        options.max_results = Some(50);
+
+        let summary = search(&options).unwrap();
+
+        assert!(
+            summary.results.len() <= 50,
+            "buffer path must honor the row budget, got {} rows",
+            summary.results.len()
+        );
+        assert!(
+            !summary.results.is_empty(),
+            "matches exist; the cap must truncate, not drop everything"
+        );
+    }
+
+    #[test]
+    fn match_preview_match_is_truncated() {
+        let dir = tempdir().unwrap();
+        // One regex match spans thousands of chars with small before/after
+        // context; the matched segment itself must be capped.
+        let line = format!("pre{}suf", "X".repeat(5000));
+        fs::write(dir.path().join("wide.txt"), line).unwrap();
+
+        let mut options = SearchOptions::new(dir.path(), "X+");
+        options.regex = true;
+
+        let summary = search(&options).unwrap();
+        assert_eq!(summary.matches, 1);
+        let row = &summary.results[0];
+        assert!(
+            row.match_preview_match.len() <= MATCH_PREVIEW_MAX_CHARS,
+            "matched preview must be capped, got {} chars",
+            row.match_preview_match.len()
+        );
+        assert!(
+            row.match_preview_before.len() <= 120,
+            "before preview must stay <= 120, got {}",
+            row.match_preview_before.len()
+        );
+        assert!(
+            row.match_preview_after.len() <= 120,
+            "after preview must stay <= 120, got {}",
+            row.match_preview_after.len()
+        );
+    }
+
+    #[test]
+    fn cancel_observed_mid_scan() {
+        let dir = tempdir().unwrap();
+        let body = (0..2000)
+            .map(|i| format!("hit line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(dir.path().join("dense.txt"), body).unwrap();
+
+        let cancel = CancelToken::new();
+        cancel.cancel();
+
+        let options = SearchOptions::new(dir.path(), "hit");
+        let summary = search_with(&options, &cancel, None).unwrap();
+
+        assert!(summary.cancelled, "a pre-cancelled token must short-circuit the search");
+        assert!(
+            summary.results.is_empty(),
+            "no rows should be emitted once cancelled before the walk"
+        );
     }
 
     #[test]
