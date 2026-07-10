@@ -1,5 +1,5 @@
 Name:           grexa
-Version:        1.10.0
+Version:        1.10.1
 Release:        1%{?dist}
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 
@@ -89,6 +89,10 @@ command -v appstream-util >/dev/null && \
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Fri Jul 10 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.10.1-1
+- Track grexa-db 1.10.0 so the engine dependency stays version-aligned with
+  Grexa. No functional changes from 1.10.0.
+
 * Fri Jul 10 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.10.0-1
 - Bound per-tab result snapshots (tab limit + aggregate row budget) and stop
   duplicating the active tab's rows on restore; fixes session-long memory

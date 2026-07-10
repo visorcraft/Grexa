@@ -1,3 +1,10 @@
+grexa (1.10.1-1) unstable; urgency=medium
+
+  * Track grexa-db 1.10.0 so the engine dependency stays version-aligned with
+    Grexa. No functional changes from 1.10.0.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Fri, 10 Jul 2026 12:00:00 +0000
+
 grexa (1.10.0-1) unstable; urgency=medium
 
   * Bound per-tab result snapshots (tab limit + aggregate row budget) and stop

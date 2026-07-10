@@ -75,6 +75,14 @@
   </supports>
 
   <releases>
+    <release version="1.10.1" date="2026-07-10">
+      <description>
+        <p>Lockstep dependency bump.</p>
+        <ul>
+          <li>Track grexa-db 1.10.0 so the engine dependency stays version-aligned with Grexa. No functional changes from 1.10.0.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.10.0" date="2026-07-10">
       <description>
         <p>Responsiveness and stability.</p>
