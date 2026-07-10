@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-grexa-core = { version = "1.9.1", path = "../grexa-core" }
+grexa-core = { version = "1.10.0", path = "../grexa-core" }
 libc = "0.2"
 regex.workspace = true
 serde.workspace = true

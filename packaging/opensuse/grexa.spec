@@ -6,7 +6,7 @@
 #
 
 Name:           grexa
-Version:        1.9.1
+Version:        1.10.0
 Release:        0
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 License:        GPL-3.0-only
@@ -102,6 +102,13 @@ cargo test --workspace --release --frozen
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Fri Jul 10 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.10.0-0
+- Bound per-tab result snapshots (tab limit + aggregate row budget) and stop
+  duplicating the active tab's rows on restore; fixes session-long memory
+  growth that forced a restart.
+- Coalesce search streaming to one GUI update per frame and thread cancellation
+  into per-line matching; cap and cancel the replace collectors.
+
 * Sat Jun 27 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.9.1-0
 - Bound the regex replace scan per file (CPU deadline + match cap) so a
   pathological pattern can no longer peg a core on a large file, matching the

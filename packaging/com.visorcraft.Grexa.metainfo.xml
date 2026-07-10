@@ -75,6 +75,17 @@
   </supports>
 
   <releases>
+    <release version="1.10.0" date="2026-07-10">
+      <description>
+        <p>Responsiveness and stability.</p>
+        <ul>
+          <li>Bound per-tab result snapshots (tab limit plus an aggregate row budget) and stop duplicating the active tab's rows on restore, fixing the session-long memory growth that forced a restart.</li>
+          <li>Coalesce search-result streaming to one GUI update per frame and throttle counter updates; reuse result-list delegates and drop the per-search O(n) recount to keep the UI responsive during large searches.</li>
+          <li>Enforce the result cap inside the scan loop, cap match-preview length, and thread cancellation into per-line matching.</li>
+          <li>Cap and cancel the literal, case-insensitive, and normalized replace collectors and bound capture expansion to the per-file deadline.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.9.1" date="2026-06-27">
       <description>
         <p>Security and reliability patch.</p>

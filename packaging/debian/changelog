@@ -1,3 +1,18 @@
+grexa (1.10.0-1) unstable; urgency=medium
+
+  * Bound per-tab result snapshots (tab limit + aggregate row budget) and stop
+    duplicating the active tab's rows on restore; fixes the session-long memory
+    growth that forced a restart.
+  * Coalesce search-result streaming to one GUI update per frame, throttle
+    counter updates, reuse result-list delegates, and drop the per-search O(n)
+    recount to keep the UI responsive on large searches.
+  * Enforce the result cap inside the scan loop, cap match-preview length, and
+    thread cancellation into per-line matching.
+  * Cap and cancel the literal/case-insensitive/normalized replace collectors
+    and bound capture expansion to the per-file deadline.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Fri, 10 Jul 2026 12:00:00 +0000
+
 grexa (1.9.1-1) unstable; urgency=medium
 
   * Bound the regex replace scan per file (CPU deadline + match cap) so a
