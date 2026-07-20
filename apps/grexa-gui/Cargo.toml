@@ -8,11 +8,11 @@ repository.workspace = true
 description = "Grexa Qt 6 / Kirigami GUI shell"
 
 [dependencies]
-grexa-ai = { version = "1.10.1", path = "../../crates/grexa-ai" }
-grexa-containers = { version = "1.10.1", path = "../../crates/grexa-containers" }
-grexa-core = { version = "1.10.1", path = "../../crates/grexa-core" }
+grexa-ai = { version = "1.10.2", path = "../../crates/grexa-ai" }
+grexa-containers = { version = "1.10.2", path = "../../crates/grexa-containers" }
+grexa-core = { version = "1.10.2", path = "../../crates/grexa-core" }
 grexa-db = { git = "https://github.com/visorcraft/grexa-db", tag = "v1.10.0", version = "1.10.0" }
-grexa-i18n = { version = "1.10.1", path = "../../crates/grexa-i18n" }
+grexa-i18n = { version = "1.10.2", path = "../../crates/grexa-i18n" }
 notify = "6"
 regex.workspace = true
 serde_json.workspace = true

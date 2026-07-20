@@ -5,6 +5,7 @@
 // (path + term + flags + primary action in one card), result list
 // below, status footer pinned to the bottom.
 
+import QtCore
 import QtQuick
 import QtQuick.Controls as Controls
 import QtQuick.Dialogs as Dialogs
@@ -61,6 +62,10 @@ Kirigami.Page {
     }
 
     function refreshRecentPaths() {
+        // Editable ComboBox resets `editText` when its model is cleared
+        // or replaced. Preserve the path the user is looking at (typed
+        // or just picked via Browse) so history updates don't blank it.
+        const preserved = searchBarControl ? searchBarControl.pathText : ""
         recentPaths.clear()
         try {
             const arr = JSON.parse(controller.recentPathsJson())
@@ -68,6 +73,8 @@ Kirigami.Page {
                 recentPaths.append({ pathText: arr[i] })
             }
         } catch (e) {}
+        if (searchBarControl && preserved && preserved.length > 0)
+            searchBarControl.setPathText(preserved)
     }
 
     function launchSearch() {
@@ -91,7 +98,7 @@ Kirigami.Page {
     }
 
     function applyExample(path, term) {
-        searchBar.pathText = path
+        searchBar.setPathText(path)
         searchBar.termText = term
         launchSearch()
     }
@@ -174,7 +181,7 @@ Kirigami.Page {
     function loadTab(idx) {
         if (idx < 0 || idx >= tabsModel.count) return
         const t = tabsModel.get(idx)
-        searchBar.pathText = t.tabPath
+        searchBar.setPathText(t.tabPath)
         searchBar.termText = t.tabTerm
         searchBar.regexEnabled = t.tabRegex
         searchBar.caseSensitive = t.tabCase
@@ -465,7 +472,15 @@ Kirigami.Page {
                 recentPathsModel: recentPaths
                 busy: page.controller.busy
                 onSubmitted: page.launchSearch()
-                onBrowse: browseDialog.open()
+                onBrowse: {
+                    // Set currentFolder at open time. A static binding is
+                    // evaluated when the dialog is first created (often
+                    // with an empty path) and some native/portal backends
+                    // ignore later binding updates, so Browse would open
+                    // on $HOME instead of the path already in the field.
+                    browseDialog.currentFolder = page.pathToFileUrl(searchBar.pathText)
+                    browseDialog.open()
+                }
             }
         }
 
@@ -1071,15 +1086,49 @@ Kirigami.Page {
     // automatically. We feed the dialog an already-encoded
     // `file://` URL so paths with spaces, accents, or tilde
     // expansion don't fail at the portal layer.
+    function expandPathForDialog(path) {
+        if (!path) return ""
+        let p = String(path).trim()
+        if (p.length === 0) return ""
+        // Expand `~` the same way search does, so Browse opens on the
+        // folder the user typed rather than falling back to $HOME.
+        if (p === "~" || p.startsWith("~/")) {
+            const home = StandardPaths.writableLocation(StandardPaths.HomeLocation)
+            if (home && home.length > 0)
+                p = p === "~" ? home : (home + p.substring(1))
+        }
+        return p
+    }
+
     function pathToFileUrl(path) {
-        if (!path || path.length === 0) return ""
-        // Tilde + relative paths get resolved Rust-side; this is a
-        // best-effort GUI prepass so the dialog opens *somewhere*
-        // sensible rather than rejecting `~/code` outright.
-        if (path.charAt(0) !== "/") return ""
+        const p = page.expandPathForDialog(path)
+        if (!p || p.charAt(0) !== "/") return ""
         // `encodeURI` preserves "/" but escapes spaces, accents,
         // and other reserved characters per RFC 3986.
-        return "file://" + encodeURI(path)
+        return "file://" + encodeURI(p)
+    }
+
+    // Convert a FolderDialog / FileDialog `url` to a local filesystem
+    // path. Handles `file:///…`, `file://localhost/…`, and bare paths.
+    function fileUrlToPath(url) {
+        if (url === undefined || url === null) return ""
+        let s = url.toString()
+        if (!s || s.length === 0) return ""
+        if (s.startsWith("file://")) {
+            // Strip scheme. `file:///work/foo` → `/work/foo`;
+            // `file://localhost/work/foo` → `/work/foo`.
+            s = s.substring(7) // after "file://"
+            if (s.startsWith("localhost/"))
+                s = s.substring("localhost".length)
+            else if (s.startsWith("localhost"))
+                s = s.substring("localhost".length)
+            // Ensure absolute path form when the host form left us
+            // without a leading slash (shouldn't happen for local).
+            if (s.length > 0 && s.charAt(0) !== "/")
+                s = "/" + s
+        }
+        try { s = decodeURIComponent(s) } catch (e) {}
+        return s
     }
 
     // Save current form as a named profile.
@@ -1160,16 +1209,24 @@ Kirigami.Page {
     Dialogs.FolderDialog {
         id: browseDialog
         title: app.i18n("ui-choose-folder")
-        currentFolder: page.pathToFileUrl(searchBar.pathText)
+        // Default only — Browse sets this again immediately before open().
+        currentFolder: ""
         onAccepted: {
-            // `selectedFolder` is a `url`. Convert to a string and
-            // run it through `decodeURIComponent` so percent-encoded
-            // characters (e.g. `My%20Code`) come back as literal text.
-            const u = selectedFolder.toString()
-            let decoded = u.replace(/^file:\/\//, "")
-            try { decoded = decodeURIComponent(decoded) } catch (e) {}
-            searchBar.pathText = decoded
+            // Prefer `selectedFolder`; some portal backends only refresh
+            // `currentFolder` on accept. Fall back so Open always sticks.
+            const raw = (selectedFolder && selectedFolder.toString().length > 0)
+                ? selectedFolder
+                : currentFolder
+            const decoded = page.fileUrlToPath(raw)
+            if (!decoded || decoded.length === 0)
+                return
+            searchBar.setPathText(decoded)
+            // addRecentPath emits historyChanged → refreshRecentPaths,
+            // which rebuilds the combo model. refreshRecentPaths
+            // preserves editText; re-apply here as a belt-and-suspenders
+            // so a race can't leave the field blank after Open.
             page.controller.addRecentPath(decoded)
+            searchBar.setPathText(decoded)
         }
     }
 

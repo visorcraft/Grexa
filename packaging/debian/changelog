@@ -1,3 +1,14 @@
+grexa (1.10.2-1) unstable; urgency=medium
+
+  * Keep the Search page alive when switching sidebar pages so the path, term,
+    flags, and tabs are no longer wiped after visiting About and returning.
+  * Open the folder browser on the path already typed in the search bar instead
+    of always falling back to the home directory.
+  * Apply the folder chosen with Browse → Open into the path field; recent-path
+    history updates no longer clear the editable path combo.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Sun, 20 Jul 2026 12:00:00 +0000
+
 grexa (1.10.1-1) unstable; urgency=medium
 
   * Track grexa-db 1.10.0 so the engine dependency stays version-aligned with

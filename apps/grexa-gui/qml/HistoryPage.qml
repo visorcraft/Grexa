@@ -257,7 +257,7 @@ Kirigami.ScrollablePage {
                                 Qt.callLater(function() {
                                     const p = app.pageStack.currentItem
                                     if (p && p.searchBar) {
-                                        p.searchBar.pathText = path
+                                        p.searchBar.setPathText(path)
                                         p.searchBar.termText = term
                                         p.searchBar.regexEnabled = regex
                                         p.searchBar.caseSensitive = caseSensitive

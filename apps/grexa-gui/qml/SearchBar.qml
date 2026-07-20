@@ -30,6 +30,15 @@ Item {
 
     function focusTermField() { termField.forceActiveFocus() }
 
+    // Set the path field without letting the combo's currentIndex
+    // override the typed/picked value. Editable ComboBox can snap
+    // `editText` back to the selected model row after a model rebuild
+    // or dialog accept; clearing the index first makes the write stick.
+    function setPathText(path) {
+        pathField.currentIndex = -1
+        pathField.editText = path || ""
+    }
+
     implicitHeight: 56
 
     // -- Soft elevation stack (drop-shadow fake) -----------------

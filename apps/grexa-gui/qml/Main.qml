@@ -266,22 +266,49 @@ Kirigami.ApplicationWindow {
         }
     }
 
+    function pageComponentFor(key) {
+        switch (key) {
+            case "search":   return searchPage
+            case "regex":    return regexPage
+            case "history":  return historyPage
+            case "profiles": return profilesPage
+            case "database": return databasePage
+            case "settings": return settingsPage
+            case "about":    return aboutPage
+            case "licenses": return licensesPage
+            case "credits":  return creditsPage
+            default:         return null
+        }
+    }
+
     function goTo(key) {
         // Short-circuit: re-clicking the active nav item would
         // otherwise tear down + rebuild the current page and lose
         // form state (e.g. typed search term, scroll position).
         if (key === currentPageKey) return
+
+        // Search is the stack root (`initialPage`). Never `replace` it
+        // away — that destroyed the page and wiped the path field,
+        // tabs, and term whenever the user left Search and came back.
+        // Non-search destinations are pushed on top of Search (or
+        // replace each other), and returning to Search pops back to
+        // the preserved root instance.
+        const leaving = currentPageKey
         currentPageKey = key
-        switch (key) {
-            case "search":   app.pageStack.replace(searchPage); break
-            case "regex":    app.pageStack.replace(regexPage); break
-            case "history":  app.pageStack.replace(historyPage); break
-            case "profiles": app.pageStack.replace(profilesPage); break
-            case "database": app.pageStack.replace(databasePage); break
-            case "settings": app.pageStack.replace(settingsPage); break
-            case "about":    app.pageStack.replace(aboutPage); break
-            case "licenses": app.pageStack.replace(licensesPage); break
-            case "credits":  app.pageStack.replace(creditsPage); break
+
+        if (key === "search") {
+            while (app.pageStack.depth > 1)
+                app.pageStack.pop()
+            return
+        }
+
+        const comp = app.pageComponentFor(key)
+        if (!comp) return
+
+        if (leaving === "search") {
+            app.pageStack.push(comp)
+        } else {
+            app.pageStack.replace(comp)
         }
     }
 

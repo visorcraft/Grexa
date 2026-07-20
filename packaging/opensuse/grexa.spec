@@ -6,7 +6,7 @@
 #
 
 Name:           grexa
-Version:        1.10.1
+Version:        1.10.2
 Release:        0
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 License:        GPL-3.0-only
@@ -102,6 +102,13 @@ cargo test --workspace --release --frozen
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Sun Jul 20 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.10.2-0
+- Keep the Search page alive when switching sidebar pages so path/term/tabs
+  survive navigation (e.g. About → Search).
+- Open the folder browser on the path already in the search bar.
+- Apply Browse → Open into the path field; recent-path history updates no
+  longer clear the editable path combo.
+
 * Fri Jul 10 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.10.1-0
 - Track grexa-db 1.10.0 so the engine dependency stays version-aligned with
   Grexa. No functional changes from 1.10.0.
