@@ -13,7 +13,7 @@ grexa-containers = { version = "1.10.2", path = "../../crates/grexa-containers" 
 grexa-core = { version = "1.10.2", path = "../../crates/grexa-core" }
 grexa-db = { git = "https://github.com/visorcraft/grexa-db", tag = "v1.10.0", version = "1.10.0" }
 grexa-i18n = { version = "1.10.2", path = "../../crates/grexa-i18n" }
-notify = "6"
+notify = "8"
 regex.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
