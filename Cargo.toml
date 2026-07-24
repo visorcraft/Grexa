@@ -41,7 +41,7 @@ tracing-appender = "0.2"
 cxx = "1.0"
 cxx-qt = "0.8"
 cxx-qt-lib = { version = "0.8", features = ["qt_gui", "qt_qml"] }
-cxx-qt-build = "0.8"
+cxx-qt-build = "0.9"
 unicode-normalization = "0.1"
 fancy-regex = "0.18"
 chardetng = "1.0"
