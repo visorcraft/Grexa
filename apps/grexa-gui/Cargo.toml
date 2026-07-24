@@ -25,7 +25,7 @@ cxx-qt-lib.workspace = true
 
 [build-dependencies]
 cxx-qt-build.workspace = true
-qt-build-utils = "0.8"
+qt-build-utils = "0.9"
 vergen-git2 = "10"
 
 [dev-dependencies]
