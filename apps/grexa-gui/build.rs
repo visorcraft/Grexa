@@ -1,8 +1,12 @@
 // SPDX-FileCopyrightText: 2026 VisorCraft LLC
 // SPDX-License-Identifier: GPL-3.0-only
 
-use cxx_qt_build::{CxxQtBuilder, QmlModule};
-use qt_build_utils::{QResource, QResourceFile, QResources};
+// Import QResource/QResources from cxx_qt_build so they match the type
+// CxxQtBuilder::qrc_resources expects (same qt-build-utils version as
+// cxx-qt-build). Importing them directly from qt_build_utils can pull a
+// parallel version and break the Into conversion.
+use cxx_qt_build::{CxxQtBuilder, QResource, QResources, QmlModule};
+use qt_build_utils::QResourceFile;
 
 fn emit_vergen() {
     use vergen_git2::{Emitter, Git2};
