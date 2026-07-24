@@ -225,8 +225,13 @@ jobs:
           # falling back to the system QML2_IMPORT_PATH. Exit 2 means
           # "QML payload did not instantiate"; exits 0/124/143 are all
           # acceptable signs of a healthy or cleanly-terminated GUI event loop.
+          # `timeout --preserve-status` returns the killed process status (143
+          # for SIGTERM); under `bash -e` that would abort the step before the
+          # acceptance check below, so disable -e around the launch.
+          set +e
           env -u QML2_IMPORT_PATH xvfb-run -a timeout --preserve-status 12 "${appimage[0]}"
           exit_code=$?
+          set -e
 
           if [[ "$exit_code" -ne 0 && "$exit_code" -ne 124 && "$exit_code" -ne 143 ]]; then
             echo "AppImage exited unexpectedly with ${exit_code}; likely QML payload did not instantiate" >&2
