@@ -6,7 +6,7 @@
 #
 
 Name:           grexa
-Version:        1.10.2
+Version:        1.11.0
 Release:        0
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 License:        GPL-3.0-only
@@ -102,6 +102,14 @@ cargo test --workspace --release --frozen
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Fri Jul 24 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.11.0-0
+- Align the full cxx-qt stack to 0.9 (cxx-qt, cxx-qt-lib, cxx-qt-build,
+  qt-build-utils) so the GUI build and runtime share one generation path.
+- Upgrade third-party crates and CI actions, including quick-xml 0.41
+  (RUSTSEC), notify 8, regex 1.13, ignore, anyhow, clap_complete, cxx,
+  vergen-git2, actions/checkout 7, and cargo-deny-action.
+- Bump crossbeam-epoch past RUSTSEC-2026-0204 and restore a green CI gate.
+
 * Sun Jul 20 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.10.2-0
 - Keep the Search page alive when switching sidebar pages so path/term/tabs
   survive navigation (e.g. About → Search).

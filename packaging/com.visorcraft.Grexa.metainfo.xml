@@ -75,6 +75,16 @@
   </supports>
 
   <releases>
+    <release version="1.11.0" date="2026-07-24">
+      <description>
+        <p>Dependency stack refresh and CI hardening.</p>
+        <ul>
+          <li>Align the full cxx-qt stack to 0.9 (cxx-qt, cxx-qt-lib, cxx-qt-build, qt-build-utils) so the GUI build script and runtime share one Qt bridge generation path.</li>
+          <li>Upgrade third-party crates and GitHub Actions pins, including quick-xml 0.41 (RUSTSEC fix), notify 8, regex 1.13, ignore, anyhow, clap_complete, cxx, vergen-git2, actions/checkout 7, and cargo-deny-action.</li>
+          <li>Bump crossbeam-epoch past the RUSTSEC-2026-0204 advisory and restore a fully green CI gate after the mixed 0.8/0.9 cxx-qt breakage.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.10.2" date="2026-07-20">
       <description>
         <p>Search path reliability.</p>

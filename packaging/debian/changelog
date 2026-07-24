@@ -1,3 +1,14 @@
+grexa (1.11.0-1) unstable; urgency=medium
+
+  * Align the full cxx-qt stack to 0.9 (cxx-qt, cxx-qt-lib, cxx-qt-build,
+    qt-build-utils) so the GUI build and runtime share one generation path.
+  * Upgrade third-party crates and CI actions, including quick-xml 0.41
+    (RUSTSEC), notify 8, regex 1.13, ignore, anyhow, clap_complete, cxx,
+    vergen-git2, actions/checkout 7, and cargo-deny-action.
+  * Bump crossbeam-epoch past RUSTSEC-2026-0204 and restore a green CI gate.
+
+ -- VisorCraft LLC <maintainer@visorcraft.com>  Fri, 24 Jul 2026 12:00:00 +0000
+
 grexa (1.10.2-1) unstable; urgency=medium
 
   * Keep the Search page alive when switching sidebar pages so the path, term,
