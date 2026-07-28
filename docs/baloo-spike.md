@@ -22,7 +22,7 @@ The repository contains:
 - CLI compatibility flags `--use-index` and `--no-index`.
 
 The search pipeline does not call the adapter. The setting and flags therefore
-have no effect in Grexa 1.11.1. The GUI does not expose a Baloo toggle.
+have no effect in Grexa 1.11.2. The GUI does not expose a Baloo toggle.
 
 ## Why it remains deferred
 

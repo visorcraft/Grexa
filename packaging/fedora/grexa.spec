@@ -1,5 +1,5 @@
 Name:           grexa
-Version:        1.11.1
+Version:        1.11.2
 Release:        1%{?dist}
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 
@@ -89,6 +89,10 @@ command -v appstream-util >/dev/null && \
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Tue Jul 28 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.11.2-1
+- Keep pages at the full page-stack width so content no longer collapses into
+  a narrow column.
+
 * Mon Jul 27 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.11.1-1
 - Add a documentation index and rebuild the public guides around current GUI,
   CLI, storage, AI, container, and packaging behavior.

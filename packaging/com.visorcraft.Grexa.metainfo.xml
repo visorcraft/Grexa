@@ -75,6 +75,14 @@
   </supports>
 
   <releases>
+    <release version="1.11.2" date="2026-07-28">
+      <description>
+        <p>Main-window layout reliability.</p>
+        <ul>
+          <li>Keep pages at the full page-stack width so content no longer collapses into a narrow column.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.11.1" date="2026-07-27">
       <description>
         <p>Documentation accuracy and discoverability.</p>

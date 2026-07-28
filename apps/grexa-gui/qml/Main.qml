@@ -155,6 +155,7 @@ Kirigami.ApplicationWindow {
     }
 
     pageStack.initialPage: searchPage
+    pageStack.defaultColumnWidth: pageStack.width
     pageStack.globalToolBar.style: Kirigami.ApplicationHeaderStyle.None
 
     // -- Global keyboard shortcuts -----------------------------------
