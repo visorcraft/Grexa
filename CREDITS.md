@@ -60,6 +60,16 @@ license compatibility on every CI run.
 | `encoding_rs` | (Apache-2.0 OR MIT) AND BSD-3-Clause | [hsivonen/encoding_rs](https://github.com/hsivonen/encoding_rs) |
 | `chardetng` | Apache-2.0 OR MIT | [hsivonen/chardetng](https://github.com/hsivonen/chardetng) |
 | `unicode-normalization` | MIT OR Apache-2.0 | [unicode-rs/unicode-normalization](https://github.com/unicode-rs/unicode-normalization) |
+| `notify` | CC0-1.0 | [notify-rs/notify](https://github.com/notify-rs/notify) |
+
+### Storage
+
+| Crate | License | Project |
+| ----- | ------- | ------- |
+| `grexa-db` | Apache-2.0 | [VisorCraft/grexa-db](https://github.com/visorcraft/grexa-db) |
+
+`grexa-db` is intentionally permissive and separately maintained. Grexa's GPL
+crates may depend on it; the database engine does not depend on Grexa.
 
 ### Unicode / localization
 
@@ -92,6 +102,7 @@ license compatibility on every CI run.
 | Crate | License | Project |
 | ----- | ------- | ------- |
 | `serde`, `serde_derive`, `serde_json`, `serde_repr` | MIT OR Apache-2.0 | [serde-rs/serde](https://github.com/serde-rs/serde) |
+| `serde_yaml_ng` | MIT | [acatton/serde-yaml-ng](https://github.com/acatton/serde-yaml-ng) |
 | `clap`, `clap_complete`, `clap_mangen`, `clap_derive` | MIT OR Apache-2.0 | [clap-rs/clap](https://github.com/clap-rs/clap) |
 | `anyhow`, `thiserror` | MIT OR Apache-2.0 | [dtolnay/anyhow](https://github.com/dtolnay/anyhow), [dtolnay/thiserror](https://github.com/dtolnay/thiserror) |
 | `tempfile` | MIT OR Apache-2.0 | [Stebalien/tempfile](https://github.com/Stebalien/tempfile) |

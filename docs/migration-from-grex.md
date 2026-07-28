@@ -1,15 +1,20 @@
 # Migrating from Grex
 
-Grexa imports Grex's settings.json, search history, profiles, and
-recent paths. This doc records what gets translated, what gets
-dropped, and how to perform the import.
+Grexa preserves Grex concepts and many serialized values, but the current
+release does not ship a one-click Windows Grex backup importer in the GUI or
+CLI. Do not copy Grex JSON files directly into Grexa's XDG directories and
+expect them to be translated.
 
-## What's on disk in Grex
+This guide separates:
 
-A typical Grex install on Windows persists four files under
-`%LocalAppData%\Grex\`:
+1. manual migration from the Windows Grex application;
+2. automatic migration from older Grexa JSON storage.
 
-```
+## Before moving data
+
+Back up the Grex directory on Windows:
+
+```text
 %LocalAppData%\Grex\
 ├── settings.json
 ├── search_path_history.json
@@ -17,13 +22,31 @@ A typical Grex install on Windows persists four files under
 └── search_profiles.json
 ```
 
-Copy that directory to your Linux box (any path you can read; the
-importer accepts a directory argument).
+Keep the original files unchanged. They are useful as a reference even when
+paths cannot map directly to Linux.
 
-## What ports verbatim
+## Current migration status
 
-| Grex setting | Grexa setting |
-| ------------ | ------------- |
+| Data | Grex to Grexa status |
+| ---- | --------------------- |
+| Settings concepts | Supported by Grexa, but must be recreated in the GUI or translated to Grexa's snake_case schema by a developer tool. |
+| Recent paths | No automatic Windows path translator; revisit valid Linux paths in Grexa. |
+| Search history | No end-user importer; rerun important searches or recreate them as profiles. |
+| Search profiles | No end-user importer; recreate named searches with Linux paths. |
+| AI endpoint/model | Enter again in Settings. |
+| AI API key | Enter again so it is stored in the Linux Secret Service. Never copy plaintext into `settings.json`. |
+| Window position | Intentionally not migrated; the Linux window manager owns placement. |
+| Window size | Grexa supports width/height, but manual GUI configuration is simplest. |
+
+`SettingsStore::import_json` is a library API for Grexa's current snake_case
+`DefaultSettings` JSON. It is not a PascalCase Grex backup converter.
+
+## Concept mapping
+
+Use this table while recreating settings:
+
+| Grex | Grexa |
+| ---- | ----- |
 | `IsRegexSearch` | `regex_search` |
 | `IsFilesSearch` | `files_search` |
 | `RespectGitignore` | `respect_gitignore` |
@@ -34,101 +57,155 @@ importer accepts a directory argument).
 | `IncludeBinaryFiles` | `include_binary_files` |
 | `IncludeSymbolicLinks` | `include_symbolic_links` |
 | `SizeUnit` | `size_unit` |
-| `UILanguage` | `ui_language` (if non-empty) |
+| `UILanguage` | `ui_language` |
 | `StringComparisonMode` | `string_comparison_mode` |
 | `UnicodeNormalizationMode` | `unicode_normalization_mode` |
 | `DiacriticSensitive` | `diacritic_sensitive` |
-| `Culture` | `culture` (if non-empty) |
+| `Culture` | `culture` |
 | `DefaultMatchFiles` | `default_match_files` |
 | `DefaultExcludeDirs` | `default_exclude_dirs` |
 | `Content*ColumnVisible` | `content_*_column_visible` |
 | `Files*ColumnVisible` | `files_*_column_visible` |
-| `ContextPreviewLines*` | `context_preview_lines_*` (clamped to 1-20) |
-| `WindowWidth`/`WindowHeight` | `window_width`/`window_height` (when ≥ 400px each) |
-| `AiSearchEndpoint`/`AiSearchModel` | trimmed and saved |
-| `ThemePreference` | `theme_preference` (integer round-trip preserved) |
+| `ContextPreviewLines*` | `context_preview_lines_*` |
+| `WindowWidth` / `WindowHeight` | `window_width` / `window_height` |
+| `AiSearchEndpoint` | `ai_search_endpoint` |
+| `AiSearchModel` | `ai_search_model` |
+| `ThemePreference` | `theme_preference` |
+| `UseWindowsSearchIndex` | `use_file_index`, currently reserved because Baloo seeding is deferred |
+| `EnableDockerSearch` | `enable_container_search`, covering Docker and Podman |
 
-## What gets translated
+The exact current types/defaults are in
+[Reference: settings schema](reference.md#settings-schema).
 
-| Grex setting | Translation |
-| ------------ | ----------- |
-| `UseWindowsSearchIndex` | → `use_file_index` (Linux Baloo equivalent; defaults are off) |
-| `EnableDockerSearch` | → `enable_container_search` (covers both Docker and Podman) |
-| `AiSearchApiKey` | **routed through the keyring**, never stored in `settings.json`; if the keyring is unavailable, the importer flags the key for the user instead of falling back to plaintext |
-| `WindowX`/`WindowY` | dropped (window position is left to the window manager on Linux) |
+## Path translation
 
-## What gets dropped
+Windows paths need a Linux filesystem location:
 
-These fields are Windows-only or don't translate. They're ignored
-silently:
+| Windows source | Linux approach |
+| -------------- | -------------- |
+| `C:\Users\<name>\...` | Copy to a Linux directory, then select that directory in Grexa. |
+| Another drive letter | Mount the volume, commonly under `/mnt`, `/media`, or a user-selected mount point. |
+| UNC share | Mount through the desktop/filesystem, then use the resulting local path. |
+| `\\wsl$\...` or `\\wsl.localhost\...` | Use the native Linux path when running Grexa inside that Linux environment. |
+| WSL `/mnt/<drive>/...` | Choose the corresponding native/mounted path on the Grexa host. |
 
-- Anything WSL-related: `\\wsl$`, `\\wsl.localhost`, `/mnt/<drive>/…`
-  paths in recent-paths or profiles. Marked unavailable rather than
-  deleted, so the user can curate.
-- UNC paths (`\\server\share\…`) - same treatment.
-- Windows drive-letter paths (`C:\Users\…`) - the importer offers a
-  one-time `C:\Users\<u>` → `$HOME` remap.
-- Windows toast / system tray / WinUI-specific settings.
-- `Properties.AssemblyInfo` style metadata.
+Grexa does not store "unavailable Windows path" placeholders. A search/profile
+must point at a directory visible to the Linux filesystem.
 
-See [linux-decisions.md](linux-decisions.md) for the full Windows-vs-
-Linux divergence table.
+## Recommended manual migration
 
-## How history and profiles port
+1. Install and start Grexa.
+2. Open **Settings** and reproduce search defaults, filters, appearance,
+   context, editor, container, accessibility, and privacy choices.
+3. Select each important Linux search root once. Grexa records it in recent
+   paths.
+4. Recreate important Grex searches.
+5. Use **Save Profile** for searches that should persist.
+6. Configure the AI endpoint/model only if needed.
+7. Enable AI explicitly and enter the API key into the keyring.
+8. Run representative searches and compare expected files, match counts, and
+   ignore behavior.
 
-- **Recent paths**: cap 20, deduped case-sensitively, newest first.
-  Drive-letter and UNC entries are kept but tagged unavailable for
-  the user's review.
-- **Search history**: cap 20. Grex's 7-field dedupe key
-  (`SearchTerm | SearchPath | IsRegexSearch | IsFilesSearch | SearchCaseSensitive | MatchFileNames | ExcludeDirs`)
-  is preserved byte-for-byte (including the C# `True`/`False`
-  capitalization). This means a history row imported from Grex and a
-  fresh search performed in Grexa with the same parameters collapse
-  into one entry, matching the Grex behavior.
-- **Search profiles**: case-insensitive name comparison preserved.
-  Insert-at-top (Grex's `AddOrUpdateProfile` behavior) replaces
-  Grexa's earlier alphabetical sort.
+Important Linux differences:
 
-## Running the import
+- path comparison and recent-path dedupe are case-sensitive;
+- `.gitignore` behavior follows the Rust `ignore` crate on Linux;
+- Windows Search is not used;
+- Docker and Podman replace Grex's Docker-only target model;
+- window position is not persisted;
+- desktop notifications, editor launch, Trash, and file-manager reveal use
+  freedesktop/Linux services.
 
-The library-level importer (`SettingsStore::import_json` and the
-matching history / profile / recent-path stores) is wired today;
-manual import is straightforward and works with both the GUI and
-CLI consumers:
+See [Linux decisions](linux-decisions.md) for the complete rationale.
 
-1. Drop `settings.json` at `$XDG_CONFIG_HOME/grexa/settings.json`.
-   Grexa's `import_json` API will merge it on next launch.
-2. Drop the three history files into `$XDG_DATA_HOME/grexa/`,
-   renaming `search_path_history.json` → `recent_paths.json`.
-3. Launch Grexa once; it will:
-   - Translate `UseWindowsSearchIndex` and `EnableDockerSearch`.
-   - Strip `WindowX/Y`, clamp `WindowWidth/Height` if too small.
-   - Route `AiSearchApiKey` to the keyring and clear it from the
-     file.
-   - Mark imported Windows-style paths as unavailable.
+## Advanced settings translation
 
-## Verifying the import
+Developers may create a Grexa-format `settings.json` manually. Start Grexa
+once, close it, edit the generated file, then relaunch. Use only keys and enum
+spellings from the [settings reference](reference.md#settings-schema).
 
-After the first launch, check:
+Do not:
+
+- place `AiSearchApiKey` in the file;
+- copy PascalCase Grex keys unchanged;
+- copy `WindowX` or `WindowY`;
+- assume Windows path strings are valid Linux roots;
+- replace current settings without a backup.
+
+Grexa ignores unknown fields and supplies defaults for missing fields.
+
+## Verifying a manual migration
 
 ```bash
-cat $XDG_CONFIG_HOME/grexa/settings.json | jq .ai_search_endpoint   # your URL
-cat $XDG_DATA_HOME/grexa/search_history.json | jq 'length'          # ≤ 20
-secret-tool lookup service com.visorcraft.Grexa.ai account \
-    https://api.openai.com/v1                                        # your key
+jq . "$XDG_CONFIG_HOME/grexa/settings.json"
+
+find "$XDG_DATA_HOME/grexa/db/recent_paths" \
+  -maxdepth 1 -name 'entry-*.md' -print
+
+find "$XDG_DATA_HOME/grexa/db/search_profiles" \
+  -maxdepth 1 -name 'entry-*.md' -print
 ```
 
-If `secret-tool` finds the API key, the import succeeded. If it
-returns nothing and you previously had an API key configured in
-Grex, the keyring backend was unavailable - see
-[SECURITY.md](SECURITY.md#api-key-handling).
+When the corresponding XDG variables are unset, use:
 
-## Bringing translations forward
+```text
+~/.config/grexa/settings.json
+~/.local/share/grexa/db/
+```
 
-Grex's `.resw` resource catalogs do not port automatically. The
-mapping is documented in
-[grex-strings-migration-matrix.md](grex-strings-migration-matrix.md);
-the new Fluent catalogs live in
-`crates/grexa-i18n/locales/<tag>/grexa.ftl`. Translators interested in
-bringing forward translations from Grex should follow
-[translations.md](translations.md).
+Check an AI key, if `secret-tool` is installed:
+
+```bash
+secret-tool lookup \
+  service com.visorcraft.Grexa.ai \
+  account https://api.openai.com
+```
+
+The account is the canonical base URL, with `/v1` removed.
+
+## Upgrading from older Grexa storage
+
+Older Grexa releases stored application lists in:
+
+```text
+$XDG_DATA_HOME/grexa/recent_paths.json
+$XDG_DATA_HOME/grexa/search_history.json
+$XDG_DATA_HOME/grexa/search_profiles.json
+```
+
+Current Grexa migrates each file automatically when:
+
+- the legacy file exists;
+- its corresponding grexa-db collection is empty;
+- the JSON parses as the expected legacy Grexa type.
+
+Destination collections:
+
+```text
+$XDG_DATA_HOME/grexa/db/recent_paths/
+$XDG_DATA_HOME/grexa/db/search_history/
+$XDG_DATA_HOME/grexa/db/search_profiles/
+```
+
+After successful migration, the source becomes:
+
+```text
+recent_paths.json.bak
+search_history.json.bak
+search_profiles.json.bak
+```
+
+Grexa does not delete these backups. Compare the new records, then archive or
+remove the `.bak` files yourself.
+
+If the destination collection already has records, Grexa leaves the legacy
+file untouched to avoid combining stores silently.
+
+## Translation catalogs
+
+Grex `.resw` catalogs do not load in Grexa. Grexa uses Fluent under
+`crates/grexa-i18n/locales/`.
+
+The upstream string mapping is recorded in
+[grex-strings-migration-matrix.md](grex-strings-migration-matrix.md).
+Contributors adding a locale should follow [Translating Grexa](translations.md).

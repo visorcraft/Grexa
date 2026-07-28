@@ -1,258 +1,519 @@
 # Building and Testing Grexa
 
-## Prerequisites
+This guide covers local prerequisites, CLI-only and full-workspace builds,
+tests, GUI validation, generated artifacts, packaging, releases, performance
+checks, and common failures.
 
-| Distro                 | Install command |
-| ---------------------- | --------------- |
-| Arch / Manjaro         | `pacman -S rust qt6-base qt6-declarative kirigami extra-cmake-modules poppler` |
-| Fedora                 | `dnf install rust cargo qt6-qtbase-devel qt6-qtdeclarative-devel kf6-kirigami-devel poppler-utils` |
-| Debian / Ubuntu        | `apt install rustc cargo qt6-base-dev qt6-declarative-dev qt6-tools-dev clang poppler-utils` |
-| openSUSE               | `zypper install rust cargo qt6-base-devel qt6-declarative-devel kirigami6-devel poppler-tools` |
+## Toolchain
 
-Notes:
+The workspace uses:
 
-- **Rust 1.96+** is required (Rust 2024 edition). Install via your
-  distro or via [rustup](https://rustup.rs/).
-- **Qt 6.6+** is required only for the GUI. The CLI builds with
-  the Rust toolchain alone.
-- **Ubuntu 24.04 / Noble** does not currently package the Qt 6/KF6
-  Kirigami QML runtime. GitHub-hosted GUI jobs run inside an Arch
-  container so CI can build and smoke-test against Kirigami 6.
-- **`pdftotext`** (Poppler) is optional but unlocks PDF search.
-- **`podman` or `docker`** is optional but unlocks container search.
+- stable Rust 1.96, pinned by [`rust-toolchain.toml`](../rust-toolchain.toml);
+- Rust edition 2024;
+- Cargo only, with no project CMake build;
+- Qt 6.4 or newer for the GUI;
+- Kirigami 6 for the GUI runtime;
+- `clang` and a C++ toolchain for cxx-qt generated code.
 
-## Build everything
+[`just`](https://just.systems/) is the command runner used by the repository.
+Every recipe is a thin wrapper around Cargo or a packaging script.
 
 ```bash
-cargo build --workspace --release
+cargo install just
 ```
 
-Binaries land at:
-
-- `target/release/grexa-cli` - headless CLI
-- `target/release/grexa` - Qt 6 / Kirigami GUI built via cxx-qt 0.8.
-  On a host with the Kirigami 6 runtime installed, smoke-test with
-  `QT_QPA_PLATFORM=offscreen target/release/grexa`.
-
-## Tests
+The CLI and core crates do not need Qt:
 
 ```bash
-just ci             # format check + clippy + tests, same gate CI uses
+cargo build -p grexa-cli
+cargo test -p grexa-core
+```
 
-# Individual stages:
+The first build of a fresh checkout needs network access because grexa-db is a
+pinned Git dependency.
+
+## Distro prerequisites
+
+Package names change between distro releases. These commands match the
+repository's current CI/package targets and include optional Poppler support:
+
+### Arch, CachyOS, or Manjaro
+
+```bash
+sudo pacman -S --needed \
+  rust just pkgconf clang ninja \
+  qt6-base qt6-declarative qt6-tools qt6-svg \
+  kirigami breeze-icons poppler
+```
+
+### Fedora
+
+```bash
+sudo dnf install \
+  rust cargo just pkgconf-pkg-config clang ninja-build \
+  qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qttools-devel \
+  kf6-kirigami-devel poppler-utils
+```
+
+### Debian
+
+Current Debian releases with Kirigami 6:
+
+```bash
+sudo apt install \
+  rustc cargo just pkg-config clang ninja-build \
+  qt6-base-dev qt6-declarative-dev qt6-tools-dev \
+  qml6-module-org-kde-kirigami libgl1-mesa-dev poppler-utils
+```
+
+On a release without the Kirigami 6 QML module, CLI/core work still builds
+with Rust alone. Use the AppImage or Flatpak for the GUI.
+
+### openSUSE
+
+```bash
+sudo zypper install \
+  rust cargo just pkgconf clang ninja \
+  qt6-base-devel qt6-declarative-devel qt6-tools-devel \
+  kirigami6-devel poppler-tools
+```
+
+If a distro Rust package is older than 1.96, install
+[rustup](https://rustup.rs/). Entering the repository then selects the pinned
+toolchain automatically.
+
+## Build
+
+Debug workspace:
+
+```bash
+just build
+```
+
+Release workspace:
+
+```bash
+just build-release
+```
+
+Binaries:
+
+```text
+target/debug/grexa
+target/debug/grexa-cli
+target/release/grexa
+target/release/grexa-cli
+```
+
+Run through `just`:
+
+```bash
+just run-gui
+just run-cli ~/code TODO --gitignore
+```
+
+Equivalent Cargo commands:
+
+```bash
+cargo build --workspace
+cargo build --workspace --release
+cargo run -p grexa
+cargo run -p grexa-cli -- ~/code TODO
+```
+
+## Local quality gates
+
+The required local CI-parity gate is:
+
+```bash
+just ci
+```
+
+It runs, in order:
+
+```bash
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-Specific test groups (279 tests total as of v1.0):
+Individual recipes:
 
 ```bash
-cargo test -p grexa-core                      # 192 total (124 unit + integration)
-cargo test --test gitignore_parity            # 61 cases
-cargo test --test property                    # 4 proptest properties
-cargo test --test root_safety                 # 3 pseudo-FS tests
-cargo test -p grexa-cli                       # 16 CLI integration tests
-cargo test -p grexa-containers                # 24 mocked container tests
-cargo test -p grexa-ai                        # 17 mocked HTTP tests
-cargo test -p grexa-i18n                      # 9 locale + plural-helper tests
-cargo test -p grexa                           # 21 QObject + workspace tests (no Qt runtime)
+just fmt
+just fmt-check
+just lint
+just test
+just check
 ```
 
-## Locale sync
+The broader release preflight is:
 
-Whenever you add a new translation key, the English catalog at
-`crates/grexa-i18n/locales/en/grexa.ftl` is the source of truth.
+```bash
+just preflight
+```
+
+It adds:
+
+```bash
+cargo deny --all-features check
+cargo audit
+cargo about generate about.hbs --output-file docs/credits-third-party.md
+```
+
+Install the optional tools first:
+
+```bash
+cargo install cargo-deny
+cargo install cargo-audit
+cargo install cargo-about --features cli
+```
+
+`just preflight` regenerates the checked-in third-party supplement. Review that
+diff rather than hand-editing it.
+
+## Targeted tests
+
+```bash
+# Core unit and integration tests
+cargo test -p grexa-core
+
+# Grex-compatible ignore behavior
+cargo test -p grexa-core --test gitignore_parity
+
+# Property tests
+cargo test -p grexa-core --test property
+
+# Root and pseudo-filesystem safety
+cargo test -p grexa-core --test root_safety
+
+# Spawned CLI integration tests
+cargo test -p grexa-cli
+
+# Mocked container-runtime tests
+cargo test -p grexa-containers
+
+# Mocked HTTP, evidence, and secret-backend tests
+cargo test -p grexa-ai
+
+# Fluent bundle and locale parity
+cargo test -p grexa-i18n
+
+# Rust backing logic for QObjects; no display server needed
+cargo test -p grexa
+```
+
+Do not hardcode total test counts in release checks. The suite grows and
+`cargo test` is the source of truth.
+
+## Locale validation
+
+English is the source catalog:
+
+```text
+crates/grexa-i18n/locales/en/grexa.ftl
+```
+
+Run both the catalog/QML checker and crate tests after changing strings:
 
 ```bash
 python3 scripts/check_locale_sync.py
+cargo test -p grexa-i18n
 ```
 
-The same check runs as a `cargo test` (`every_locale_has_same_key_set_as_english`)
-so a `just ci` pass is sufficient.
+The crate test runs in `just ci`; the Python checker adds QML-specific checks
+and should be run directly for localization work.
 
-## Generated artifacts
+## GUI development
+
+The GUI crate is `grexa` under `apps/grexa-gui/`.
 
 ```bash
-just manpage        # writes target/man/grexa-cli.1
-just completions    # writes target/completions/{grexa-cli.bash,_grexa-cli,grexa-cli.fish}
+cargo run -p grexa
 ```
 
-## Distro packages
+cxx-qt compiles every QML file into the binary's Qt resource module. Editing
+QML therefore requires another Cargo build. There is no production
+filesystem-hot-reload mode.
 
-Per-distro recipes live under `packaging/`. Each is bumped to match
-the workspace `[workspace.package].version`. Build the artifact for
-your target distro on a host with that distro's tooling:
+New QML files must also be added to the `qml_files` list in
+[`apps/grexa-gui/build.rs`](../apps/grexa-gui/build.rs). If omitted, the file
+may work from a source tree during debugging but will not ship in a package.
 
-| Target | Tooling | Command |
-| ------ | ------- | ------- |
-| Source tarball | `tar` | `tar --exclude='./target' --exclude='./.git' --transform 's,^\./,grexa-1.2.0/,' -czf grexa-1.2.0.tar.gz .` |
-| Debian / Ubuntu (.deb) | `dpkg-deb`, `fakeroot` | `fakeroot dpkg-deb --build --root-owner-group <staged-tree> grexa.deb` (see `packaging/debian/`) |
-| Fedora / RHEL (.rpm) | `rpmbuild` | `rpmbuild -bb packaging/fedora/grexa.spec` |
-| openSUSE (.rpm) | `rpmbuild` | `rpmbuild -bb packaging/opensuse/grexa.spec` |
-| Arch / CachyOS (.pkg.tar.zst) | `makepkg`, `fakeroot` | `cd packaging/arch && makepkg -f` |
-| AppImage | `linuxdeploy`, `linuxdeploy-plugin-qt`, Qt 6 host stack, `jxrlib` | `NO_STRIP=1 QMAKE=/usr/bin/qmake6 bash packaging/appimage/build.sh` |
-| Flatpak | `flatpak-builder`, KDE 6.10 runtime, rust-stable//25.08 | `just flatpak-bundle` |
+### Verify that the window really starts
 
-## GitHub release automation
+A successful compile is not enough. Qt can reject the root QML object at
+runtime while the Rust/C++ build remains green.
 
-Pushing a tag to GitHub triggers
-[`.github/workflows/release.yml`](../.github/workflows/release.yml).
-The workflow runs the release gate on Ubuntu 24.04, builds the GUI and
-CLI with the pinned Rust toolchain, smoke-tests the GUI under offscreen
-Qt, packages a Linux x86_64 archive, writes `sha256sums.txt`, and
-creates a GitHub Release with both files attached.
-
-For version-like tags such as `v1.2.0`, the tag version must match the
-workspace version in `Cargo.toml`.
+After a release build:
 
 ```bash
-git tag -a v1.2.0 -m "Grexa v1.2.0"
-git push origin v1.2.0
+just verify-gui
 ```
 
-The Justfile exposes the Flatpak path as first-class targets:
+For another binary:
 
 ```bash
-just flatpak-vendor   # `cargo vendor --locked target/flatpak/vendor`
-                      # + writes .cargo/config.toml. Run once, or whenever
-                      # Cargo.lock changes.
-
-just flatpak          # flatpak-builder against
-                      # packaging/flatpak/com.visorcraft.Grexa.yml.
-                      # Produces target/flatpak/repo + target/flatpak/build.
-
-just flatpak-bundle   # flatpak build-bundle → target/release/grexa.flatpak.
-                      # The single-file bundle that ships to users.
+just verify-gui target/debug/grexa
+just verify-gui pkg:packaging/arch/grexa-<version>-1-x86_64.pkg.tar.zst
 ```
 
-One-time Flatpak runtime install (per dev box):
+The verifier launches offscreen with an isolated runtime directory. Success
+means the main window instantiates and the event loop remains alive. The
+generic failure is:
 
-```bash
-flatpak remote-add --user --if-not-exists flathub \
-    https://flathub.org/repo/flathub.flatpakrepo
-flatpak install --user -y flathub \
-    org.kde.Platform//6.10 \
-    org.kde.Sdk//6.10 \
-    org.freedesktop.Sdk.Extension.rust-stable//25.08
+```text
+QML payload did not instantiate
 ```
 
-The `rust-stable//25.08` extension ships Rust 1.95.0 - one minor behind
-the workspace `rust-toolchain.toml` pin (now 1.96.0). The Flatpak SDK
-provides `cargo`/`rustc` directly (no rustup in the sandbox), so the pin
-is not honored there and the build compiles against 1.95.0. **Keep the
-code 1.95-compatible** (no 1.96-only language or stdlib features) until
-the freedesktop SDK ships a matching 1.96 `rust-stable` extension, and
-verify the Flatpak build after any toolchain bump. The build itself runs
-**with no network access** -
-`just flatpak-vendor` populates `target/flatpak/vendor` first and the
-manifest's `cargo --offline build --release --workspace --frozen`
-reads only from that directory.
+Use this gate after every QML/controller signature change and before handing
+off a package.
 
-### Why the Flatpak skips the .svg icon
+### Diagnose a QML load failure
 
-Newer librsvg releases on Arch (≥ 2.62) dropped the gdk-pixbuf SVG
-loader, so `flatpak build-export` rejects `com.visorcraft.Grexa.svg`
-with "Format not recognized" on those hosts. The Flatpak manifest
-intentionally installs only the PNG hicolor set (16..512 px) - KDE
-Plasma scales the closest PNG cleanly at HiDPI. The .deb / .rpm /
-Arch / AppImage targets all still ship the SVG.
+1. Build the debug GUI:
 
-## Dependency policy
+   ```bash
+   cargo build -p grexa
+   ```
+
+2. Locate generated QML modules:
+
+   ```bash
+   ls -d target/debug/build/grexa-*/out/qt-build-utils/qml_modules
+   ```
+
+3. Run `qmllint` with that directory:
+
+   ```bash
+   qmllint \
+     -I target/debug/build/grexa-*/out/qt-build-utils/qml_modules \
+     apps/grexa-gui/qml/Main.qml
+   ```
+
+4. Check cxx-qt naming. Rust snake_case becomes QML camelCase:
+
+   ```text
+   record_paths_ready -> onRecordPathsReady
+   list_views         -> listViews()
+   ```
+
+A handler for a nonexistent signal is fatal to QML object creation.
+
+## Generated CLI artifacts
 
 ```bash
-just deny           # cargo-deny: licenses + advisories + bans
-just audit          # cargo-audit: RustSec database
+just manpage
+just completions
 ```
 
-Both require `cargo install cargo-deny` / `cargo install cargo-audit`.
+Outputs:
 
-## Container search live tests
+```text
+target/man/grexa-cli.1
+target/completions/grexa-cli.bash
+target/completions/_grexa-cli
+target/completions/grexa-cli.fish
+```
 
-The default container test suite uses `MockCommandRunner` so it runs
-without a daemon. To exercise the live path automatically, enable the
-`container-live` Cargo feature:
+The release workflow installs them into the standard package locations.
+
+## Container live tests
+
+Default tests use `MockCommandRunner` and need no daemon.
+
+To run the opt-in live test:
 
 ```bash
-# Run the live-daemon integration tests (requires podman or docker
-# on $PATH; tests no-op when neither is reachable).
 cargo test -p grexa-containers --features container-live -- live::
 ```
 
-The live tests spawn a throwaway Alpine container, run direct grep
-inside it, exercise the archive mirror fallback, and clean up on the
-way out.
+The test uses Docker or Podman when reachable and skips otherwise. It creates
+and removes a temporary Alpine container.
 
-You can also exercise the live path manually:
-
-```bash
-# Start a podman container and search inside it.
-podman run -d --name web alpine sleep 600
-podman exec web sh -c 'echo "TODO inside container" > /etc/grexa-todo.txt'
-grexa-cli /etc TODO --container web --runtime podman
-podman rm -f web
-```
-
-## GUI prerequisites + dev cycle
-
-The Qt/Kirigami shell is the `grexa` binary under `apps/grexa-gui/`:
+Manual Podman smoke:
 
 ```bash
-# Iterate on QML / Rust together:
-cargo run -p grexa
-
-# Or with cargo-watch for an auto-rebuild on save:
-cargo install cargo-watch
-cargo watch -x 'run -p grexa'
+podman run -d --name grexa-smoke alpine sleep 600
+podman exec grexa-smoke sh -c 'echo "TODO inside container" > /tmp/grexa.txt'
+target/debug/grexa-cli /tmp TODO --container grexa-smoke --runtime podman
+podman rm -f grexa-smoke
 ```
 
-Note: QML files are bundled into the binary as Qt resources at
-build time via `cxx-qt-build`'s `qrc_resources`. Editing a `.qml`
-file requires a `cargo build` - there is no filesystem hot-reload
-path. New `.qml` files must be added to the `qml_files` list in
-`apps/grexa-gui/build.rs` or they won't ship.
+## Packaging
 
-## Cross-distro container build
+The release workflow is the canonical reproducible packaging implementation.
+Local helpers cover the main developer targets:
 
-For reproducible packaging builds:
+| Artifact | Command | Output |
+| -------- | ------- | ------ |
+| Arch / CachyOS | `just arch-package` | `packaging/arch/grexa-<version>-1-x86_64.pkg.tar.zst` |
+| Fedora RPM in Fedora container | `just fedora-pkg` | path printed by the container build |
+| Flatpak bundle | `just flatpak-bundle` | `target/release/grexa.flatpak` |
+| AppImage or staged AppDir | `bash packaging/appimage/build.sh` | `target/appimage/Grexa-<version>-x86_64.AppImage` or `Grexa.AppDir` |
+
+`just arch-package` also runs the packaged-GUI launch gate. It does not install
+the package:
 
 ```bash
-podman build -t grexa-builder -f packaging/Dockerfile.builder .
-podman run --rm -v "$PWD:/src" -w /src grexa-builder \
-    cargo build --workspace --release
+sudo pacman -U packaging/arch/grexa-<version>-1-x86_64.pkg.tar.zst
 ```
 
-## What CI runs
+Debian and openSUSE recipes live under `packaging/debian/` and
+`packaging/opensuse/`. Their exact clean-container commands are maintained in
+[the release workflow](../.github/workflows/release.yml).
 
-See [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
+### AppImage requirements
+
+To produce a packed AppImage, put these on `PATH`:
+
+- `linuxdeploy`
+- `linuxdeploy-plugin-qt`
+- `qmake6`
+
+The build host also needs Breeze icons and Qt SVG plugins for complete
+Kirigami icon rendering. If `linuxdeploy` is absent, the script deliberately
+stages only the unpacked AppDir and exits successfully with a notice.
+
+The script's `QML_SOURCES_PATHS`, two-pass linuxdeploy flow, `QMAKE=qmake6`,
+`NO_STRIP=1` retry, Breeze icons, and Qt SVG staging are required. Removing
+them can produce an AppImage that builds but exits before showing a window.
+
+Verify the result without host QML fallback:
+
+```bash
+env -u QML2_IMPORT_PATH \
+  timeout 12 target/appimage/Grexa-<version>-x86_64.AppImage
+```
+
+Exit `124` or `143` means the event loop stayed alive until timeout. Exit `2`
+means the QML payload failed.
+
+### Flatpak
+
+Install the pinned runtimes once:
+
+```bash
+flatpak remote-add --user --if-not-exists flathub \
+  https://flathub.org/repo/flathub.flatpakrepo
+flatpak install --user -y flathub \
+  org.kde.Platform//6.10 \
+  org.kde.Sdk//6.10 \
+  org.freedesktop.Sdk.Extension.rust-stable//25.08
+```
+
+Then:
+
+```bash
+just flatpak-vendor
+just flatpak
+just flatpak-bundle
+```
+
+`flatpak-vendor` writes dependencies under `target/flatpak/vendor`; it does not
+permanently redirect host Cargo. The sandbox build is offline and frozen.
+
+The manifest grants home, `/run/media`, network for opt-in AI, Secret Service,
+file-manager, and notification access. It does not expose Docker or Podman
+sockets, so the Flatpak does not provide container search.
+
+The freedesktop 25.08 Rust extension is one minor release behind the workspace
+pin. Keep code compatible with its Rust 1.95 compiler until the runtime
+extension catches up, and verify Flatpak after any toolchain bump.
+
+The Flatpak intentionally installs PNG icons rather than the SVG because some
+host librsvg/gdk-pixbuf combinations reject the SVG during export.
+
+## Release process
+
+Before tagging:
+
+1. Update `[workspace.package].version` in `Cargo.toml`.
+2. Update sibling Grexa path-dependency versions in the GUI, AI, CLI, and
+   container crate manifests.
+3. Update `packaging/arch/PKGBUILD`, resetting `pkgrel=1`.
+4. Prepend the release in
+   `packaging/com.visorcraft.Grexa.metainfo.xml`.
+5. Update `packaging/debian/changelog`.
+6. Update Fedora and openSUSE spec versions and changelogs.
+7. Run `cargo metadata >/dev/null` to let Cargo refresh `Cargo.lock`.
+8. Confirm the lockfile changed only for Grexa workspace packages.
+9. Run `just preflight`.
+10. Build the target package and run its GUI launch gate.
+
+Never hand-edit `Cargo.lock`.
+
+For a semantic version tag, the tag version must match the workspace version:
+
+```bash
+git tag -a v<version> -m "Grexa v<version>"
+git push origin v<version>
+```
+
+The tag-triggered workflow builds:
+
+- Linux x86_64 tarball;
+- AppImage;
+- Arch package;
+- Debian packages;
+- Fedora RPM;
+- Flatpak bundle;
+- SHA-256 checksum files.
+
+The tarball is an unpackaged tree built against the Arch job's Qt/Kirigami
+stack. It is not ABI-portable across arbitrary distributions; use the AppImage
+when a self-contained GUI is needed.
+
+It validates formatting, Clippy, all-feature tests, desktop metadata, AppStream
+metadata, and GUI launch before publication.
+
+## GitHub CI
+
+[`ci.yml`](../.github/workflows/ci.yml) runs independent jobs for:
 
 1. `cargo fmt --all -- --check`
 2. `cargo clippy --workspace --all-targets -- -D warnings`
 3. `cargo test --workspace --all-features`
-4. `cargo deny check`
-5. `appstreamcli validate packaging/com.visorcraft.Grexa.metainfo.xml`
-6. `desktop-file-validate packaging/com.visorcraft.Grexa.desktop`
+4. release GUI build and offscreen smoke test on Arch
+5. `cargo-deny`
+6. AppStream metadata validation
+7. desktop-file validation
 
-## Performance baselines
+`just ci` is parity for the formatting, Clippy, and default-feature workspace
+test sequence. Run `just preflight` when dependencies, licenses, or release
+artifacts change.
 
-Run the search engine against a representative source tree:
+## Performance checks
+
+Build the optimized CLI, then compare a trusted path and term with ripgrep:
 
 ```bash
 cargo build --release -p grexa-cli
-hyperfine --warmup 2 \
-    'target/release/grexa-cli ~/code/linux TODO --quiet' \
-    'rg --quiet TODO ~/code/linux'
+scripts/bench_vs_rg.sh ~/code TODO
 ```
 
-A spreadsheet of comparison results lives at
-[memory-budgets.md](memory-budgets.md).
+The script requires `hyperfine` and `rg`, performs ten runs after warmup, and
+writes `bench-results.md`. Use trusted arguments because the benchmark tool
+receives command strings.
+
+Memory ceilings and GUI snapshot policy are documented in
+[Result-set memory budgets](memory-budgets.md).
 
 ## Troubleshooting
 
-| Symptom | Likely cause |
-| ------- | ------------ |
-| `pdftotext: not found` skipped PDFs | install Poppler (`pdftotext`) |
-| `keyring backend unavailable` AI errors | start KWallet / GNOME Keyring; on headless boxes, AI features are off by design |
-| Slow regex search on lookaround patterns | the cascade fell through to `fancy-regex`; `tracing::info!` logs note this |
-| Search misses files because of `.gitignore` | the engine respects gitignore even without `.git/`; pass `--include-system` to ignore the rules |
-| Container search exits with status 125 | `docker`/`podman` CLI returned a permission error; check the socket perms |
+| Symptom or error | Cause and next check |
+| ---------------- | -------------------- |
+| Qt headers or `qmake6` not found | Install Qt 6 development packages and set `QMAKE=qmake6`. |
+| Kirigami module missing at runtime | Install Kirigami 6, or use the AppImage/Flatpak. |
+| `QML payload did not instantiate` | Run `qmllint`; check new QML is in `build.rs` and Rust signal/method names are camelCase in QML. |
+| GUI build passes but no window appears | Run `just verify-gui`; a successful compile is not a launch test. |
+| AppImage starts only with `QML2_IMPORT_PATH=/usr/lib/qt6/qml` | The bundle missed a QML module; check `QML_SOURCES_PATHS` and the two linuxdeploy passes. |
+| AppImage `strip` fails on `.relr.dyn` | Re-run with `NO_STRIP=1`. |
+| PDF files are skipped | Install Poppler `pdftotext`; use `GREXA_LOG=debug` for extraction errors. |
+| AI key save reports backend unavailable | Start/unlock KWallet, GNOME Keyring, or another Secret Service on the session bus. |
+| Container runtime not detected | Check `docker ps` or `podman ps`, socket permissions, `DOCKER_HOST`, and `XDG_RUNTIME_DIR`. |
+| Container command times out | Narrow the container path/term; commands are killed after 30 seconds. |
+| Search unexpectedly follows ignore files | `--gitignore` was enabled; omit it. `--include-system` is a separate control. |
+| Search omits dependency/system paths | Add `--include-system`, then use explicit globs to control scope. |
+| Extended regex is slow or capped | Narrow the path/globs, simplify the pattern, or use `--regex-engine fast` to reject unsupported constructs. |
+| `just deny`, `audit`, or `credits` is missing | Install `cargo-deny`, `cargo-audit`, or `cargo-about` as shown above. |

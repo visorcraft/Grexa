@@ -1,89 +1,167 @@
-# Accessibility Plan
+# Accessibility
 
-PLAN.md phase 15 lines 453-454 require an accessibility pass plus
-AT-SPI roles for custom result tables, row actions, command buttons,
-filter controls, and dialogs. This doc records what Grexa's
-core/CLI/AI/containers crates contribute and what the GUI will own.
+Grexa supports keyboard-driven search and uses Qt Quick accessibility metadata
+for its primary controls, result list, and AI conversation. Accessibility is
+an active release criterion, not a claim of certification.
 
-## Core / CLI layer (already shipping)
+## Current support
 
-- **Structured progress events.** `ProgressEvent::FileScanned`,
-  `FileSkipped`, `Match` carry typed data the screen-reader-friendly
-  GUI can announce as "Scanning file …" / "10 matches in 5 files so far".
-- **Structured tracing logs.** `tracing::info!(matches, files_matched,
-  elapsed_ms, "search completed")` lets the GUI mirror state into
-  ARIA-live equivalents.
-- **CLI text output is line-oriented.** `grexa-cli` prints one match
-  per line in `path:line:col:content` form, which is the canonical
-  shape screen-readers and terminal accessibility hooks expect.
-- **Documented exit codes** (0 / 1 / 2) so terminal users on assistive
-  tech don't have to read body text to know the search status.
-- **Localized strings.** `crates/grexa-i18n` ships catalogs whose
-  keys map 1:1 to UI strings; no English-only labels leak through.
+### Keyboard
 
-## GUI layer (Phase 4 / 18 deliverables)
+The desktop application provides:
 
-The QML shell must:
+- global navigation shortcuts;
+- search, stop, tab, focus, and quit shortcuts;
+- keyboard traversal through standard Qt controls;
+- Space for result context preview;
+- Enter for open-in-editor;
+- Escape for search cancellation and dialog/drawer close behavior.
 
-1. Set `Accessible.role` and `Accessible.name` on every clickable
-   control (`Search`, `Stop`, `Replace`, `AI`, `Reset`, `Filter Options`,
-   `Profiles`, `History`, `Export`, every column header, every result
-   row).
-2. Wire `Accessible.description` to the localized tooltip text from
-   the Fluent catalog.
-3. Set `Accessible.focusOnPress = true` so keyboard navigation lands
-   in the right place after each command-strip action.
-4. Use Kirigami's `BasicListItem` / `ListItem` controls for results,
-   which already announce row content correctly under AT-SPI.
-5. Surface live regions for status text: `Accessible.announcement`
-   triggered on every `ProgressEvent::FileScanned` batch.
-6. Mark non-decorative icons with `Accessible.name`; mark purely
-   decorative icons with `Accessible.ignored = true`.
-7. Preserve the keyboard shortcuts from Grex: Enter to search, Enter
-   to replace from the replacement input, Space for preview, Escape
-   to close preview / dialogs, F1 for About, double-click → Enter to
-   open result. PLAN.md phase 4 line 254 covers the keyboard surface.
+The complete mapping is in
+[Reference: desktop keyboard and pointer actions](reference.md#desktop-keyboard-and-pointer-actions).
 
-## Settings
+### Assistive technology metadata
 
-- High-contrast theme support: `DefaultSettings.theme_preference`
-  already enumerates the eight high-contrast variants Grex ships
-  (`BlackKnight` … `Vibes`) under the same integer encoding so
-  imports round-trip. The GUI maps them to QQC2 Desktop Style
-  palettes.
-- Reduced-motion: when `gtk-enable-animations = 0` on GNOME or
-  `PlasmaThemeOption Animate = false` on KDE, the GUI must skip
-  filter-pane / tab-switch / AI-arrival transitions. Tracked as a
-  `cxx-qt` controller hook in Phase 18.
+Shared controls declare Qt `Accessible` roles and names:
+
+- buttons and navigation items;
+- text fields;
+- check boxes;
+- combo boxes;
+- spin boxes and sliders;
+- result rows and result list;
+- AI message list;
+- static empty states.
+
+Result rows announce `relative-path:line` as their name and the matched preview
+as their description. Decorative icons in the search and result surfaces are
+marked ignored where they would add noise.
+
+Raw Qt Quick Controls retain their native roles. New custom interaction
+surfaces must set an explicit role, name, and description when the native
+control cannot infer them.
+
+### Visual settings
+
+**Settings → Accessibility** provides:
+
+- **Reduce motion**: token animation durations become zero and busy animations
+  stop where wired;
+- **High contrast**: selected theme tokens use stronger border and text
+  contrast.
+
+The appearance selector also includes system, light, dark, OLED black, and
+named Grex-derived palettes.
+
+### CLI
+
+The CLI:
+
+- emits one logical match per line;
+- has stable text, JSON, and CSV shapes;
+- uses documented grep-like exit codes;
+- supports `--quiet`, `--count`, and `--files-only`;
+- does not require color to understand status;
+- replaces terminal control characters only when writing directly to a TTY.
+
+## Known limitations
+
+- CI builds and launches the GUI offscreen, but does not run an automated
+  AT-SPI or screen-reader assertion suite.
+- Orca behavior must be checked manually before releases that materially
+  change navigation, dialogs, result rows, or custom controls.
+- Grexa currently ships no right-to-left locale, so RTL layout has not received
+  a full translated end-to-end release check.
+- Reduced motion is an application setting; Grexa does not automatically read
+  every desktop environment's animation preference.
+- High contrast changes Grexa's token palette. It does not integrate with
+  every desktop high-contrast protocol or guarantee a formal WCAG conformance
+  level.
+- Database-page controls mostly use native Qt roles and have less custom
+  descriptive metadata than the Search and Settings surfaces.
+
+Report accessibility bugs through
+[GitHub Issues](https://github.com/visorcraft/grexa/issues). Include the Grexa
+version, desktop, Qt version, assistive technology, input method, and exact
+control or workflow.
+
+## Manual verification
+
+### Keyboard-only
+
+1. Start with a fresh process.
+2. Reach every sidebar item without a pointer.
+3. Enter a path and term, toggle Regex/Case/Whole Word, and run search.
+4. Open/close Filters and AI drawers with keyboard input.
+5. Traverse result headers and rows.
+6. Open preview with Space and editor with Enter.
+7. Open and cancel Replace without accidental activation.
+8. Create, switch, and close tabs.
+9. Visit History, Profiles, Regex Builder, Database, Settings, About,
+   Credits, and Licenses.
+10. Confirm visible focus does not disappear behind drawers or dialogs.
+
+### Orca / AT-SPI
+
+Run a normal desktop build with accessibility forced on if the environment
+does not enable it automatically:
+
+```bash
+QT_ACCESSIBILITY=1 target/debug/grexa
+```
+
+Verify:
+
+- controls announce a useful name and role;
+- result rows include path, line, and match context;
+- changing pages moves focus predictably;
+- busy and completion state is discoverable;
+- disabled controls are announced as disabled;
+- icon-only controls have names;
+- decorative images are silent;
+- dialogs announce title, primary action, and cancel path.
+
+### Display and motion
+
+Check:
+
+- system, light, dark, and OLED black;
+- application high contrast on light and dark bases;
+- application reduced motion;
+- 100%, 125%, 150%, and 200% scale;
+- narrow and default window sizes;
+- long German labels;
+- keyboard focus against every palette.
+
+## Contributor requirements
+
+For every new or changed interactive QML item:
+
+1. Prefer an existing `App*.qml` or native Qt control.
+2. Provide visible text or `Accessible.name`.
+3. Add `Accessible.description` when the action is not clear from the name.
+4. Use a correct role.
+5. Mark decorative images/icons ignored.
+6. Keep a keyboard activation path.
+7. Preserve visible focus.
+8. Route text through Fluent.
+9. Honor `app.tokens.reducedMotion` for nonessential animation.
+10. Check high-contrast colors and scaling.
+
+Do not set `Accessible.focusOnPress` blindly on every control. Preserve the
+native focus behavior unless a custom interaction requires an override.
 
 ## CI coverage
 
-- `cargo test` runs the property tests + golden tests + status-string
-  formatting tests; this catches regressions in the strings layer.
-- GUI accessibility is verified under `QT_ACCESSIBILITY=1` with
-  Qt's automated tester. CI sets the env var on the offscreen platform
-  before running `qmltestrunner`.
-- `desktop-file-validate` and `appstreamcli validate` already block
-  desktop-entry regressions that would hide Grexa from accessibility
-  listings.
+Current automated coverage provides:
 
-## Manual checklist (before each release)
+- Rust tests for status strings, settings round-trip, result model roles, and
+  reduced-motion/high-contrast settings;
+- Fluent key parity;
+- QML source checks through `scripts/check_locale_sync.py`;
+- cxx-qt/QML compilation;
+- offscreen root-window launch;
+- desktop-entry and AppStream validation.
 
-- [x] `Accessible.role` set on all interactive controls (Button, CheckBox, ComboBox, SpinBox, ListItem, EditableText).
-- [x] `Accessible.name` bound to control text or placeholder.
-- [x] `Accessible.description` wired to tooltip text where available.
-- [x] `Accessible.focusOnPress: true` on interactive controls.
-- [x] Decorative icons marked `Accessible.ignored: true`.
-- [ ] Run Orca on KDE Plasma against the live app; verify every
-  command-strip button announces correctly.
-- [ ] Verify keyboard-only flow: tab between every focusable control,
-  trigger every keyboard shortcut without using the pointer.
-- [ ] Verify high-contrast theme inversion looks reasonable.
-- [ ] Verify fractional scaling (125 / 150 / 200%) doesn't crop
-  control labels.
-- [ ] Verify the CLI's `--quiet` and exit codes match documented
-  behavior.
-
-This doc is intentionally short - the heavy lifting lives in the GUI
-phase. The point is to capture today's promises so the GUI authors
-have a contract to test against.
+These checks catch broken wiring and missing text, but do not replace manual
+screen-reader verification.

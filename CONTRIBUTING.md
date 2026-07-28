@@ -43,8 +43,8 @@ output.
 ## Project layout
 
 - `crates/grexa-core` contains search, replace, filtering, encoding,
-  document extraction, settings, history, profiles, and desktop helper
-  logic.
+  document extraction, settings, grexa-db-backed history/profile
+  adapters, and desktop helper logic.
 - `crates/grexa-cli` contains the `grexa-cli` binary and command-line
   interface.
 - `crates/grexa-containers` contains Docker and Podman adapters.
@@ -72,6 +72,7 @@ just test           # cargo test --workspace
 just lint           # cargo clippy --workspace --all-targets -- -D warnings
 just fmt            # cargo fmt --all
 just ci             # fmt check + clippy + tests
+just preflight      # ci + licenses + advisories + generated credits
 ```
 
 Direct `cargo` commands are acceptable when `just` is not installed.
@@ -110,6 +111,10 @@ SPDX-License-Identifier: GPL-3.0-only
 
 Use the comment syntax appropriate for the file type.
 
+The separately maintained `grexa-db` crate is Apache-2.0. Grexa may depend on
+it, but it must never depend on this repository's GPL crates. See
+[dependency and license policy](docs/dependency-license-review.md).
+
 ## GUI and QML changes
 
 - cxx-qt bridge modules live under `apps/grexa-gui/src/qobjects/`.
@@ -120,6 +125,8 @@ Use the comment syntax appropriate for the file type.
 - QML files are compiled into Qt resources at build time. Rebuild after
   editing QML.
 - Keep GUI strings localized through Fluent keys.
+- Run `just verify-gui` after a GUI/QML change. A successful compile does not
+  prove that the QML root instantiated.
 
 ## Tests
 
@@ -146,6 +153,8 @@ When changing dependencies, also run:
 
 ```bash
 just deny
+just audit
+just credits
 ```
 
 ## Localization
@@ -173,6 +182,8 @@ The same parity check runs in the test suite.
 
 Update documentation in the same pull request when behavior changes.
 
+- Add or move documentation through the
+  [documentation index](docs/README.md).
 - User workflows belong in [docs/usage.md](docs/usage.md).
 - CLI flags, settings, paths, and shortcuts belong in
   [docs/reference.md](docs/reference.md).

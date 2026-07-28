@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 VisorCraft LLC
 // SPDX-License-Identifier: GPL-3.0-only
 
-//! QObjects exposed to QML via `cxx-qt` 0.8.
+//! QObjects exposed to QML via `cxx-qt`.
 //!
 //! Each submodule owns one `#[cxx_qt::bridge]` and the Rust-side
 //! state struct backing its QObjects. The cxx-qt build script in

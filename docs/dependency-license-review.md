@@ -1,131 +1,134 @@
-# Dependency License Review
+<!-- SPDX-FileCopyrightText: 2026 VisorCraft LLC -->
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
 
-Grexa is licensed under GPL-3.0-only. Every direct dependency must
-ship with a license that is compatible with GPL-3.0-only redistribution.
-This doc records the policy, the enforcement mechanisms, and the
-review notes for each non-permissive dep.
+# Dependency and License Policy
 
-## Policy
+Grexa is GPL-3.0-only. Every Rust dependency, bundled asset, and shipped runtime
+component must be redistributable under compatible terms.
 
-The allowlist lives in [`deny.toml`](../deny.toml). At the time of
-writing, permitted licenses are:
+## License boundary
 
-- MIT, Apache-2.0, Apache-2.0 WITH LLVM-exception
-- BSD-2-Clause, BSD-3-Clause, 0BSD
-- ISC, MPL-2.0
-- Unicode-DFS-2016, Unicode-3.0
-- Zlib, BSL-1.0, CC0-1.0
-- GPL-3.0, GPL-3.0-only, GPL-3.0-or-later
-- LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later
+All crates in this repository inherit `GPL-3.0-only`.
 
-Anything outside this set is rejected by `cargo-deny check`. Adding a
-new license requires updating both `deny.toml` and this doc.
+`grexa-db` is the sole intentional exception. It is a separately maintained,
+Apache-2.0 engine consumed through a pinned git tag. The permissive license
+allows the database engine to be embedded outside Grexa.
+
+Three rules protect that boundary:
+
+1. `grexa-db` must not take GPL-only dependencies.
+2. `grexa-db` must not depend on `grexa-core` or another Grexa GPL crate.
+3. Files in the `grexa-db` repository use `Apache-2.0` SPDX headers. Files in
+   this repository use `GPL-3.0-only`.
+
+Apache-2.0 code may flow into GPL-3.0-only Grexa. The reverse dependency would
+remove the independent embedding option.
+
+## Accepted dependency licenses
+
+`deny.toml` and `about.toml` must contain the same accepted set:
+
+| License |
+| ------- |
+| `0BSD` |
+| `Apache-2.0` |
+| `Apache-2.0 WITH LLVM-exception` |
+| `BSD-3-Clause` |
+| `CC0-1.0` |
+| `CDLA-Permissive-2.0` |
+| `GPL-3.0-only` |
+| `ISC` |
+| `LGPL-2.1-or-later` |
+| `MIT` |
+| `Unicode-3.0` |
+| `Unlicense` |
+| `Zlib` |
+
+`cargo-deny` rejects licenses outside this list unless a reviewed,
+version-specific clarification is added. There are no clarification entries
+today.
+
+## Source policy
+
+Cargo sources are restricted to:
+
+- the crates.io index;
+- `https://github.com/visorcraft/grexa-db`.
+
+Unknown registries and unknown git sources fail `cargo deny`. Wildcard
+dependency versions are denied. Multiple versions warn because some ecosystem
+stacks cannot avoid them safely.
+
+## Direct dependency groups
+
+| Purpose | Direct crates |
+| ------- | ------------- |
+| Search and traversal | `regex`, `fancy-regex`, `ignore`, `globset` |
+| Unicode and encodings | `encoding_rs`, `chardetng`, `unicode-normalization`, `icu_casemap`, `icu_locale_core`, `icu_properties` |
+| Documents | `zip`, `quick-xml` |
+| Storage and serialization | `grexa-db`, `serde`, `serde_json`, `serde_yaml_ng`, `serde_repr`, `tempfile` |
+| CLI | `anyhow`, `clap`, `clap_complete`, `clap_mangen`, `ctrlc` |
+| Containers | `libc` |
+| AI and secrets | `ureq`, `keyring-core`, `zbus-secret-service-keyring-store` |
+| Localization | `fluent`, `unic-langid` |
+| GUI bridge | `cxx`, `cxx-qt`, `cxx-qt-lib`, `cxx-qt-build`, `qt-build-utils` |
+| GUI integration | `notify` |
+| Logging and errors | `tracing`, `tracing-subscriber`, `tracing-appender`, `thiserror` |
+| Build metadata | `vergen-git2` |
+| Tests | `assert_cmd`, `predicates`, `proptest`, `tempfile` |
+
+Exact versions and transitive crates come from `Cargo.lock`, not this summary.
+The generated [third-party supplement](credits-third-party.md) lists every
+resolved package and license text.
+
+## Runtime components
+
+Some functionality uses system components rather than Rust crates:
+
+| Component | Role | Typical license family |
+| --------- | ---- | ---------------------- |
+| Qt 6 | GUI runtime | LGPL-3.0/GPL/commercial |
+| KDE Frameworks Kirigami | GUI components | LGPL-2.1-or-later |
+| Poppler `pdftotext` | PDF extraction | GPL-2.0-or-later |
+| Docker/Podman CLI | Container access | Apache-2.0 and project-specific combinations |
+| KWallet/GNOME Keyring Secret Service | Credential storage | component-specific free-software licenses |
+
+Verbatim texts used by the in-app license viewer live under `LICENSES/`.
+`RUNTIME_COMPONENTS` in
+`apps/grexa-gui/src/qobjects/settings.rs` maps each component to its SPDX
+identifier and bundled text.
 
 ## Enforcement
 
-- `just deny` runs `cargo-deny check`. CI runs the same command
-  ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml) job
-  `deny`).
-- `just audit` runs `cargo-audit` against the RustSec database for
-  known vulnerabilities.
-- `dependabot.yml` opens PRs for both Rust and GitHub Actions
-  dependency updates on a weekly schedule.
+| Command | Purpose |
+| ------- | ------- |
+| `just deny` | Check licenses, sources, bans, and advisories through `cargo-deny --all-features`. |
+| `just audit` | Check `Cargo.lock` against RustSec through `cargo-audit`. |
+| `just credits` | Regenerate `docs/credits-third-party.md` from `Cargo.lock` through `cargo-about`. |
+| `just preflight` | Run `just ci`, deny, audit, and credits regeneration. |
 
-## Direct dependencies
+CI runs `cargo-deny` in a dedicated job. Dependabot checks Cargo and GitHub
+Actions weekly. Release preparation uses the full preflight gate.
 
-| Crate | License | Notes |
-| ----- | ------- | ----- |
-| `anyhow` | MIT / Apache-2.0 | Used in CLI for error glue. |
-| `clap`, `clap_complete`, `clap_mangen` | MIT / Apache-2.0 | CLI parsing. |
-| `chardetng` | Apache-2.0 / MIT | Mozilla-origin encoding heuristic. |
-| `ctrlc` | MIT | CLI signal handler. |
-| `encoding_rs` | Apache-2.0 / MIT | Mozilla encoding decoder. |
-| `fancy-regex` | MIT | Extended regex engine. |
-| `fluent`, `fluent-bundle` | Apache-2.0 / MIT | Localization runtime. |
-| `globset`, `ignore` | Unlicense / MIT | gitignore + glob handling. |
-| `keyring-core`, `zbus-secret-service-keyring-store`, `secret-service` | Apache-2.0 / MIT | Secret-Service API-key storage. |
-| `quick-xml` | MIT | XML parser for OOXML / ODF. |
-| `regex` | Apache-2.0 / MIT | Fast regex engine. |
-| `serde`, `serde_json`, `serde_repr` | MIT / Apache-2.0 | Serialization. |
-| `tempfile` | Apache-2.0 / MIT | Atomic-rename writes. |
-| `thiserror` | Apache-2.0 / MIT | Error derive macro. |
-| `tracing`, `tracing-subscriber`, `tracing-appender` | MIT | Logging. |
-| `unic-langid` | Apache-2.0 / MIT | BCP-47 parsing. |
-| `unicode-normalization` | Apache-2.0 / MIT | Unicode form conversion. |
-| `ureq` | Apache-2.0 / MIT | Sync HTTP client. |
-| `zip` | MIT | OOXML / ODF / ZIP unpacking. |
+`docs/credits-third-party.md` is generated. Never hand-edit it.
 
-Test/dev dependencies (`assert_cmd`, `predicates`, `proptest`,
-`tempfile`) are also MIT/Apache-2.0/CC0.
+## Adding or updating a dependency
 
-## Transitive dependencies
+1. Confirm the feature belongs in the smallest owning crate.
+2. Check the package source, license expression, maintenance state, and known
+   advisories.
+3. For `grexa-db`, verify the one-way license boundary remains intact.
+4. Update `Cargo.toml`; let Cargo refresh `Cargo.lock`.
+5. Run `just deny` and `just audit`.
+6. Run `just credits`; review the generated attribution delta.
+7. Update `CREDITS.md` or `LICENSES/` when a direct/runtime component changes.
+8. Run `just ci`.
 
-`cargo-deny check` examines the full transitive tree against the same
-allowlist. As of v0.1.0-alpha the tree is clean with one explicit
-clarification:
+When adding an accepted license, update `deny.toml`, `about.toml`, this
+document, and the compatibility rationale in the same change.
 
-- **`ring`** ships with a custom OpenSSL-derived license. The
-  `deny.toml` `[[licenses.clarify]]` entry pins the version Grexa
-  actually consumes (via `ureq`'s rustls feature) and asserts the
-  combined `MIT AND ISC AND OpenSSL` license. The OpenSSL portion is
-  the ChaCha20-Poly1305 implementation, which is compatible with
-  GPL-3.0-only redistribution under SFLC's interpretation; ring's
-  authors have publicly assented to this use. Re-evaluate when ring
-  changes upstream.
+## Reporting a concern
 
-### Runtime / system components
-
-Beyond the Rust crate tree, Grexa relies on system runtimes that are
-provided by downstream packagers rather than vendored into the source
-distribution:
-
-| Component | License |
-| --------- | ------- |
-| Qt 6 (Core, Qml, Gui, Quick) | LGPL-3.0 |
-| KDE Frameworks 6 - Kirigami | LGPL-2.1+ |
-| Poppler (`pdftotext`) | GPL-2.0+ |
-| Docker / Podman CLI | Apache-2.0 |
-| Secret Service backends (KWallet / GNOME Keyring) | various |
-
-The full license texts for these components are bundled under the
-top-level [`LICENSES/`](../LICENSES/) directory and surfaced in-app.
-The `about.toml` accepted-license set and the `deny.toml` allow list
-are kept in sync, so both the crate tree and these system components
-clear the same compatibility bar.
-
-## When adding a new dependency
-
-1. Check the crate's license on crates.io.
-2. If it's not on the allowlist, decide:
-   - Is the functionality essential? Can we vendor a smaller MIT
-     equivalent?
-   - If essential, add the license to `deny.toml` *and* this doc
-     with the justification.
-3. Run `just deny` locally before pushing.
-4. Update `Cargo.lock`; CI will re-verify.
-
-## Audit cadence
-
-- **Weekly**: dependabot PRs (automated review).
-- **Per release**: human pass over `cargo tree --depth 2`; flag any
-  new transitive deps that don't show up in this table.
-- **Per major version bump of `ureq` / `keyring-core`**: re-check the
-  rustls / secret-service backends, since both pull TLS / D-Bus crates
-  whose licenses occasionally shift.
-
-## Security advisories
-
-`cargo-audit` consults <https://github.com/RustSec/advisory-db>. CI
-warns on yanked dependencies but does not fail; failures only fire on
-unaddressed advisories.
-
-History of fixed advisories:
-
-- (none recorded for v0.1.0-alpha)
-
-## Reporting concerns
-
-If a license review turns up a real conflict (e.g. a new transitive
-dep with an incompatible license), open an issue tagged
-`license-review`. The PR that lands a remediation should update
-`deny.toml` and this doc in the same commit.
+Open a normal issue for attribution or license-policy gaps. Use the private
+process in [Security and privacy](SECURITY.md) when the concern also creates a
+security vulnerability.

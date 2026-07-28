@@ -2,7 +2,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 
 <p align="center">
-  <img src="packaging/icons/512x512/apps/com.visorcraft.Grexa.png" alt="Grexa logo" width="250">
+  <img src="packaging/icons/512x512/apps/com.visorcraft.Grexa.png" alt="Grexa logo" width="220">
 </p>
 
 <h1 align="center">Grexa</h1>
@@ -12,192 +12,69 @@
 </p>
 
 <p align="center">
-  A Qt 6 / Kirigami desktop app and scriptable Rust CLI for searching,
-  filtering, previewing, and safely replacing text across local files,
-  documents, and containers.
+  A Qt 6 / Kirigami desktop workbench and scriptable Rust CLI for searching,
+  filtering, previewing, and safely replacing text in local files, documents,
+  and containers.
 </p>
 
-## What is Grexa?
+Grexa is the Linux-native port of
+[Grex](https://github.com/visorcraft/grex). It combines a polished desktop
+workflow with a headless CLI, both backed by the same synchronous Rust search
+engine.
 
-Grexa is a Linux-native port of
-[Grex](https://github.com/visorcraft/grex), rebuilt as a Rust workspace
-with a Qt 6 / Kirigami interface. It is designed for developers and
-power users who need fast local search with predictable filters,
-grep-style automation, and a polished desktop workflow.
+## Why Grexa?
 
-Grexa can:
-
-- Search by literal text or regex, including advanced regex features
-  through a fast `regex` / `fancy-regex` cascade.
-- Respect `.gitignore`, hidden-file settings, glob filters, size
-  filters, binary-file rules, symlinks, and recursive directory
-  options.
-- Preview matches with file path, line, column, encoding, modified
-  time, and sorted result views.
-- Replace text safely with atomic file writes and a replace journal.
-- Search extracted text from OOXML, ODF, and PDF documents.
-- Search inside Docker or Podman containers.
-- Run as either the `grexa` desktop app or the `grexa-cli` command.
-- Chat with an optional, opt-in AI panel (any OpenAI-compatible
-  endpoint) that can summarize the current search results over the
-  matched lines.
-- Store API keys in the Linux Secret Service when optional AI features
-  are configured.
-
-## Plain files all the way down
-
-Most apps bury your data in an opaque blob - a SQLite file, a settings
-database, a binary cache - that only the app can read. Grexa does the
-opposite. Its storage layer is **[grexa-db](https://github.com/visorcraft/grexa-db)**,
-a standalone (`Apache-2.0`) flat-file database engine where **every record is a
-plain Markdown file** and **a query is just the filesystem**. That one decision
-shows up in Grexa two ways.
-
-### It remembers everything - in files you own
-
-Your **recent folders**, **search history**, and **saved search profiles**
-aren't trapped in a binary blob. Each is a human-readable Markdown record under
-`~/.local/share/grexa/db/`, with YAML frontmatter and a schema you can read:
-
-```console
-$ cat ~/.local/share/grexa/db/recent_paths/entry-*.md
----
-path: /home/you/projects/kernel
-added_at: 1718706000000000000
----
-```
-
-So your own data is greppable, diffable, versionable, and portable with the
-tools you already have - `grep` it, track it in `git`, back it up with `cp`,
-sync it with Syncthing. **If Grexa vanished tomorrow, every byte is still
-readable.** No export step, no proprietary format, no lock-in. (Grexa writes
-these records atomically - temp file + rename - so a crash never leaves a torn
-entry.)
-
-### A database browser, built in
-
-Open **Tools → Database** in the desktop app and point it at *any* grexa-db
-directory - including Grexa's own. From there you can list collections, run
-typed filter queries, validate records against their schema, and **materialize
-a query as a real directory of symlinks** you can open in any file manager.
-Point it at `~/.local/share/grexa/db` and you'll browse the very history and
-profiles the app has been quietly writing.
-
-### Benchmarks: where flat files beat a binary database
-
-grexa-db is not trying to out-race SQLite on a million-row `JOIN` - its own
-[design spec](https://github.com/visorcraft/grexa-db/blob/master/docs/grexa-db-design.md)
-says a real database wins past ~250k records. What the flat-file design *buys*
-you is everything below. Every number is measured by a deterministic,
-fixed-seed benchmark holding the **same 5,000 records** three ways: as grexa-db
-records, as a SQLite database, and as a single JSON blob (what Grexa used
-*before* grexa-db).
-
-| # | Property | grexa-db | The "standard" way |
-|---|----------|----------|--------------------|
-| 1 | Records readable with **zero database software** | **5,000 / 5,000** (`cat note.md`) | SQLite: **0** - it's a binary blob |
-| 2 | Tools that can query it with **no driver** | **7** - `grep` `rg` `awk` `find` `git` `sed` `fzf` | SQLite: **1** (`sqlite3`, SQL only) |
-| 3 | A one-field edit is a **human-reviewable diff** | **2-line** `git diff` | SQLite: `Binary files differ` - **0** reviewable lines |
-| 4 | **Incremental backup** of that one-field edit | **195 bytes** re-transmitted | SQLite: **4,064 bytes** - ≈ **21× more** |
-| 5 | **Blast radius** of one corrupted byte | **1 record** lost; **4,999** still readable | SQLite: header byte → **whole DB unreadable** (0/5,000) |
-| 6 | Engine **footprint / supply chain** | **19** pure-Rust crates, **0** C libraries | SQLite: a ~1.6 MB C library linked in + a C build step |
-| 7 | **Peak RAM** to scan-filter **40,000** records | **7.7 MB** - streams one record at a time | Load-the-blob: **53 MB** - ≈ **7× more** |
-| 8 | **Open + first answer** | **0.8 ms** | Parse-the-blob: **30 ms** - ≈ **37× slower** |
-| 9 | **Crash mid-write** (`SIGKILL`) | **0** partial records across **47,000** writes | In-place JSON rewrite: file truncated to **0 bytes** |
-| 10 | **Merge** two datasets | `cp -r` - **0** lines of SQL, ~2 ms | SQLite: `ATTACH` + `INSERT…SELECT`, or dump + reload |
-| 11 | Query results are **real directories** | **983** symlinks in `views/by-rating/5/`, usable by `ls`/`find`/`du`/`fzf` | SQL views: **0** filesystem objects |
-| 12 | **Add a new field** | **0** `ALTER TABLE`, **0** rows rewritten; old records still query | SQLite: `ALTER TABLE` + a migration |
-
-Reproduce all of it (deterministic - fixed seed, writes `bench-results.json`):
-
-```bash
-git clone https://github.com/visorcraft/grexa-db && cd grexa-db
-cargo build --release -p grexa-db-cli
-python3 scripts/bench.py          # optional: N=20000 N_BIG=100000 python3 scripts/bench.py
-```
-
-> Absolute numbers are from one CachyOS / AMD box (5,000 records; the memory
-> test uses 40,000). Your machine's numbers will differ - the **ratios** are
-> the point, and the script regenerates them on your hardware.
-
-### Scaling
-
-The table above is grexa-db's behavior *today*. Read+parse dominates query time
-and **now runs in parallel across all cores** (shipped in grexa-db; results are
-byte-identical to the serial path, verified). Measured on **200,000 records**
-(16-core box):
-
-| Operation | Before (serial) | After (parallel) | Gain |
-|---|---|---|---|
-| selective filter (100 hits) | 1005 ms | **208 ms** | **4.8×** |
-| broad filter (80k hits) | 1017 ms | **276 ms** | **3.7×** |
-| list all records | 992 ms | **375 ms** | **2.6×** |
-| `order_by` (sort 200k) | 1669 ms | **851 ms** | **2.0×** |
-
-A **secondary index** is also shipped - and wired into the **Database browser**,
-which holds it in memory and keeps it fresh via `inotify`. It's a derived
-`.grexa-index/` sidecar (rebuildable - delete it and every record is still
-intact). Held that way, a **selective query drops from 188 ms to 0.63 ms
-(297×)**, byte-identical to a scan, with verify-on-read so a stale index can
-never return a wrong match and a selectivity guard so broad queries fall back to
-the parallel scan. The directory walk is linear to 1M records (no cliff). A
-frontmatter fast-path (→ ~10× on the cold scan) remains prototyped. Full method,
-numbers, and design in grexa-db's
-[scaling R&D](https://github.com/visorcraft/grexa-db/blob/master/docs/grexa-db-scaling-rnd.md).
-
-## Setup
-
-### Requirements
-
-- Linux on Wayland or X11. KDE Plasma 6 is the primary desktop target.
-- Qt 6.6+ and Kirigami 6 for the GUI.
-- Rust 1.96+ only when building from source.
-- Optional: `pdftotext` from Poppler for PDF search.
-- Optional: Docker or Podman for container search.
-- Optional: KWallet or GNOME Keyring for AI-provider keys.
-
-### Install development packages
-
-Use your distro's package manager before building from source. The
-development packages also satisfy the GUI runtime requirements on most
-systems.
-
-| Distro | Command |
-| ------ | ------- |
-| Debian / Ubuntu | `sudo apt install rustc cargo qt6-base-dev qt6-declarative-dev qt6-tools-dev clang poppler-utils` |
-| Fedora | `sudo dnf install rust cargo qt6-qtbase-devel qt6-qtdeclarative-devel kf6-kirigami-devel clang poppler-utils` |
-| Arch / Manjaro | `sudo pacman -S rust qt6-base qt6-declarative kirigami clang poppler` |
-| openSUSE | `sudo zypper install rust cargo qt6-base-devel qt6-declarative-devel kirigami6-devel clang poppler-tools` |
-
-Ubuntu 24.04 does not currently package the Qt 6/KF6 Kirigami QML
-runtime used by the GUI. The Debian / Ubuntu package list above is
-enough for source builds and CLI development; run the GUI on a distro
-that ships Kirigami 6, or install Kirigami 6 from KDE/distro packages
-when available.
-
-The repository uses [`just`](https://just.systems/) for common tasks.
-If it is not installed, the equivalent `cargo` commands still work.
-
-```bash
-cargo install just
-```
+- **Precise search**: literal or regex matching, whole-word mode,
+  case/diacritic controls, Unicode normalization, culture-aware comparison,
+  file globs, directory exclusions, size filters, `.gitignore`, hidden files,
+  and symlink controls.
+- **Useful results**: content and file views, line and column numbers,
+  match highlighting, context preview, sorting, result-within-result filtering,
+  tabs, export, editor launch, and file-manager reveal.
+- **Safe replace**: preview and confirmation in the GUI, `--dry-run` in the
+  CLI, encoding-aware atomic writes, permission preservation, regex capture
+  expansion, and an interruption journal.
+- **Document search**: DOCX, XLSX, PPTX, ODT, ODS, ODP, ZIP, RTF, and PDF
+  text extraction.
+- **Container search**: Docker and Podman support with in-container `grep` and
+  a local mirror fallback for minimal images.
+- **Optional AI help**: an explicitly enabled OpenAI-compatible chat panel,
+  including bounded summaries of visible matches. Credentials stay in the
+  Linux Secret Service.
+- **Plain-file app data**: recent paths, history, and profiles are Markdown
+  records managed by [grexa-db](https://github.com/visorcraft/grexa-db), not an
+  opaque application database.
+- **Linux-native integration**: Qt 6, Kirigami, Wayland/X11, XDG paths,
+  desktop notifications, `org.freedesktop.FileManager1`, and common Linux
+  editors.
 
 ## Install
 
-### From a GitHub Release
+[GitHub Releases](https://github.com/visorcraft/grexa/releases) publish Linux
+x86_64 artifacts. Choose the native package for your distribution when
+available:
 
-Download the latest `grexa-<version>-linux-x86_64.tar.gz` from the
-repository's GitHub Releases page, then unpack it:
+| Artifact | Best for | Install or run |
+| -------- | -------- | -------------- |
+| AppImage | Portable GUI | `chmod +x Grexa-*.AppImage && ./Grexa-*.AppImage` |
+| `.pkg.tar.zst` | Arch / CachyOS | `sudo pacman -U grexa-*.pkg.tar.zst` |
+| `.deb` | Debian-family systems with Kirigami 6 | `sudo apt install ./grexa_*.deb ./grexa-cli_*.deb` |
+| `.rpm` | The Fedora release matching the artifact's Qt ABI | `sudo dnf install ./grexa-*.rpm` |
+| `.flatpak` | Sandboxed desktop install | `flatpak install --user ./grexa.flatpak` |
+| `.tar.gz` | Unpackaged tree on a compatible Qt/Kirigami system | unpack and run `bin/grexa` or `bin/grexa-cli` |
+
+The AppImage and tarball are not package-manager installations. For the
+tarball, the host must provide compatible Qt/Kirigami libraries. Release
+tarballs are built on Arch and are not a universal Linux binary:
 
 ```bash
 tar -xzf grexa-<version>-linux-x86_64.tar.gz
 cd grexa-<version>-linux-x86_64
-
 ./bin/grexa
 ./bin/grexa-cli --help
 ```
 
-To install the archive into `/usr/local`:
+To install that tarball under `/usr/local`:
 
 ```bash
 sudo install -Dm755 bin/grexa /usr/local/bin/grexa
@@ -205,7 +82,13 @@ sudo install -Dm755 bin/grexa-cli /usr/local/bin/grexa-cli
 sudo cp -a share/. /usr/local/share/
 ```
 
-### From source
+See [Building and testing](docs/build-and-test.md) for distro prerequisites,
+source builds, Flatpak/AppImage/package commands, and GUI troubleshooting.
+
+## Build from source
+
+The repository pins Rust 1.96. The GUI also needs Qt 6, Kirigami 6, and a C++
+toolchain. The CLI does not need Qt.
 
 ```bash
 git clone https://github.com/visorcraft/grexa.git
@@ -218,104 +101,171 @@ target/release/grexa
 target/release/grexa-cli --help
 ```
 
-CLI-only builds do not need Qt:
+Without [`just`](https://just.systems/), use the equivalent Cargo commands:
+
+```bash
+cargo test --workspace
+cargo build --workspace --release
+```
+
+CLI-only:
 
 ```bash
 cargo build -p grexa-cli --release
 target/release/grexa-cli ~/code TODO
 ```
 
-### Packaging
+## Desktop quick start
 
-Packaging recipes live under [`packaging/`](packaging/), including
-Flatpak, AppImage, Debian, Fedora, openSUSE, and Arch/CachyOS
-metadata. See [docs/build-and-test.md](docs/build-and-test.md) for
-packaging commands and release automation details.
+1. Launch `grexa`.
+2. Enter a directory and search term. Toggle Regex or Case Sensitive if needed.
+3. Open the filter drawer for file globs, excluded directories,
+   `.gitignore`, hidden files, documents, system paths, recursion, and
+   symlinks. The CLI exposes the additional size and Unicode controls.
+4. Select **Content** for one row per matching line or **Files** for one row per
+   file.
+5. Press **Search**. Use the result filter to narrow the already loaded rows.
+6. Select a result and press Space for context or Enter to open it in the
+   configured editor.
 
-## Tweak Grexa
+Useful desktop surfaces:
 
-### Common CLI workflows
+- Search tabs retain independent forms and result snapshots during the session.
+- History records completed searches. Opening an entry restores the form but
+  does not run it automatically.
+- Profiles save named search configurations.
+- Regex Builder tests patterns against sample text before using them.
+- Tools → Database browses any grexa-db directory, including Grexa's own data
+  at `$XDG_DATA_HOME/grexa/db`.
+- Settings auto-save appearance, search defaults, integrations, editor,
+  replace, accessibility, privacy, and diagnostics options.
 
-```bash
-# Basic content search
-grexa-cli ~/code TODO
+Full walkthrough: [Using Grexa](docs/usage.md).
 
-# Regex search
-grexa-cli ~/code 'fn\s+\w+_test' --regex --case-sensitive
+## CLI quick start
 
-# JSON output for scripts
-grexa-cli ~/code TODO --format json | jq '.[] | .full_path'
+Search syntax:
 
-# Search inside a Podman container
-grexa-cli /etc TODO --container web --runtime podman
-
-# Generate shell completions
-grexa-cli completions bash > ~/.local/share/bash-completion/completions/grexa-cli
+```text
+grexa-cli [OPTIONS] <PATH> <TERM>
+grexa-cli replace [OPTIONS] <PATH> <TERM> <REPLACEMENT>
 ```
 
-### Desktop settings
+Examples:
 
-The GUI settings page auto-saves changes. Grexa stores local app data
-under standard XDG locations:
+```bash
+# Literal search. Default output: path:line:column:content
+grexa-cli ~/code TODO
+
+# Regex, whole words, Rust and Markdown only
+grexa-cli ~/code 'TODO|FIXME' --regex --whole-word \
+  --match-files '*.rs|*.md'
+
+# Respect ignore files and include hidden paths
+grexa-cli ~/code secret --gitignore --include-hidden
+
+# Script with JSON
+grexa-cli ~/code TODO --format json | jq -r '.[].full_path'
+
+# Preview a replacement, then apply it
+grexa-cli replace ~/code 'old_(\w+)' 'new_$1' --regex --dry-run
+grexa-cli replace ~/code 'old_(\w+)' 'new_$1' --regex
+
+# Search a running Podman container
+grexa-cli /etc/nginx TODO --container web --runtime podman
+```
+
+Exit codes are grep-like: `0` means matches or modifications, `1` means none,
+and `2` means an error. Run `grexa-cli --help` or read the
+[complete reference](docs/reference.md).
+
+## Defaults and important limits
+
+- Searches recurse by default.
+- Matching is case-insensitive, ordinal, and diacritic-sensitive by default.
+- Hidden paths, system/dependency directories, binary/documents, symlink
+  traversal, and `.gitignore` handling are off until enabled.
+- Without `--max-results`, one search returns at most 1,000,000 matching rows.
+- A single file larger than 512 MiB is not read into memory.
+- Replace is for local text files. Container and archive/document replacement
+  are not exposed in the GUI or CLI.
+- The `--use-index` and `--no-index` compatibility flags are accepted, but
+  Baloo candidate seeding is not wired into the search path yet.
+- AI is off by default. Grexa makes no AI request until the user enables it and
+  initiates a chat or endpoint test.
+
+See [Reference: resource bounds](docs/reference.md#resource-bounds) for every
+enforced cap and timeout.
+
+## Data, privacy, and portability
+
+Grexa follows the XDG Base Directory specification:
 
 | Data | Default path |
 | ---- | ------------ |
 | Settings | `~/.config/grexa/settings.json` |
-| Recent paths, history, profiles | `~/.local/share/grexa/` |
-| Logs and replace journal | `~/.local/state/grexa/` |
+| Recent paths | `~/.local/share/grexa/db/recent_paths/` |
+| Search history | `~/.local/share/grexa/db/search_history/` |
+| Search profiles | `~/.local/share/grexa/db/search_profiles/` |
+| CLI log | `~/.local/state/grexa/grexa.log` |
+| GUI logs | `~/.local/state/grexa/grexa-gui.*.log` |
+| Replace journal | `~/.local/state/grexa/replace-journal.json` |
+| Container mirrors | `~/.cache/grexa/container-mirrors/` |
 
-Set `GREXA_LOG` to tune logging:
+Recent paths, history, and profiles are plain Markdown records with YAML
+frontmatter. You can inspect, back up, diff, or version them with ordinary
+filesystem tools. Legacy Grexa JSON stores are migrated to these collections
+on first use and renamed with a `.bak` suffix.
 
-```bash
-GREXA_LOG=debug grexa
-```
+AI API keys are not stored in these files. They live in the system Secret
+Service under `com.visorcraft.Grexa.ai`, keyed by endpoint. Grexa ships no
+telemetry. Read [Security and privacy](docs/SECURITY.md) for the exact outbound
+traffic, subprocess, logging, and replacement threat model.
 
-### Optional integrations
-
-- PDF search uses `pdftotext` when available.
-- Container search uses Docker or Podman from `PATH`.
-- AI-provider keys are stored in the system Secret Service, not in QML
-  or plain-text config files.
-- Localization currently ships English, German, and Japanese catalogs.
-
-Full usage details are in [docs/usage.md](docs/usage.md). CLI flags,
-settings, paths, and keyboard shortcuts are in
-[docs/reference.md](docs/reference.md).
-
-## Contribute
-
-Contributions are welcome through the standard fork-and-pull-request
-workflow. Start with [CONTRIBUTING.md](CONTRIBUTING.md), which covers
-local setup, coding standards, tests, documentation expectations,
-localization rules, dependency policy, and pull request requirements.
-
-The short version:
-
-```bash
-git clone https://github.com/<you>/grexa.git
-cd grexa
-git checkout -b fix-or-feature-name
-
-just ci
-```
-
-Before opening a pull request, include focused tests for behavior
-changes, update relevant docs, and make sure `just ci` passes.
+The Flatpak can access the home directory, `/run/media`, and paths granted
+through the desktop portal. It intentionally has no Docker or Podman socket
+access; use a native package, AppImage, or compatible tar build for container
+search.
 
 ## Documentation
 
-- [docs/features.md](docs/features.md) - feature inventory
-- [docs/usage.md](docs/usage.md) - user workflows
-- [docs/reference.md](docs/reference.md) - settings and CLI reference
-- [docs/build-and-test.md](docs/build-and-test.md) - build, test, and packaging guide
-- [docs/architecture.md](docs/architecture.md) - workspace architecture
-- [docs/gui-design.md](docs/gui-design.md) - Qt / cxx-qt bridge design
-- [docs/translations.md](docs/translations.md) - localization workflow
-- [docs/SECURITY.md](docs/SECURITY.md) - threat model and disclosure policy
-- [docs/feature-parity.md](docs/feature-parity.md) - Grex / Grexa parity matrix
+Start at the [documentation index](docs/README.md).
+
+| Need | Document |
+| ---- | -------- |
+| Learn the desktop and CLI workflows | [Using Grexa](docs/usage.md) |
+| Find flags, settings, paths, formats, shortcuts, and limits | [Reference](docs/reference.md) |
+| See everything Grexa supports | [Features](docs/features.md) |
+| Install, build, test, package, or troubleshoot | [Building and testing](docs/build-and-test.md) |
+| Understand crate boundaries and runtime flows | [Architecture](docs/architecture.md) |
+| Work on Qt/QML and cxx-qt | [GUI design](docs/gui-design.md) |
+| Translate the app | [Translations](docs/translations.md) |
+| Migrate concepts and data from Grex | [Migration from Grex](docs/migration-from-grex.md) |
+| Review privacy or report a vulnerability | [Security and privacy](docs/SECURITY.md) |
+| Contribute | [CONTRIBUTING.md](CONTRIBUTING.md) |
+
+## Contributing and support
+
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), keep changes
+focused, update tests and docs together, and run:
+
+```bash
+just ci
+```
+
+- Bugs and feature requests:
+  [GitHub Issues](https://github.com/visorcraft/grexa/issues)
+- Security reports: use
+  [GitHub private vulnerability reporting](docs/SECURITY.md#reporting-a-vulnerability)
+- Third-party attribution: [CREDITS.md](CREDITS.md) and the generated
+  [third-party license supplement](docs/credits-third-party.md)
 
 ## License
 
-Grexa is licensed under GPL-3.0-only, matching the upstream Grex
-project. See [LICENSE](LICENSE) for the full text and
-[CREDITS.md](CREDITS.md) for third-party attribution.
+Grexa is licensed under
+[GPL-3.0-only](https://spdx.org/licenses/GPL-3.0-only.html). See
+[LICENSE](LICENSE).
+
+The separately maintained grexa-db engine is Apache-2.0 and is consumed as a
+pinned dependency. Its permissive license is intentional; Grexa's application
+and other workspace crates remain GPL-3.0-only.

@@ -41,9 +41,9 @@ audit:
 # Requires `cargo install cargo-about --features cli`.
 credits:
     cargo about generate about.hbs --output-file docs/credits-third-party.md
-    # cargo-about embeds some upstream license texts with CRLF; normalize to
-    # LF so the include_str!'d bundle renders cleanly in the in-app viewer.
-    sed -i 's/\r$//' docs/credits-third-party.md
+    # cargo-about embeds upstream license texts with CRLF and trailing spaces;
+    # normalize both so the include_str!'d bundle and generated Markdown stay clean.
+    sed -i -e 's/\r$//' -e 's/[[:blank:]]*$//' docs/credits-third-party.md
     @echo "wrote docs/credits-third-party.md"
 
 # Generate and stamp the man page into target/man/.

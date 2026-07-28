@@ -654,7 +654,7 @@ mod tests {
 
         assert!(entries.len() > 200);
         assert!(entries.iter().any(|entry| {
-            entry.name == "cxx-qt" && entry.version == "0.8.1" && entry.license == "Apache-2.0"
+            entry.name == "cxx-qt" && entry.version == "0.9.1" && entry.license == "Apache-2.0"
         }));
         assert!(entries.iter().any(|entry| {
             entry.name == "aho-corasick"

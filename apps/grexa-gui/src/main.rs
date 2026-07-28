@@ -3,22 +3,22 @@
 
 //! Grexa GUI shell entry point.
 //!
-//! Uses `cxx-qt` 0.8 for the Rust ⇄ Qt bridge. The QObjects defined in
+//! Uses `cxx-qt` for the Rust ⇄ Qt bridge. The QObjects defined in
 //! `qobjects/` are auto-registered with QML under
 //! `com.visorcraft.Grexa 1.0` by the `qml_module()` declaration in
 //! `build.rs`. The QML files in `apps/grexa-gui/qml/` are bundled into
 //! the binary via Qt's resource system and loaded from
-//! `qrc:/qt/qml/com/visorcraft/Grexa/Main.qml`.
+//! `qrc:/qt/qml/com/visorcraft/Grexa/qml/Main.qml`.
 //!
 //! Runtime contract:
 //!
-//! 1. Initialize structured logging (mirrors `grexa-cli`).
-//! 2. Build the shared `Workspace` and install it via
-//!    `qobjects::install_workspace`.
-//! 3. Initialize cxx-qt's static initializers
+//! 1. Initialize structured logging and the single-instance guard.
+//! 2. Initialize cxx-qt's static initializers
 //!    (`cxx_qt::init_crate!` + `cxx_qt::init_qml_module!`).
+//! 3. Build the shared `Workspace` and install it via
+//!    `qobjects::install_workspace`.
 //! 4. Boot a `QGuiApplication` + `QQmlApplicationEngine`, load
-//!    `qrc:/qt/qml/com/visorcraft/Grexa/Main.qml`, run the event loop.
+//!    `qrc:/qt/qml/com/visorcraft/Grexa/qml/Main.qml`, run the event loop.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -146,7 +146,7 @@ fn main() {
         let flag = load_failed.clone();
         engine
             .on_object_creation_failed(move |eng, url| {
-                // cxx-qt-lib 0.8 exposes neither `QQmlComponent::errors()` nor a
+                // cxx-qt-lib exposes neither `QQmlComponent::errors()` nor a
                 // message-handler hook, so we cannot print the individual
                 // `QQmlError` lines here. The next-most-useful diagnostic for a
                 // *packaged* build — where a failed load almost always means a
@@ -283,7 +283,8 @@ fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
     guard
 }
 
-/// Try to acquire an exclusive `flock` on `$XDG_RUNTIME_DIR/grexa.lock`.
+/// Try to acquire an exclusive `flock` on
+/// `$XDG_RUNTIME_DIR/grexa/grexa.lock`.
 /// Returns:
 /// * `Some(File)` — we hold the lock; keep the file alive for the
 ///   process's lifetime.

@@ -1,212 +1,279 @@
 # Grexa Features
 
-A user-facing inventory of what Grexa does today (v1.0). The
-source-of-truth audits live in `docs/grex-*-audit.md`; this doc is
-the consumer-shaped view. The Grex ↔ Grexa parity matrix lives in
-[feature-parity.md](feature-parity.md).
+This inventory describes behavior exposed by the current desktop application
+and CLI. Lower-level APIs that are not reachable from either user interface
+are labeled explicitly.
 
-## Search
+For workflows, see [Using Grexa](usage.md). For exact flags and limits, see
+[Reference](reference.md). Upstream status lives in
+[Grex to Grexa feature parity](feature-parity.md).
 
-### Modes
+## Search engine
 
-- **Text**: literal substring matching, case-sensitive or
-  case-insensitive (default). Configurable string-comparison mode
-  (`ordinal`, `current-culture`, `invariant-culture`), Unicode
-  normalization (`form-c`, `form-d`, `form-kc`, `form-kd`), and
-  optional diacritic stripping (`café` → `cafe`).
-- **Regex**: PCRE-style with a two-engine cascade. Simple patterns use
-  the fast Rust `regex` crate; lookaround / backreference / conditional
-  groups automatically fall through to `fancy-regex`. The engine choice
-  is visible in `tracing` logs.
+### Literal search
 
-### Result modes
+- Case-insensitive by default, with case-sensitive mode.
+- Whole-word matching through one shared adjacent-character rule.
+- Ordinal, current-culture, and invariant-culture comparison.
+- ICU/BCP-47 culture selection.
+- Unicode NFC, NFD, NFKC, and NFKD normalization.
+- Optional diacritic removal.
+- Grapheme-aware mapping from normalized matches back to original byte and
+  character offsets.
 
-- **Content** - one row per matching line: file name, line number,
-  column number, snippet, full path, match count.
-- **Files** - one row per matching file with aggregated counts plus
-  first-match preview, encoding label, size, modified time.
+The GUI exposes literal, case, and whole-word controls directly. Advanced
+comparison, normalization, diacritic, and culture controls are available from
+the CLI and persisted settings schema.
 
-### Filters
+### Regex search
 
-- Respect `.gitignore` (and `.ignore`, global git excludes) without
-  requiring a real git repo.
-- Include / exclude hidden files
-- Include / exclude system directories (`.git`, `vendor`,
-  `node_modules`, etc., plus Linux pseudo filesystems `/proc`, `/sys`,
-  `/dev`, `/run`)
-- Include / exclude binary files (with extension allowlist)
-- Include / exclude symbolic links
-- Recurse subdirectories
-- File-name globs (`*.rs|*.toml|-target*`, with `-` prefix excluding)
-- Directory excludes (`bin,obj,target,node_modules`, or regex when the
-  string contains regex metacharacters)
-- Size limit (`Less` / `Equal` / `Greater` than N KB / MB / GB)
+- Fast Rust `regex` engine for linear-time patterns.
+- `fancy-regex` extended engine for lookaround and backreferences.
+- Automatic engine selection.
+- CLI engine pinning with `--regex-engine fast|extended`.
+- Per-line time, backtrack, match-count, and preview limits.
+- Full-haystack capture re-query for correct lookaround replacement.
 
-### Search execution
+### Filesystem traversal
 
-- **Cooperative cancellation** via `CancelToken`. Every walker entry
-  and every 64th line in a file checks the flag. Partial results are
-  preserved on cancel; `SearchSummary.cancelled = true` flags the
-  truncation.
-- **Streaming progress** via `ProgressEvent` (`FileScanned`,
-  `FileSkipped`, `Match`). The GUI uses these to populate the table
-  model batched.
-- **Stable, deterministic results**: sort defaults (`Name asc` for
-  content, `Matches desc` for files) plus stable tie-breakers across
-  parallel runs.
+- Recursive search by default.
+- Optional `.gitignore`, `.ignore`, and global Git exclude handling without
+  requiring a Git repository.
+- Hidden-path, dependency/system-directory, and symlink controls.
+- Root safety for `/proc`, `/sys`, `/dev`, and `/run`.
+- File-name include/exclude globs.
+- Directory-name lists or root-relative regex exclusions.
+- Less/equal/greater file-size filters in KB, MB, or GB.
+- Exact, case-sensitive Linux path behavior.
 
-## Searchable document support
+### Results
 
-When `--include-binary` is set, Grexa transparently extracts text
-from:
+- Content mode: one row per matching line.
+- Files mode: one row per matching file with aggregate count, first match,
+  encoding, size, extension, and modification time.
+- 1-based line and Unicode character columns.
+- Stable sorting with deterministic tie-breakers.
+- Loaded-result literal or regex filtering.
+- Context preview with 1 through 20 lines before and after.
+- CSV, JSON, and text from the CLI.
+- CSV, JSON, and Markdown export from the GUI.
+- Copy path, file name, relative path, line content, or `path:line`.
+- Open at line in common editors.
+- Reveal with `org.freedesktop.FileManager1`, with `xdg-open` fallback.
+- Move to freedesktop Trash through `gio`.
 
-- **OOXML**: `.docx`, `.xlsx`, `.pptx`
-- **ODF**: `.odt`, `.ods`, `.odp`
-- **ZIP**: file names + every textual entry inside
-- **PDF**: via `pdftotext` (Poppler)
-- **RTF**: control-word stripping in pure Rust
+### Cancellation and progress
 
-Search results from these formats list the container file path so
-"open in editor" opens the original document, not the extracted text.
+- Cooperative `CancelToken` shared by search and replace.
+- Typed progress events for scanned, skipped, and matched files.
+- Ctrl-C cancellation in the CLI.
+- Stop button and Escape cancellation in the GUI.
+- Partial search results remain available after cancellation.
+- GUI row delivery is coalesced to avoid flooding the Qt event loop.
 
-## Encoding detection
+## Searchable documents
 
-Three-tier cascade:
+`--include-binary` and the GUI document toggle enable:
 
-1. **BOM**: UTF-8, UTF-8 BOM, UTF-16 LE/BE, UTF-32 LE/BE.
-2. **Strict UTF-8 fast path** for BOM-less files.
-3. **`chardetng` heuristic** for legacy encodings (Windows-1252,
-   Shift-JIS, etc.).
+| Format | Extraction |
+| ------ | ---------- |
+| DOCX | Word document XML |
+| XLSX | Shared strings and comments |
+| PPTX | Slide XML |
+| ODT / ODS / ODP | ODF content XML |
+| ZIP | Entry names and recognized text entries |
+| RTF | Best-effort control-word stripping |
+| PDF | Poppler `pdftotext` |
 
-Each match row reports the detected encoding label. Invalid bytes
-fall back to lossy UTF-8 with U+FFFD replacements so search never
-crashes on malformed input.
+Results retain the original document path. Document extraction is read-only;
+replace does not rewrite archive/document formats.
 
-## Safe replace
+Extraction is bounded by entry-count, entry-size, output-size, and PDF timeout
+limits documented in [Reference: resource bounds](reference.md#resource-bounds).
 
-- **Atomic same-filesystem temp-file-then-rename** via
-  `tempfile::NamedTempFile::persist`.
-- **Capture-group regex replace** with `$1`, `$name` references.
-- **Permission preservation**.
-- **CRLF / no-final-newline preservation** through full-buffer
+## Encoding
+
+Detection order:
+
+1. UTF-8, UTF-16, or UTF-32 byte-order mark.
+2. Strict UTF-8.
+3. `chardetng` heuristic with `encoding_rs` decoding.
+4. Lossy UTF-8 fallback for malformed input.
+
+Replace round-trips UTF-8, UTF-8 BOM, UTF-16 LE/BE, and supported legacy
+encodings. UTF-32 is detected for display but is not decoded or rewritten as
+UTF-32.
+
+## Replace
+
+- Reuses the exact options from the completed preview search in the GUI.
+- Shares the CLI's search flags through one argument/options builder.
+- Supports literal and regex capture replacement.
+- Preserves CRLF/LF shape and final-newline state through whole-buffer
   substitution.
-- **Encoding round-trip**: UTF-16 LE/BE files stay UTF-16; UTF-8
-  files stay UTF-8; legacy encodings detected via `chardetng` are
-  re-encoded through `encoding_rs`.
-- **Crash-recovery journal** at `$XDG_STATE_HOME/grexa/replace-journal.json`
-  - every replaced file is logged before the operation completes, so
-  a SIGKILL leaves an accurate "modified-so-far" list behind.
-- **No silent backup fallback**. If the user wants undo, they snapshot
-  the tree before launching the replace.
-- **Disabled for containers and for ZIP / OOXML / ODF / PDF / RTF
-  archives** in v1.0.
+- Preserves file permissions.
+- Refuses files above the shared 512 MiB read ceiling.
+- Writes a temporary file in the destination directory and atomically persists
+  it.
+- Records modified and failed paths in a replace journal.
+- Clears the journal after clean completion.
+- Surfaces a residual journal at GUI startup when enabled.
+- Caps files, matches per file, and extended-regex CPU time.
+
+There is no backup-content or undo store. Users needing rollback should use
+version control or filesystem snapshots.
+
+The library contains a container copy-out/replace/copy-back path, but container
+replacement is not exposed in the GUI or CLI. Documents and archives are
+search-only.
+
+## Desktop workbench
+
+- Qt 6 and Kirigami on Wayland or X11.
+- Search tabs with independent form and result snapshots.
+- Eight-tab cap and bounded inactive snapshot memory.
+- Search path history with type-ahead selection and removal.
+- Search History page with filtering and form restoration.
+- Named Profiles page with load and delete actions.
+- Regex Builder with presets, errors, highlights, and match list.
+- Context preview dialog.
+- Filter drawer and optional AI drawer.
+- Content/Files mode switching and sortable result headers.
+- Appearance themes, including system, light, dark, OLED black, and Grex
+  palette variants.
+- Auto-saved settings with visible success/failure status.
+- Desktop completion notifications.
+- Single-instance lock with existing-window activation.
+- In-app About, Credits, third-party licenses, and GPL text.
+
+## Plain-file database
+
+Grexa uses the separately maintained,
+[Apache-2.0 grexa-db engine](https://github.com/visorcraft/grexa-db) for:
+
+- recent paths;
+- completed search history;
+- saved search profiles.
+
+Each record is Markdown with YAML frontmatter under
+`$XDG_DATA_HOME/grexa/db/`. Schemas are `schema.md` files. Writes are atomic,
+and legacy Grexa JSON stores migrate on first use.
+
+The **Tools → Database** page can open any grexa-db root and:
+
+- list collections and schemas;
+- inspect record frontmatter;
+- filter typed fields;
+- validate records;
+- materialize filesystem views as symlink directories;
+- list and delete views.
+
+Derived secondary indexes accelerate selective queries and can be rebuilt from
+the source records.
 
 ## Container search
 
-- **Docker** detected via `$DOCKER_HOST` and `/var/run/docker.sock`,
-  with CLI fallback when only the binary is on `$PATH`.
-- **Rootless Podman** detected via `$XDG_RUNTIME_DIR/podman/podman.sock`.
-- **Rootful Podman** via `/run/podman/podman.sock`, with CLI fallback.
-- **Direct grep** inside the container via argv-array `exec` -
-  immune to shell-quoting bugs on paths / patterns containing spaces,
-  colons, globs, or newlines.
-- **Archive mirror fallback** when the container has no `grep` -
-  `docker cp` / `podman cp` to
-  `$XDG_CACHE_HOME/grexa/container-mirrors/<runtime>/<id>/<unix-ts>`
-  and run the local search engine over the mirrored tree.
-- **Container path display** even when mirroring is used; the
-  `used_mirror` flag on the summary lets the UI badge the result.
-- **Writable container replace** is implemented at the library level
-  (`grexa_containers::replace_container`): files are copied out, replaced
-  locally, and copied back. GUI and CLI integration are still pending, so
-  the feature is not yet exposed to end users.
+- Docker detection through `DOCKER_HOST`, standard socket, and CLI.
+- Rootless Podman detection through `$XDG_RUNTIME_DIR`.
+- Rootful Podman detection through `/run/podman/podman.sock`.
+- Running-container selection by ID or name.
+- Direct `grep` through an argv array, never a shell.
+- NUL-delimited output where supported, with BusyBox retry.
+- Whole-word and maximum-result handling.
+- Unicode/culture options through mirror fallback when direct grep cannot
+  express them.
+- Local archive mirror fallback when `grep` is absent.
+- Container-path rewriting after mirror search.
+- 30-second command timeouts and bounded stdout/stderr.
+- Automatic stale-mirror cleanup.
 
-## AI Search Chat
+Local filesystem traversal flags do not apply to the direct in-container path.
+See [Using Grexa: container search](usage.md#container-search).
 
-- OpenAI-compatible HTTP shape only (`POST /v1/chat/completions`,
-  `GET /v1/models`).
-- Endpoint normalization handles bare hosts, `/v1`, `/v1/chat/completions`,
-  and trailing slashes uniformly.
-- Model discovery via `/v1/models` when the user doesn't specify a model.
-- **API keys stored in the system keyring** (`org.freedesktop.secrets`
-  on Linux) keyed by endpoint, so multiple endpoints don't share a key.
-- **Opt-in**: `DefaultSettings.ai_search_enabled` defaults to `false`.
-- **No telemetry**; see [SECURITY.md](SECURITY.md).
-- See [ai-provider-scope.md](ai-provider-scope.md) for the full
-  in-scope / out-of-scope matrix.
+## AI Search
 
-## Context preview
+- Explicit `ai_search_enabled` opt-in, off by default.
+- OpenAI-compatible `GET /v1/models` and `POST /v1/chat/completions`.
+- Endpoint normalization for a bare base URL, `/v1`, or
+  `/v1/chat/completions`.
+- Optional model discovery.
+- Synchronous `ureq` transport with no redirect following.
+- 90-second request and 4 MiB response limits.
+- Bearer credentials only over HTTPS or loopback HTTP.
+- One key per canonical endpoint in the Linux Secret Service.
+- No plaintext fallback.
+- One in-flight request at a time.
+- Single-turn chat requests.
+- Bounded match summaries with context and `path:line` citations.
+- Visible truncation disclosure when rows or evidence do not fit.
 
-- Configurable before/after line counts (1-20 each, clamped at the
-  service boundary).
-- Returns line numbers + content + match-line index for the UI.
-- Encoding-aware reading (UTF-8 / UTF-8 BOM / UTF-16 / chardetng
-  fallback).
-- Tolerates empty files, out-of-range line numbers, and missing files.
-
-## Settings, history, profiles, recent paths
-
-- Settings JSON at `$XDG_CONFIG_HOME/grexa/settings.json`.
-- Recent paths at `$XDG_DATA_HOME/grexa/db/recent_paths/` (grexa-db backed;
-  case-sensitive dedupe, type-ahead filter).
-- Search history at `$XDG_DATA_HOME/grexa/search_history.json` (cap
-  20, 7-field dedupe key matching Grex byte-for-byte).
-- Search profiles at `$XDG_DATA_HOME/grexa/search_profiles.json`
-  (case-insensitive name, move-to-top on upsert).
-- Atomic write + Grex JSON import compatibility.
-- Theme preference, comparison mode, normalization, diacritic
-  sensitivity, AI endpoint/model, column visibility, window
-  dimensions, default match/exclude globs, context preview line
-  counts.
-
-## Localization
-
-- Fluent (`.ftl`) catalog format. Three locales today: `en`, `de`,
-  `ja`. Translation key parity enforced by
-  `scripts/check_locale_sync.py` and a `cargo test`.
-- Plural-aware (ICU `select` ranges) - Grex's English-only
-  `string.Format` plural failures don't survive the port.
-- Runtime locale switching via `Bundle::for_locale(Locale::from_tag(tag))`.
+AI responses never modify files. See [AI provider scope](ai-provider-scope.md)
+and [Security and privacy](SECURITY.md).
 
 ## CLI
 
-- Positional `<path> <term>` plus every flag Grex's CLI exposed:
-  - Search behavior: `--regex` `--case-sensitive` `--gitignore`
-    `--include-hidden` `--include-binary` `--include-system`
-    `--no-subfolders` `--include-symlinks` `--match-files`
-    `--exclude-dirs` `--size-limit` `--size-unit` `--size-type`
-    `--whole-word` / `-w` `--max-results <N>`
-    `--regex-engine <auto|fast|extended>`
-  - Output: `--format text|json|csv` `--count` `--files-only`
-    `--quiet`
-  - Advanced: `--comparison` `--normalization` `--ignore-diacritics`
-    `--culture` `--use-index` `--no-index`
-  - Container: `--container <id>` `--runtime auto|docker|podman`
-  - `rg`-style aliases: `--hidden`, `--no-ignore`
-- Replace subcommand: `grexa-cli replace <path> <term> <replacement>`
-  with flags `--regex`, `--case-sensitive`, `--gitignore`,
-  `--include-hidden`, `--include-binary`, `--include-system`,
-  `--no-subfolders`, `--include-symlinks`, `--match-files`,
-  `--exclude-dirs`, `--dry-run`.
-- Exit codes: `0` matches, `1` no matches, `2` error.
-- `completions <shell>` and `manpage` subcommands.
-- Ctrl-C cancels the in-flight search.
-- Structured tracing logs to `$XDG_STATE_HOME/grexa/grexa.log`
-  (configure verbosity with `GREXA_LOG=debug`).
+- One-shot local search with positional path and term.
+- Search/replace shared behavior flags.
+- Container target and runtime selection.
+- Text, JSON, and CSV local-search output.
+- Count, files-only, and quiet modes.
+- Grep-like exit codes.
+- Dry-run and applied replace.
+- Bash, Zsh, Fish, Elvish, and PowerShell completion generation.
+- Generated roff man page.
+- TTY control-sequence sanitization.
+- Spreadsheet-formula neutralization in CSV.
+- Structured file and stderr logging through `tracing`.
 
-## Linux desktop integration
+## Settings and persistence
 
-- Editor presets with correct open-at-line flags for Kate, KWrite,
-  VS Code, VSCodium, Sublime Text, JetBrains IDEs, GNOME Text
-  Editor, Neovim, and `xdg-open`.
-- "Reveal in file manager" via `org.freedesktop.FileManager1.ShowItems`
-  with `xdg-open` fallback.
-- `file://` URI percent-encoding for the FileManager1 D-Bus call.
+- XDG Base Directory compliance.
+- Atomic JSON settings.
+- Plain Markdown history/profile/recent-path records.
+- Daily GUI log rotation.
+- Separate appended CLI log.
+- Interruption-only replace journal.
+- Bounded temporary container mirrors.
+- Keyring-only AI secrets.
+
+The complete keys and paths are in
+[Reference: settings schema](reference.md#settings-schema) and
+[Reference: data paths](reference.md#data-paths).
+
+## Localization
+
+- Fluent catalogs embedded at compile time.
+- English, German, and Japanese.
+- English fallback.
+- Named placeholders and plural selectors.
+- Runtime locale selection from BCP-47 or POSIX-style tags.
+- Exact key-set parity tests and a source/QML sync script.
+
+See [Translating Grexa](translations.md).
+
+## Accessibility
+
+- Accessible roles and names on shared controls and main result/chat lists.
+- Keyboard navigation and global shortcuts.
+- Reduced-motion setting.
+- High-contrast token setting.
+- Terminal-friendly line output and documented exit codes.
+- No color-only CLI status contract.
+
+Manual assistive-technology verification remains a release responsibility. See
+[Accessibility](accessibility.md).
 
 ## Optional integrations
 
-- **Baloo** candidate seeding (KDE file index). The
-  [Baloo spike](baloo-spike.md) recommended **defer**; the trait
-  surface exists for a future enable.
-- **PDF text** via `pdftotext` (Poppler). Falls back gracefully when
-  the binary is missing.
+| Integration | Unlocks |
+| ----------- | ------- |
+| Poppler `pdftotext` | PDF search |
+| Docker or Podman | Container search |
+| KWallet, GNOME Keyring, or compatible Secret Service | AI API-key storage |
+| common editors | Open at matching line |
+| `wl-copy` or `xclip` | GUI copy actions |
+| `gio` | Move to Trash |
+| desktop notification tools | Completion notifications and activation |
+
+The Baloo adapter and compatibility setting ship, but Baloo candidate seeding
+remains deferred and does not alter searches.

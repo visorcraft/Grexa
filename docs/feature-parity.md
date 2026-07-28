@@ -1,219 +1,166 @@
-# Grex → Grexa Feature Parity
+<!-- SPDX-FileCopyrightText: 2026 VisorCraft LLC -->
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
 
-The canonical answer to "is feature X from Grex present in Grexa?"
-Every row is one Grex behavior; the *Implementation* column points at
-the code, doc, or audit that establishes parity, an intentional
-divergence, or an explicit non-applicability.
+# Grex to Grexa Feature Parity
 
-Last refreshed: v1.0.0.
+This matrix answers whether behavior from the Windows/WinUI
+[Grex](https://github.com/visorcraft/grex) application is present in Grexa.
+It describes Grexa 1.11.1.
 
-Status legend:
+Status:
 
-- ✅ **Done** - shipped in Grexa.
-- 🟡 **Partial** - present at the contract level; some refinement
-  scheduled for a later release.
-- ⏸ **Deferred** - explicit deferral with a recorded reason.
-- 🟥 **N/A** - Windows-only or otherwise out of scope for Linux.
+- ✅ Shipped
+- 🟡 Partial or intentionally narrower
+- ⏸ Deferred
+- 🟥 Not applicable on Linux
+
+For current Grexa behavior, this document and the
+[feature inventory](features.md) take precedence over implementation plans in
+the historical `grex-*-audit.md` files.
 
 ## Search
 
-| Grex feature | Status | Implementation |
-| ------------ | ------ | -------------- |
-| Tabbed searches, per-tab state | ✅ | Per-tab snapshots in `qobjects/search.rs::TabSnapshot`; QML tab strip in `SearchPage.qml` with horizontal-scroll overflow (v0.3). |
-| Text + Regex modes | ✅ | `crates/grexa-core/src/search.rs` + `pattern.rs` (two-engine cascade). |
-| Content mode with line / column / snippet | ✅ | `SearchResult`. |
-| Files mode aggregation | ✅ | `FileSearchResult` + `aggregate_file_results`. |
-| Filter set (gitignore, case, hidden, system, …) | ✅ | Every `SearchOptions` field; `gitignore_parity.rs` pins 61 cases. |
-| Match-files glob syntax (`|` / `;` / `-prefix`) | ✅ | `FileNameFilter` (`crates/grexa-core/src/search.rs`). |
-| Exclude-dirs name list or regex | ✅ | `ExcludeDirFilter`. |
-| System-path auto-exclusions | ✅ | `SYSTEM_DIRS` + `is_system_path`; `tests/root_safety.rs`. |
-| Pseudo-FS guards (`/proc`, `/sys`, `/dev`, `/run`) | ✅ | Same auto-exclusions; user can override with `--include-system`. |
-| Culture-aware comparison (ordinal / culture / invariant / normalization / diacritic) | 🟡 | Modes wired through `SearchOptions`; ICU4X-backed casing ships v1.1 (`docs/grex-culture-comparison-audit.md`). |
-| Streaming + cancellation | ✅ | `CancelToken` + `ProgressEvent`. |
-| Sort + stable tie-breakers | ✅ | `qobjects/search.rs::sort_results` (in-place stable sort by column). |
-| Search-within-results | ✅ | `SearchController` within-filter state + QML tab snapshots. |
-| Result export (CSV / JSON / clipboard) | ✅ | CLI emits CSV/JSON; GUI Export menu writes CSV/JSON/Markdown; result-row context menu copies path / filename / line content / path:line. |
+| Grex behavior | Status | Grexa implementation |
+| ------------- | ------ | -------------------- |
+| Multiple search tabs with independent state | ✅ | `SearchController` snapshots path, term, filters, sort, within-filter, results, and scroll state. The GUI allows eight tabs and bounds inactive snapshots. |
+| Text and regex modes | ✅ | `grexa-core` uses the Rust `regex` engine first and the bounded `fancy-regex` engine when extended constructs require it. |
+| Content and files result modes | ✅ | Content rows expose path, line, column, text, and match previews. Files mode aggregates matching rows by path. |
+| Gitignore-aware traversal | ✅ | The `ignore` walker honors gitignore, hidden-file, symlink, recursion, system-path, glob, directory, and size options. |
+| File globs and excluded directories | ✅ | `FileNameFilter` supports `|` or `;` terms and `-` exclusions. `ExcludeDirFilter` supports names or regex. |
+| Whole-word matching | ✅ | One Unicode-aware adjacent-character rule is shared by text, regex, local, and container mirror search. |
+| Case, culture, normalization, and diacritics | ✅ | ICU4X casing, ordinal/culture/invariant comparison, NFC/NFD/NFKC/NFKD normalization, and grapheme-aware source-offset mapping. |
+| Searchable documents | ✅ | DOCX, XLSX, PPTX, ODT, ODS, ODP, ZIP, RTF, and PDF text extraction. PDF requires `pdftotext`. |
+| Binary-file controls | ✅ | Known binary formats are skipped unless allowed. Searchable document containers are extracted rather than treated as raw text. |
+| Progress and cancellation | ✅ | `ProgressEvent` and `CancelToken` connect the synchronous engine to CLI Ctrl-C and GUI cancellation. Partial results remain visible. |
+| Stable sorting | ✅ | GUI content and file modes sort by their visible columns with stable path/line tie-breakers. |
+| Search within current results | ✅ | Plain or regex within-filter, cached and fail-closed when invalid. |
+| Context preview | ✅ | Local and container previews include configurable surrounding lines, line numbers, and match highlighting. |
+| Result export and copy actions | ✅ | GUI exports visible rows as CSV, JSON, or Markdown and provides path/text copy actions. CLI emits text, JSON, or CSV for local search. |
+| Windows Search acceleration | ⏸ | `use_file_index`, `--use-index`, and the Baloo adapter remain compatibility surfaces. They do not change current searches. |
 
 ## Replace
 
-| Grex feature | Status | Implementation |
-| ------------ | ------ | -------------- |
-| Safe atomic replace | ✅ | `crates/grexa-core/src/replace.rs::replace_with` + `tempfile::persist`. |
-| Regex captures (`$1`, `$name`) | ✅ | `PatternEngine::replace_all`. |
-| Permission preservation | ✅ | `restore_permissions`. |
-| CRLF + final-newline preservation | ✅ | Whole-buffer substitution; two unit tests. |
-| Encoding round-trip | ✅ | `encode_for_writeback` covers UTF-8 / UTF-8 BOM / UTF-16 / chardetng-detected encodings. |
-| Confirmation dialog | ✅ | `SearchPage.qml::replaceDialog` (gated on `replace_confirm` setting); Enter commits, Escape cancels. |
-| Switch to Files mode after replace | ✅ | `Workspace::run_replace_blocking` flips `result_mode` on completion. |
-| Crash-recovery journal | ✅ | `replace-journal.json` under `$XDG_STATE_HOME/grexa/`. |
-| No-undo, no backup files | ✅ | Documented in `docs/features.md`. |
-| Replace disabled for containers / archives | ⚠️ | Writable container replace is implemented in `replace_container`, but GUI/CLI integration is pending; replace remains disabled in the UI. Archives still have no write path. |
+| Grex behavior | Status | Grexa implementation |
+| ------------- | ------ | -------------------- |
+| Previewed local-file replace | ✅ | The GUI reuses the exact `SearchOptions` from the last search. CLI defaults to dry-run and requires `--apply` to write. |
+| Regex capture expansion | ✅ | Numbered and named captures are expanded against the full source text so lookaround keeps working. |
+| Atomic write | ✅ | Encoded output is written to a temporary file and persisted over the original. |
+| Encoding and permissions preserved | ✅ | UTF BOM/encoding and filesystem permissions are retained when writeback is possible. |
+| Confirmation | ✅ | Controlled by `replace_confirm`; CLI uses explicit `--apply`. |
+| Bounded work | ✅ | Files, matches per file, and extended-regex time are capped. Searchable archive/document formats are never rewritten as raw bytes. |
+| Crash/interruption journal | ✅ | `$XDG_STATE_HOME/grexa/replace-journal.json` records interrupted operations and is removed after a clean completion. |
+| Undo or backup files | 🟡 | Neither is provided. Atomic replacement prevents partial writes, but users need version control or external backups for rollback. |
+| Container replace | ⏸ | A crate-level copy-out/copy-back implementation exists, but neither public GUI nor CLI invokes it. |
+| Archive/document replace | ⏸ | Search-only. |
 
-## Encoding
+## Encodings and documents
 
-| Grex feature | Status | Implementation |
-| ------------ | ------ | -------------- |
-| BOM detection (UTF-8 / 16 / 32) | ✅ | `crates/grexa-core/src/encoding.rs::detect_from_bytes`. |
-| Strict UTF-8 fast path | ✅ | `read_text`. |
-| Legacy 8-bit + multibyte heuristic | ✅ | `chardetng`. |
-| Grex-compatible labels | ✅ | `DetectedEncoding::label`. |
-| Lossy fallback for malformed bytes | ✅ | `encoding_rs::Encoding::decode` plus `String::from_utf8_lossy`. |
+| Grex behavior | Status | Grexa implementation |
+| ------------- | ------ | -------------------- |
+| UTF BOM detection | ✅ | UTF-8, UTF-16, and UTF-32 BOMs are recognized. |
+| Strict UTF-8 fast path | ✅ | Valid UTF-8 avoids heuristic detection. |
+| Legacy encoding detection | ✅ | `chardetng` and `encoding_rs`. |
+| Malformed input fallback | ✅ | Lossy decoding keeps searches available and reports the detected label. |
+| OOXML and ODF extraction | ✅ | Bounded ZIP entry parsing with XML text extraction. |
+| ZIP and RTF extraction | ✅ | Textual ZIP entries and RTF text are searchable. |
+| PDF extraction | ✅ | Bounded `pdftotext` subprocess with timeout. |
 
-## Searchable documents
+## Containers
 
-| Grex feature | Status | Implementation |
-| ------------ | ------ | -------------- |
-| OOXML extraction | ✅ | `documents.rs::extract_ooxml` for docx/xlsx/pptx. |
-| ODF extraction | ✅ | Same path for odt/ods/odp. |
-| ZIP search | ✅ | `extract_zip` (names + textual entries). |
-| RTF text extraction | ✅ | `extract_rtf`. |
-| PDF extraction via Poppler | ✅ | `extract_pdf` shells `pdftotext`. |
-| Binary skip list | ✅ | `BINARY_EXTENSIONS` in `search.rs`. |
+| Grex behavior | Status | Grexa implementation |
+| ------------- | ------ | -------------------- |
+| Docker discovery and search | ✅ | Linux Docker CLI runtime. |
+| Rootless and rootful Podman | ✅ | Added Linux runtime choices with auto-detection or `--runtime`. |
+| Direct in-container grep | ✅ | NUL-delimited parsing when supported, BusyBox retry, char-based columns, whole-word filtering, and result caps. |
+| Missing-grep fallback | ✅ | The target path is copied to a bounded local mirror and searched by `grexa-core`. |
+| Container context preview | ✅ | Reads context through the selected runtime. |
+| Command safety bounds | ✅ | Runtime commands have a 30-second timeout and bounded stdout/stderr capture. Mirror paths are constrained and cleaned up. |
+| Local walker flags on direct grep | 🟡 | Local-only traversal flags have no meaning in the direct path. Comparison modes that grep cannot express force the mirror path. |
+| Live daemon coverage | ✅ | `cargo test -p grexa-containers --features container-live -- live::`; tests self-skip when no supported daemon exists. |
 
-## Container search
+## AI Search
 
-| Grex feature | Status | Implementation |
-| ------------ | ------ | -------------- |
-| Docker runtime detection | ✅ | `detect_runtimes::detect_docker`. |
-| Podman rootless detection | ✅ | `detect_podman_rootless`. |
-| Podman rootful detection | ✅ | `detect_podman_rootful`. |
-| List containers (`ps --format json`) | ✅ | `CliRuntime::list_containers` (Docker + Podman shapes). |
-| `grep` availability probe | ✅ | `has_grep`. |
-| Direct exec grep with argv array | ✅ | `direct_grep` - quoting-safe. |
-| BusyBox / distroless fallback | ✅ | `grep -rnH` is portable across distros; missing-grep falls through to mirror. |
-| Archive mirror fallback | ✅ | `archive_path` + `search_container` mirror branch. |
-| Container path display | ✅ | `rewrite_path` keeps the container path intact. |
-| Container context preview | ✅ | `grexa_containers::container_context_preview`. |
-| Replace disabled for containers | ⚠️ | `replace_container` + `copy_into_container` implement the write path, but it is not wired into the GUI/CLI yet. |
-| Live Docker test suite | ⏸ | Gated behind the `container-live` Cargo feature; runs in CI when a daemon is present. |
-| Live Podman test suite | ⏸ | Same. |
+| Grex behavior | Status | Grexa implementation |
+| ------------- | ------ | -------------------- |
+| OpenAI-compatible endpoint | ✅ | Model discovery and chat-completions requests through synchronous `ureq`. |
+| Endpoint normalization | ✅ | Accepts a base URL, `/v1`, or `/v1/chat/completions` form. |
+| Common response/error shapes | ✅ | Chat choice, legacy text choice, `output_text`, and structured provider errors. |
+| Linux filter suggestions | ✅ | Optional prompt hints use Grexa terminology. |
+| Search-result summary | ✅ | Up to 400 visible rows are packed into a configured 2,000 to 40,000 character evidence budget with truncation disclosure. |
+| Keyring-only API key | ✅ | One credential per canonical endpoint in the Linux Secret Service. No plaintext fallback. |
+| Opt-in and transport guardrails | ✅ | Disabled by default. Credentials require HTTPS or loopback HTTP. Redirects are disabled; request and response bounds apply. |
+| Multi-turn provider conversation | 🟡 | The tab shows local chat bubbles, but each provider request is standalone and does not resend previous turns. |
+| Tool calls, file upload, streaming, embeddings | ⏸ | Outside the current provider contract. |
 
-## AI Search Chat
+## Settings and persisted lists
 
-| Grex feature | Status | Implementation |
-| ------------ | ------ | -------------- |
-| OpenAI-compatible endpoint | ✅ | `crates/grexa-ai/src/lib.rs::AiSearchClient`. |
-| Endpoint URL normalization | ✅ | `normalize_endpoint_base`. |
-| Model auto-discovery (`/v1/models`) | ✅ | `AiSearchClient::discover_model`. |
-| Chat completions request | ✅ | `send_chat`. |
-| Response parsing (choices/message/content, choices/text, output_text) | ✅ | `extract_assistant_content`. |
-| Error extraction | ✅ | `extract_error_message`. |
-| Context prompt builder | ✅ | `build_context_prompt`. |
-| Linux-aware filter hints | ✅ | `linux_suggestions_for`. |
-| Secret-Service-backed API key | ✅ | `secret.rs` via `keyring-core`. |
-| Opt-in setting | ✅ | `DefaultSettings.ai_search_enabled`. |
-| Provider scope doc | ✅ | `docs/ai-provider-scope.md`. |
-| In-tab conversation state | ✅ | `AiChatPanel.qml` with turn-count header + Clear button (v0.3). |
-
-## Context preview
-
-| Grex feature | Status | Implementation |
-| ------------ | ------ | -------------- |
-| Configurable before/after (1-20) | ✅ | `crates/grexa-core/src/preview.rs::context_preview`. |
-| 1-based line numbers | ✅ | Same module. |
-| Encoding-aware reader | ✅ | Inherits `encoding::read_text`. |
-| Match-line index | ✅ | `match_line_index` field. |
-| Edge cases (empty / OOR / missing / perms) | ✅ | 9 unit tests. |
-| Container-backed preview | ✅ | `grexa_containers::container_context_preview`. |
-| Gutter + match highlight | ✅ | `ContextPreviewDialog.qml` renders both. |
-
-## Settings, history, profiles, recent paths
-
-| Grex feature | Status | Implementation |
-| ------------ | ------ | -------------- |
-| `DefaultSettings` round-trip | ✅ | `crates/grexa-core/src/storage.rs`. |
-| Recent paths cap 20 + dedupe + filter | ✅ | `RecentPathStore`. |
-| Search history cap 20 + 7-field dedupe key (matching Grex byte-for-byte) | ✅ | `SearchHistoryStore` + `RecentSearch::key`. |
-| Search profiles upsert + move-to-top | ✅ | `SearchProfileStore`. |
-| JSON import/export with merge rules | ✅ | `SettingsStore::import_json`/`export_json`. |
-| Theme preference (13 variants) | ✅ | `ThemePreference` enum; Grex integer encoding preserved for `0…11`, with Grexa-only OLED Black at `12`. |
-| Settings UI sections | ✅ | `apps/grexa-gui/qml/SettingsPage.qml`; auto-save on change as of v0.3 (no Apply button). |
-| API key in keyring (never plaintext) | ✅ | `grexa_ai::secret`. |
-| Restore defaults | ✅ | `SettingsStore::delete`. |
+| Grex behavior | Status | Grexa implementation |
+| ------------- | ------ | -------------------- |
+| Settings defaults and round-trip | ✅ | Atomic `$XDG_CONFIG_HOME/grexa/settings.json` through `SettingsStore`. |
+| Recent paths | ✅ | grexa-db records under `db/recent_paths`, exact case-sensitive dedupe, cap 20. |
+| Search history | ✅ | grexa-db records under `db/search_history`, current full search identity key, cap 20. |
+| Search profiles | ✅ | grexa-db records under `db/search_profiles`, name-based upsert and move-to-top behavior. |
+| Older Grexa JSON migration | ✅ | Empty database collections import the three legacy Grexa JSON files once and rename them to `.bak`. |
+| Grex Windows backup import | ⏸ | No public converter. Recreate settings and profiles against Linux paths. See [Migration from Grex](migration-from-grex.md). |
+| Grexa-format settings import/export | 🟡 | `SettingsStore` exposes library APIs, but the current GUI and CLI do not provide a backup command. |
+| Theme preference | ✅ | System, light, dark, Grex-compatible named values, and Grexa OLED Black. |
+| Secret persistence | ✅ | AI keys never enter settings JSON or QML. |
 
 ## CLI
 
-| Grex feature | Status | Implementation |
-| ------------ | ------ | -------------- |
-| Positional `<path> <term>` | ✅ | `grexa-cli`. |
-| All Grex CLI flags (regex, case, gitignore, hidden, binary, system, no-subfolders, symlinks, match-files, exclude-dirs, size-limit, size-unit, size-type) | ✅ | Mirror of `SearchArgs`. |
-| Output formats (text / JSON / CSV) | ✅ | `--format`. |
-| `--count`, `--files-only`, `--quiet` | ✅ | All wired. |
-| Exit codes 0 / 1 / 2 | ✅ | Confirmed by `crates/grexa-cli/tests/cli.rs`. |
-| Comparison / normalization / diacritic / culture | ✅ | `--comparison`, `--normalization`, `--ignore-diacritics`, `--culture`. |
-| Baloo seed override | ✅ | `--use-index` / `--no-index`. |
-| Container mode | ✅ | `--container`, `--runtime`. |
-| `rg`-style aliases | ✅ | `--hidden`, `--no-ignore`. |
-| Shell completion | ✅ | `grexa-cli completions <shell>`. |
-| Man page | ✅ | `grexa-cli manpage`. |
-| Ctrl-C cancellation | ✅ | Cooperative `CancelToken`. |
+| Grex behavior | Status | Grexa implementation |
+| ------------- | ------ | -------------------- |
+| Positional path and term | ✅ | `grexa-cli <path> <term>`. |
+| Shared search/replace flags | ✅ | `SharedSearchArgs` and one `build_search_options` path. |
+| Text, JSON, and CSV | ✅ | Local search supports all three. Container output has a narrower text/count/files surface. |
+| Count, files-only, and quiet | ✅ | Local search supports all. Container search supports count/files-only; accepted format/quiet flags do not alter its renderer. |
+| Comparison, normalization, culture, and diacritics | ✅ | Same core semantics as the GUI. |
+| Grep-style exit codes | ✅ | Search: 0 matches, 1 none, 2 failure. Replace: 0 modified, 1 none, 2 failure. |
+| Ctrl-C cancellation | ✅ | Cooperative cancellation token. |
+| Completion and man page generation | ✅ | Bash, Zsh, Fish, Elvish, PowerShell, and roff. |
+| Baloo flags | ⏸ | Parsed for compatibility but currently have no search effect. |
 
 ## Linux desktop integration
 
-| Grex feature | Status | Implementation |
-| ------------ | ------ | -------------- |
-| Editor argv presets (Kate / VSCode / JetBrains / …) | ✅ | `grexa_core::desktop::open_in_editor_command`. |
-| FileManager1 reveal | ✅ | `qobjects/search.rs::reveal_in_file_manager` (D-Bus `org.freedesktop.FileManager1.ShowItems`) with `grexa_core::desktop::reveal_with_xdg_open` fallback. |
-| User path classifier (abstract URLs) | 🟡 | The standalone classifier was removed as unused. The search bar accepts typed/pasted paths and the portal picker returns local `file://` paths; abstract URLs (`smb://`, `sftp://`, …) are not specially classified and currently fail as nonexistent local paths. |
-| KNotifications | ✅ | `notify_desktop` in `qobjects/search.rs` shells `notify-send` (which routes via `org.freedesktop.Notifications` / KNotifications). |
-| Portal file picker | ✅ | `QtQuick.Dialogs.FolderDialog` - Breeze on KDE, XDG desktop portal under Wayland / Flatpak. Recent-path store integrated. |
-| KDE color scheme + accent | 🟡 | Kirigami picks up the user's accent + theme today; full Qt palette swap via `KColorSchemeManager` still needs a cxx-qt-lib binding and is tracked as future GUI work. |
+| Grex/Windows behavior | Status | Grexa replacement |
+| --------------------- | ------ | ----------------- |
+| Open match in editor | ✅ | Built-in editor argv presets and a shell-free custom template using `{path}`, `{file}`, and `{line}`. |
+| Reveal file | ✅ | `org.freedesktop.FileManager1.ShowItems`, then `xdg-open` fallback. |
+| Recycle Bin | ✅ | `gio trash` when available. |
+| Completion notification | ✅ | `notify-send`, with optional activation through `wmctrl`. |
+| Clipboard helpers | ✅ | Qt clipboard plus `wl-copy` or `xclip` where an external helper is needed. |
+| Native folder picker | ✅ | Qt Quick folder dialog and desktop portal integration. |
+| Mounted network paths | ✅ | Local paths exposed by GVFS, KIO FUSE, CIFS, NFS, or another mount work normally. |
+| Abstract `smb://` or `sftp://` URLs | 🟡 | Not search roots. Mount or browse the resource first and select its local path. |
+| Window placement persistence | 🟥 | The Linux window manager owns placement. Grexa persists size only. |
+| Windows toast activation and shell verbs | 🟥 | Replaced by freedesktop services and normal subprocess argv. |
+| WSL and UNC path translation | 🟥 | Grexa searches native Linux-visible paths. |
 
-## Localization
+## Localization and accessibility
 
-| Grex feature | Status | Implementation |
-| ------------ | ------ | -------------- |
-| Fluent catalog format | ✅ | `crates/grexa-i18n`. |
-| Three locales (en/de/ja) | ✅ | `locales/<tag>/grexa.ftl`. |
-| Plural-aware status text | ✅ | `Bundle::plural_count` for bare-count fragments (`count-matches`, `count-files`, `count-files-modified`, `count-matches-replaced`, `count-failures` in en/de/ja). QML side uses Qt's `qsTr("%n …(s)", "", n)` plural overload. |
-| Runtime locale switching | ✅ | `Bundle::for_locale(Locale::from_tag(tag))`. |
-| English fallback | ✅ | `Bundle` always carries a fallback bundle. |
-| Locale sync gate | ✅ | `scripts/check_locale_sync.py` + a unit test. |
-| RTL layout | 🟡 | Documented contract in `docs/accessibility.md`; Kirigami flips layout direction automatically when `LayoutMirroring.enabled` is set, but live verification with a translated RTL locale is pending a future translation contribution. |
+| Grex behavior | Status | Grexa implementation |
+| ------------- | ------ | -------------------- |
+| Localized interface | ✅ | Embedded Fluent catalogs for English, German, and Japanese with English fallback. |
+| Plural-aware counts | ✅ | Fluent plural selectors through `i18nPlural(...)`. |
+| Runtime locale selection | ✅ | BCP-47 and common POSIX locale tags. |
+| Locale parity gate | ✅ | Rust key-set test plus `scripts/check_locale_sync.py` for QML/source usage. |
+| Keyboard operation | ✅ | Global navigation/search/tab shortcuts and keyboard-operable result actions. |
+| Reduced motion and high contrast | ✅ | User settings and theme tokens. |
+| Screen-reader metadata | 🟡 | Main controls, results, and chat expose accessible roles/names. Full AT-SPI regression automation is not present. |
+| RTL locale verification | 🟡 | Layout mirroring support exists, but no RTL translation ships today. |
 
-## Non-applicable (Linux replacements)
+## Verification map
 
-| Grex behavior | Replacement |
-| ------------- | ----------- |
-| `%LocalAppData%\Grex\...` | `$XDG_*_HOME/grexa/...` |
-| Windows Search index | Baloo (optional, deferred) |
-| WSL / `\\wsl$\` / `\\wsl.localhost\` paths | None - Linux is native |
-| UNC paths (`\\server\share`) | Mounted shares via gvfs / kio-fuse |
-| Windows toasts | KNotifications / `org.freedesktop.Notifications` |
-| Windows clipboard | QClipboard / wl-copy / xclip |
-| Windows shell verbs | `org.freedesktop.FileManager1` + `xdg-open` |
-| Recycle Bin | `gio trash` (future) |
-| `Microsoft.Search` provider | Removed |
-| `Microsoft.Toolkit.Uwp.Notifications` | Removed |
-| Windows window position persistence | Window manager handles placement; only width/height persisted |
+| Surface | Main verification |
+| ------- | ----------------- |
+| Core search/replace | Unit tests plus `gitignore_parity`, property, and root-safety integration suites |
+| CLI behavior | `crates/grexa-cli/tests/cli.rs` |
+| Containers | Mock-runner unit tests plus opt-in `container-live` tests |
+| AI | Client, prompt, transport, and secret-store tests |
+| Localization | `grexa-i18n` tests plus `scripts/check_locale_sync.py` |
+| GUI bridge | Rust backing-struct tests and QML compilation |
+| GUI launch | `just verify-gui` and the release/package smoke gates |
+| Full repository | `just ci`; `just preflight` adds deny, audit, and credits |
 
-## Coverage map (Grex test files → Grexa equivalents)
-
-| Grex test | Grexa equivalent |
-| --------- | ---------------- |
-| `Tests/Services/SearchServiceTests.cs` | `crates/grexa-core/src/search.rs` tests + `tests/gitignore_parity.rs` + `tests/property.rs` + `tests/root_safety.rs` |
-| `Tests/Services/SettingsServiceTests.cs` | `crates/grexa-core/src/storage.rs::tests` |
-| `Tests/Services/RecentSearchesServiceTests.cs` | `storage.rs::tests::search_history_*` |
-| `Tests/Services/SearchProfilesServiceTests.cs` | `storage.rs::tests::profile_*` |
-| `Tests/Services/RecentPathsServiceTests.cs` | `storage.rs::tests::recent_paths_*` |
-| `Tests/Services/GitIgnoreServiceTests.cs` | `crates/grexa-core/tests/gitignore_parity.rs` (61 cases) |
-| `Tests/Services/EncodingDetectionServiceTests.cs` | `crates/grexa-core/src/encoding.rs::tests` |
-| `Tests/Services/AiSearchServiceTests.cs` | `crates/grexa-ai/src/lib.rs::tests` + `secret.rs::tests` |
-| `Tests/Services/DockerSearchServiceTests.cs` | `crates/grexa-containers/src/{runtime,search}.rs::tests` |
-| `Tests/Services/ContextPreviewServiceTests.cs` | `crates/grexa-core/src/preview.rs::tests` |
-| `Tests/Services/ExportServiceTests.cs` | `crates/grexa-cli/tests/cli.rs` (CSV/JSON output) |
-| `Tests/Services/LocalizationServiceTests.cs` | `crates/grexa-i18n/src/lib.rs::tests` |
-| `Tests/Controls/SearchTabContentTests.cs` | `apps/grexa-gui/src/{tab,workspace,status}.rs::tests` |
-| Grex.UITests | QML side; lands with cxx-qt PR + `QT_QPA_PLATFORM=offscreen` |
-
-## Peer review
-
-This document is the parity contract. Any new Grex feature shipped in
-upstream releases must:
-
-1. Add a row above with the Grex spec link.
-2. Implement, defer, or non-applicable-mark in Grexa with a status icon.
-3. Link to the audit doc that records the decision.
-
-Every release walks this matrix once and confirms the status flag is
-still accurate before the version is tagged.
+Update this matrix when a Grex behavior changes, Grexa intentionally diverges,
+or a deferred surface becomes user-visible.

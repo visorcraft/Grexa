@@ -75,6 +75,16 @@
   </supports>
 
   <releases>
+    <release version="1.11.1" date="2026-07-27">
+      <description>
+        <p>Documentation accuracy and discoverability.</p>
+        <ul>
+          <li>Add a documentation index and rebuild the public guides around the current GUI, CLI, storage, AI, container, and packaging behavior.</li>
+          <li>Expand the settings and command reference, security and privacy guidance, resource limits, accessibility notes, migration steps, and troubleshooting.</li>
+          <li>Correct cxx-qt bridge and runtime documentation and refresh the bundled third-party credits.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.11.0" date="2026-07-24">
       <description>
         <p>Dependency stack refresh and CI hardening.</p>

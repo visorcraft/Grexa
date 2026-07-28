@@ -1,72 +1,186 @@
 # AI Provider Scope
 
-This note pins what kinds of AI endpoints Grexa supports in v1.0, and what
-falls outside the scope on purpose.
+Grexa supports one provider-neutral wire contract: OpenAI-compatible model
+listing and chat completions. Provider-native APIs, tool execution, and
+authentication schemes beyond a bearer token are out of scope.
 
-PLAN.md phase 8 lines 333-348 (and `docs/grex-ai-search-service-audit.md`)
-reference this doc.
+AI is optional at runtime and disabled by default, but the GUI always links the
+`grexa-ai` crate. There is no Cargo feature that removes the AI code from the
+desktop binary.
 
-## In scope
+## Required HTTP contract
 
-Grexa speaks only the **OpenAI-compatible HTTP shape**: a `POST /v1/chat/completions`
-endpoint that takes `{model, temperature, messages: [{role, content}]}` and
-returns the OpenAI-style `{choices: [{message: {content}}]}` envelope. We
-also call `GET /v1/models` for endpoint sanity tests and for the
-"auto-discover model" path.
+### Model listing
 
-Servers that ship this shape, validated against
-`crates/grexa-ai/src/lib.rs::AiSearchClient`:
+Grexa tests an endpoint and discovers a model with:
 
-- `api.openai.com` (the namesake)
-- `api.anthropic.com` via OpenAI-shim proxies (LiteLLM, Anthropic's own
-  OpenAI-compatible endpoints, when present)
-- Local OpenAI-compatible servers: `ollama serve` (after enabling the
-  `/v1` proxy), `vLLM` with the OpenAI server, `LM Studio`,
-  `text-generation-webui` with the `--openai` flag, `LocalAI`
-- Azure OpenAI when fronted by an API gateway that strips the
-  `api-key:` / `api-version=` query-string requirements
-- Self-hosted aggregators: LiteLLM, BerriAI, OneAPI, Helicone
+```http
+GET <base>/v1/models
+Authorization: Bearer <key>
+```
 
-## Out of scope
+The response must contain:
 
-Grexa does **not** implement provider-native wire formats:
+```json
+{
+  "data": [
+    { "id": "model-id" }
+  ]
+}
+```
 
-- **Anthropic Messages API** (`/v1/messages` with `tool_use` and
-  `content: [{type: text}]` blocks) - proxy through LiteLLM if you need it.
-- **Google Gemini** native JSON shape.
-- **Cohere `/v1/chat`** native shape.
-- **xAI Grok** native API.
-- **AWS Bedrock**, **Azure OpenAI without an OpenAI-shim gateway**.
+Discovery selects the first non-empty `id`. If listing fails or yields no ID,
+the client falls back to `gpt-4o-mini`.
 
-If a server speaks a different shape, run an OpenAI-compatible proxy
-between it and Grexa. The Settings → AI Search panel has a "Test endpoint"
-button that calls `GET /v1/models`; if that responds with an OpenAI-style
-`{data: [{id, ...}]}` array, Grexa can talk to it.
+### Chat completions
 
-## Feature flag
+Grexa sends:
 
-The full chat client lives behind the implicit `ai` Cargo path in
-`grexa-ai`. Privacy-conscious distributions can omit the entire crate
-from a build without losing search, replace, CLI, or container support:
-nothing else depends on it. The GUI presents the AI tab only when the
-crate is linked - that wiring lives in the GUI crate's Cargo features.
+```http
+POST <base>/v1/chat/completions
+Content-Type: application/json; charset=utf-8
+Authorization: Bearer <key>
+```
 
-## Opt-in
+Payload shape:
 
-`DefaultSettings.ai_search_enabled` defaults to `false`. The AI chat
-panel is greyed out until the user toggles this on in Settings, and the
-toggle is wired to a one-time consent dialog that summarizes what
-context (search path, query, filter list) the first request will send.
+```json
+{
+  "model": "model-id",
+  "temperature": 0.2,
+  "messages": [
+    { "role": "system", "content": "..." },
+    { "role": "user", "content": "..." }
+  ]
+}
+```
 
-The API key never lives in `settings.json`. `grexa-ai` stores it in the
-system keyring (`org.freedesktop.secrets` on Linux) keyed by
-`service = "com.visorcraft.Grexa.ai"` and `account = <endpoint-base>`,
-which means one user can keep multiple distinct keys for multiple
-endpoints.
+The preferred response shape is:
 
-If the keyring backend is unavailable (no D-Bus session, no
-secret-service daemon), `grexa-ai::store_api_key` returns
-`SecretError::Backend(_)`. The Settings UI surfaces this verbatim and
-**refuses to fall back to plaintext** - that's the
-`docs/linux-decisions.md` rule and `docs/grex-storage-services-audit.md`
-import contract working together.
+```json
+{
+  "choices": [
+    {
+      "message": {
+        "content": "assistant text"
+      }
+    }
+  ]
+}
+```
+
+For compatibility, Grexa also accepts:
+
+```text
+choices[0].text
+output_text
+```
+
+Error parsing checks `error.message`, then top-level `message`, then the raw
+response body.
+
+## Endpoint normalization
+
+These settings resolve to the same base:
+
+```text
+https://example.test
+https://example.test/
+https://example.test/v1
+https://example.test/v1/chat/completions
+```
+
+Grexa strips the known suffix and then appends `/v1/models` or
+`/v1/chat/completions`.
+
+A host without a scheme receives `https://`. For a local plaintext server,
+enter the scheme explicitly:
+
+```text
+http://localhost:11434
+```
+
+## Authentication and transport
+
+Grexa supports one optional header:
+
+```http
+Authorization: Bearer <API key>
+```
+
+It does not support custom headers, cookies, query-string API versions,
+mutual TLS configuration, OAuth flows, or provider-specific signing.
+
+Bearer keys are sent only to:
+
+- any `https://` URL;
+- `http://localhost`;
+- `http://127.0.0.1`;
+- `http://[::1]`.
+
+A remote `http://` endpoint receives no bearer header. Redirects are disabled.
+Requests time out after 90 seconds, and response bodies are capped at 4 MiB.
+
+## Compatible server categories
+
+A server is compatible when it implements the contract above. Common
+categories include:
+
+- OpenAI's chat-completions-compatible endpoints;
+- local servers exposing an OpenAI compatibility layer;
+- vLLM, llama.cpp, Ollama, LM Studio, or LocalAI when their OpenAI-compatible
+  routes are enabled;
+- gateways such as LiteLLM;
+- organization proxies that preserve the documented paths, bearer header, and
+  JSON shapes.
+
+These projects evolve independently. Treat the protocol checklist, not the
+brand list, as authoritative and use **Test endpoint** before chat.
+
+## Not supported directly
+
+- Anthropic Messages API;
+- Google Gemini native API;
+- Cohere native chat API;
+- AWS Bedrock request signing;
+- Azure OpenAI deployments requiring `api-key` and `api-version` parameters;
+- streaming Server-Sent Events;
+- tool/function calls;
+- multimodal message blocks;
+- provider-specific response content arrays;
+- Responses API request format;
+- embeddings or vector search;
+- automatic model download or server management.
+
+Use an OpenAI-compatible gateway when a provider has only a native format.
+
+Grexa accepts a top-level `output_text` response for compatibility, but it
+still sends a Chat Completions request. It is not a full Responses API client.
+
+## Desktop behavior
+
+Enable AI under **Settings → AI Search**. The same opt-in gate is checked
+before endpoint tests, chat, and summaries.
+
+- Saving a key stores it in the Secret Service.
+- Testing sends only `GET /v1/models`.
+- A typed chat sends that turn plus fixed system instructions and the current
+  search path/query/modes/filter suggestions; visible earlier bubbles are not
+  resent.
+- Summarize Results sends bounded path/line/file excerpts from visible search
+  rows.
+- One request may run at a time.
+- Responses are displayed as text and never executed or applied to files.
+
+See [Security and privacy](SECURITY.md#outbound-traffic) for exact data
+disclosure and [Using Grexa](usage.md#ai-search) for setup.
+
+## Library behavior
+
+`AiSearchClient::send_chat` accepts an arbitrary slice of
+`AiConversationTurn`, so Rust callers may supply multi-turn history even though
+the current GUI sends one turn.
+
+`send_chat_with_evidence` adds text packed from `EvidenceMatch` records.
+`pack_evidence` spreads the budget across files before adding more snippets
+from the same file, favoring breadth without exceeding the character ceiling.

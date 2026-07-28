@@ -1,196 +1,202 @@
 # Translating Grexa
 
-Grexa uses [Fluent] (`.ftl`) catalogs for runtime strings. This doc
-walks translators through adding or updating a locale.
+Grexa uses [Fluent](https://projectfluent.org/) catalogs embedded into the
+binary. English is canonical. German and Japanese currently ship beside it.
 
-[Fluent]: https://projectfluent.org/
-
-## Where the catalogs live
-
-```
+```text
 crates/grexa-i18n/locales/
-├── en/grexa.ftl       (canonical, source of truth)
-├── de/grexa.ftl       (German)
-└── ja/grexa.ftl       (Japanese)
+├── en/grexa.ftl
+├── de/grexa.ftl
+└── ja/grexa.ftl
 ```
 
-Each locale's catalog must define **exactly** the same set of message
-ids as English. The sync gate enforces this two ways:
+Every shipped locale must define exactly the same message IDs as English.
 
-1. `python3 scripts/check_locale_sync.py` from the repo root.
-2. `cargo test -p grexa-i18n every_locale_has_same_key_set_as_english`.
+## Update an existing translation
 
-Both fire in CI.
-
-## Adding a new locale
-
-1. Pick the BCP-47 tag (e.g. `fr` for French). Avoid region tags
-   unless the language genuinely needs them (`zh-CN` vs `zh-TW`,
-   `pt-BR` vs `pt-PT`).
-2. Create `crates/grexa-i18n/locales/<tag>/grexa.ftl` by copying
-   the English file:
+1. Find the English key in
+   `crates/grexa-i18n/locales/en/grexa.ftl`.
+2. Update the same key in the target catalog.
+3. Preserve all variables and selector branches.
+4. Run:
 
    ```bash
-   mkdir -p crates/grexa-i18n/locales/fr
-   cp crates/grexa-i18n/locales/en/grexa.ftl crates/grexa-i18n/locales/fr/grexa.ftl
+   python3 scripts/check_locale_sync.py
+   cargo test -p grexa-i18n
    ```
 
-3. Translate every value. Keep every key id intact.
-4. Add the locale to `crates/grexa-i18n/src/lib.rs::Locale`:
+5. Launch Grexa with the target UI language and check the affected page at
+   normal and narrow window widths.
 
-   ```rust
-   pub enum Locale {
-       English,
-       German,
-       Japanese,
-       French,    // <- new
-   }
+Do not rename an ID only in one locale.
 
-   impl Locale {
-       pub fn lang_id(self) -> LanguageIdentifier {
-           match self {
-               // …
-               Locale::French => langid!("fr"),
-           }
-       }
-       pub fn ftl_source(self) -> &'static str {
-           match self {
-               // …
-               Locale::French => include_str!("../locales/fr/grexa.ftl"),
-           }
-       }
-       pub fn from_tag(tag: &str) -> Locale {
-           match primary.as_str() {
-               // …
-               "fr" => Locale::French,
-           }
-       }
-   }
-   ```
+## Add a user-facing string
 
-5. Add the locale to the `every_locale_has_same_key_set_as_english`
-   test:
+1. Add a concept-based ID to English.
+2. Add the same ID to German and Japanese.
+3. Use the key from Rust or QML.
+4. Run the sync checks.
 
-   ```rust
-   for &locale in &[Locale::German, Locale::Japanese, Locale::French] {
-   ```
-
-6. Run `cargo test -p grexa-i18n` and `python3 scripts/check_locale_sync.py`.
-   Both must pass.
-
-## Fluent syntax cheat-sheet
-
-Every message has an id and a value:
-
-```ftl
-search-status-ready = Ready
-```
-
-Argument interpolation:
-
-```ftl
-search-status-error = Error: {$message}
-```
-
-Plural selector (`one` for ≈1, `*[other]` for the default):
-
-```ftl
-search-status-found = {$matches ->
-    [one] Found 1 match
-   *[other] Found {$matches} matches
-}
-```
-
-Use plural categories that match the target language. Russian / Polish /
-Welsh / Arabic / Lithuanian need `zero` / `few` / `many` selectors;
-Chinese / Japanese / Korean / Thai have a single form (no selector).
-
-Comments use `#` (one line) or `##` (file section) or `###` (group):
-
-```ftl
-## App chrome
-app-name = Grexa
-```
-
-## What changes from Grex
-
-- **Placeholders**: Grex `.resw` files used `string.Format`'s
-  positional `{0}` / `{1}` syntax. Fluent uses named placeholders
-  (`{$matches}`) so translators can reorder them per-language.
-- **Plurals**: Grex baked the English `s` into the resource string,
-  which mis-renders other languages. Fluent's selector solves this.
-- **Key scope**: Grex resource keys were per-XAML-control
-  (`SearchButtonContent.Text`). Fluent keys are per-concept
-  (`search-status-ready`). The migration matrix at
-  [grex-strings-migration-matrix.md](grex-strings-migration-matrix.md)
-  records the mapping for every Grex key.
-
-## Using strings from QML
-
-QML accesses the Fluent bundle through helper functions on the root
-`ApplicationWindow`. Call `app.i18n("key")` for simple messages and
-`app.i18nPlural("key", count)` for plural selectors:
-
-```qml
-import org.kde.kirigami as Kirigami
-
-Kirigami.ApplicationWindow {
-    // exposed by Main.qml
-    function i18n(key) { return searchController.i18n(key); }
-    function i18nPlural(key, n) { return searchController.i18n_plural(key, n); }
-}
-```
-
-In any QML file:
+QML:
 
 ```qml
 Controls.Label {
     text: app.i18n("ui-search-term")
 }
+```
 
+Plural QML:
+
+```qml
 Controls.Label {
-    text: app.i18nPlural("count-matches", matchModel.count)
+    text: app.i18nPlural("count-matches", matchCount)
 }
 ```
 
-Do **not** use `qsTr()` for new strings. The migration of existing
-`qsTr()` calls to Fluent keys is complete, and `scripts/check_locale_sync.py`
-now expects zero `qsTr()` calls in shipped QML.
+Rust:
 
-## Adding new keys
-
-1. Add the message to `crates/grexa-i18n/locales/en/grexa.ftl`.
-2. Add the same key with a translated value to every other locale.
-3. Run `just ci`. The sync test will fail if you missed any locale.
-
-The CI gate ensures Grexa never ships a missing translation in any
-language.
-
-## Reviewing translations
-
-A few rules that catch most defects:
-
-- Plural selectors mirror the source. If English has `[one] … *[other] …`,
-  the target should reuse the same branch names, even when the language
-  needs more (e.g. Russian's `[few]` arm gets *added*).
-- Placeholders match the source. If the source uses `{$matches}` and
-  `{$files}`, the target must also reference both.
-- Trailing whitespace is preserved exactly. Fluent strips one space
-  on either side of `=`; everything else is significant.
-- File ends with a trailing newline. The sync test treats the last
-  line specially.
-
-## Distro packaging
-
-Translation catalogs are embedded into the binary via `include_str!`,
-so packagers don't need to install separate `.mo` / `.qm` files.
-Installing Grexa installs every shipped locale.
-
-## Sync check from CI
-
-```yaml
-- name: locale sync
-  run: python3 scripts/check_locale_sync.py
+```rust
+let text = bundle.t("search-status-ready")?;
+let count = bundle.plural_count("count-files", files as i64)?;
 ```
 
-This is part of `.github/workflows/ci.yml`.
+New QML text must not use `qsTr()`. All shipped QML strings have moved to
+Fluent.
+
+## Add a locale
+
+Use a primary BCP-47 language tag unless regional catalogs have materially
+different translations.
+
+1. Copy the English catalog:
+
+   ```bash
+   mkdir -p crates/grexa-i18n/locales/fr
+   cp crates/grexa-i18n/locales/en/grexa.ftl \
+     crates/grexa-i18n/locales/fr/grexa.ftl
+   ```
+
+2. Translate every value without changing IDs.
+3. Add a `Locale` variant in `crates/grexa-i18n/src/lib.rs`.
+4. Add that variant to:
+   - `Locale::lang_id`;
+   - `Locale::ftl_source`;
+   - `Locale::from_tag`;
+   - `every_locale_has_same_key_set_as_english`.
+5. Add locale-specific plural tests when the language has meaningful plural
+   categories.
+6. Add the locale to the shipped-language lists in
+   [README](../README.md), [Features](features.md), and
+   [Reference](reference.md).
+7. Run:
+
+   ```bash
+   python3 scripts/check_locale_sync.py
+   cargo test -p grexa-i18n
+   just ci
+   ```
+
+8. Manually check Search, History, Profiles, Settings, dialogs, empty states,
+   status text, About, Credits, and Licenses.
+
+Catalogs are compiled with `include_str!`; packages do not install separate
+`.mo`, `.qm`, or `.ftl` files.
+
+## Fluent syntax
+
+Simple message:
+
+```ftl
+search-status-ready = Ready
+```
+
+Variable:
+
+```ftl
+search-status-error = Error: { $message }
+```
+
+Plural selector:
+
+```ftl
+count-files =
+    { $count ->
+        [one] { $count } file
+       *[other] { $count } files
+    }
+```
+
+Keep the variable names used by callers. Translators may reorder text around
+variables.
+
+Use the plural categories required by the target language. The `other` branch
+must be marked as the default with `*`.
+
+Comments:
+
+```ftl
+# Translator note for one message
+## Section heading
+### Subsection heading
+```
+
+## Locale resolution
+
+`Locale::from_tag` accepts BCP-47 and common POSIX forms:
+
+```text
+de
+de-DE
+de_DE.UTF-8
+ja-JP
+```
+
+It selects by primary language. Unknown languages fall back to English.
+
+`Bundle::for_locale` also carries an English fallback bundle. A missing target
+message therefore falls back at runtime, but the key-parity tests prevent
+shipping that state.
+
+## What the checks enforce
+
+`cargo test -p grexa-i18n` verifies:
+
+- catalogs parse;
+- locale resolution;
+- formatting and plural helpers;
+- every non-English catalog has exactly the English ID set.
+
+`python3 scripts/check_locale_sync.py` additionally verifies:
+
+- every QML file under `apps/grexa-gui/qml/` is listed in
+  `apps/grexa-gui/build.rs`;
+- no empty `qsTr()` call exists;
+- reports that all `qsTr()` calls have been migrated.
+
+`just ci` runs the Rust parity test. Run the Python checker directly whenever
+QML files or localized strings change.
+
+The checks do not prove translation quality, placeholder meaning, layout fit,
+or correct grammar. Review those manually.
+
+## Review checklist
+
+- Meaning matches the English source and UI context.
+- Variables are neither removed nor renamed.
+- Plural categories fit the target language.
+- Punctuation and capitalization are natural for that locale.
+- Keyboard labels and button text remain concise.
+- Long text wraps without clipping.
+- Placeholders such as `%1` that are intentionally consumed by QML `.arg()`
+  remain present.
+- File ends with a newline.
+- No new English text is hardcoded in QML or user-facing Rust paths.
+
+## Relationship to Grex
+
+Grex used `.resw` resources and positional `string.Format` placeholders.
+Grexa uses concept IDs, named Fluent variables, and plural selectors.
+
+The source mapping is preserved in
+[grex-strings-migration-matrix.md](grex-strings-migration-matrix.md). It is a
+reference for intent, not an input format that Grexa loads at runtime.

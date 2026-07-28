@@ -6,7 +6,7 @@
 #
 
 Name:           grexa
-Version:        1.11.0
+Version:        1.11.1
 Release:        0
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 License:        GPL-3.0-only
@@ -102,6 +102,13 @@ cargo test --workspace --release --frozen
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Mon Jul 27 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.11.1-0
+- Add a documentation index and rebuild the public guides around current GUI,
+  CLI, storage, AI, container, and packaging behavior.
+- Expand settings, security, resource-limit, accessibility, migration, and
+  troubleshooting documentation.
+- Correct cxx-qt bridge documentation and refresh third-party credits.
+
 * Fri Jul 24 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.11.0-0
 - Align the full cxx-qt stack to 0.9 (cxx-qt, cxx-qt-lib, cxx-qt-build,
   qt-build-utils) so the GUI build and runtime share one generation path.
