@@ -11,7 +11,7 @@ pub mod search;
 
 pub use runtime::{
     CliRuntime, CommandInvocation, CommandResult, CommandRunner, MockCommandRunner, RuntimeError,
-    RuntimeOperations, SystemCommandRunner, clear_grep_availability_cache,
+    RuntimeOperations, SystemCommandRunner,
 };
 
 pub use search::{

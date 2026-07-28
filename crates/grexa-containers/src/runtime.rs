@@ -388,14 +388,6 @@ fn grep_availability_cache() -> &'static Mutex<GrepAvailabilityCache> {
     GREP_AVAILABILITY_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// Clear the per-container grep-availability cache. Exposed for tests and
-/// long-lived GUI sessions that want to force a fresh probe.
-pub fn clear_grep_availability_cache() {
-    if let Ok(mut cache) = grep_availability_cache().lock() {
-        cache.clear();
-    }
-}
-
 /// Operations Grexa runs against a single container runtime.
 pub trait RuntimeOperations {
     fn kind(&self) -> ContainerRuntimeKind;
@@ -747,7 +739,6 @@ mod tests {
 
     #[test]
     fn has_grep_returns_true_when_which_succeeds() {
-        clear_grep_availability_cache();
         let runner = MockCommandRunner::default();
         runner.push(CommandResult::success("/usr/bin/grep\n"));
         let runtime = CliRuntime::new(fake_runtime(), runner);
@@ -756,7 +747,6 @@ mod tests {
 
     #[test]
     fn has_grep_returns_false_when_which_returns_nothing() {
-        clear_grep_availability_cache();
         let runner = MockCommandRunner::default();
         runner.push(CommandResult::success(""));
         let runtime = CliRuntime::new(fake_runtime(), runner);
@@ -765,7 +755,6 @@ mod tests {
 
     #[test]
     fn has_grep_caches_result_across_calls() {
-        clear_grep_availability_cache();
         let runner = MockCommandRunner::default();
         runner.push(CommandResult::success("/usr/bin/grep\n"));
         let runtime = CliRuntime::new(fake_runtime(), runner.clone());
