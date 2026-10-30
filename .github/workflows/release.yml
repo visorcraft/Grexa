@@ -207,8 +207,8 @@ jobs:
           # executing them. If upstream ships a new `continuous` build these
           # hashes must be refreshed deliberately (a fail-closed supply-chain
           # gate, not an accident).
-          echo "e87ee0815d109282fdda73e34c2361d64d02b0ffaea3674b18f1fd1f6a687dcf  linuxdeploy" | sha256sum -c -
-          echo "be1b7e166bf9975cfb694ebe6759ba40502ffc6196440d3e64aa90c4dbd67e9f  linuxdeploy-plugin-qt" | sha256sum -c -
+          echo "8aea8da0f7f7039d2a2cecb14657d752a222a5e1d3825caeef186c82f751cdd1  linuxdeploy" | sha256sum -c -
+          echo "cfc1055b2b9dbc08412b579f20990b7b41a17b61beaa5847dc9477c96c9e9617  linuxdeploy-plugin-qt" | sha256sum -c -
           chmod +x linuxdeploy linuxdeploy-plugin-qt
           export PATH="/opt/linuxdeploy:$PATH"
 
