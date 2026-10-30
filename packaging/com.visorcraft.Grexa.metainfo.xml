@@ -75,6 +75,15 @@
   </supports>
 
   <releases>
+    <release version="1.12.0" date="2026-10-29">
+      <description>
+        <p>Dependency refresh.</p>
+        <ul>
+          <li>Update third-party crates to current compatible releases, including clap 4.6.7, ignore 0.4.34, ureq 3.5.0, the ICU 2.4 line, fancy-regex 0.20, and webpki-roots 1.0.11.</li>
+          <li>Keep cxx at 1.0.198 so the cxx-qt 0.9 GUI continues to link.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.11.2" date="2026-07-28">
       <description>
         <p>Main-window layout reliability.</p>

@@ -658,7 +658,7 @@ mod tests {
         }));
         assert!(entries.iter().any(|entry| {
             entry.name == "aho-corasick"
-                && entry.version == "1.1.4"
+                && entry.version == "1.1.5"
                 && entry.license == "MIT"
                 && entry.url.contains("aho-corasick")
         }));

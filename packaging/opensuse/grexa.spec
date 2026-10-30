@@ -6,7 +6,7 @@
 #
 
 Name:           grexa
-Version:        1.11.2
+Version:        1.12.0
 Release:        0
 Summary:        Fast Linux file content search with tabs, replace, and AI assistance
 License:        GPL-3.0-only
@@ -102,6 +102,12 @@ cargo test --workspace --release --frozen
 %{_datadir}/fish/vendor_completions.d/grexa-cli.fish
 
 %changelog
+* Thu Oct 29 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.12.0-0
+- Refresh third-party crates to current compatible releases, including
+  clap 4.6.7, ignore 0.4.34, ureq 3.5.0, the ICU 2.4 line, fancy-regex
+  0.20, proptest 1.12, and webpki-roots 1.0.11.
+- Keep cxx at 1.0.198 so the cxx-qt 0.9 GUI continues to link.
+
 * Tue Jul 28 2026 VisorCraft LLC <maintainer@visorcraft.com> - 1.11.2-0
 - Keep pages at the full page-stack width so content no longer collapses into
   a narrow column.

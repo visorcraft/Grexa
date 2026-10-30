@@ -5,7 +5,7 @@
 
 This matrix answers whether behavior from the Windows/WinUI
 [Grex](https://github.com/visorcraft/grex) application is present in Grexa.
-It describes Grexa 1.11.2.
+It describes Grexa 1.12.0.
 
 Status:
 
