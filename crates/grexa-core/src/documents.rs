@@ -111,7 +111,7 @@ fn extract_ooxml_glob(path: &Path, prefix: &str) -> Result<String, ExtractError>
     let mut targets: Vec<String> = Vec::new();
     for i in 0..archive.len() {
         let entry = archive.by_index(i)?;
-        let name = entry.name().to_string();
+        let name = zip_entry_name(&entry);
         if name.starts_with(prefix) && name.ends_with(".xml") {
             targets.push(name);
         }
@@ -142,7 +142,7 @@ fn extract_zip(path: &Path) -> Result<String, ExtractError> {
         .map(|i| {
             archive
                 .by_index(i)
-                .map(|entry| entry.name().to_string())
+                .map(|entry| zip_entry_name(&entry))
                 .unwrap_or_default()
         })
         .filter(|name| !name.is_empty())
@@ -172,6 +172,15 @@ fn extract_zip(path: &Path) -> Result<String, ExtractError> {
         push_limited(&mut out, &String::from_utf8_lossy(&buf))?;
     }
     Ok(out)
+}
+
+/// zip 9 returns `name()` as a `Result` when the entry path is not UTF-8.
+/// Fall back to a lossy decode so those entries stay searchable.
+fn zip_entry_name(entry: &zip::read::ZipFile<'_, impl Read>) -> String {
+    match entry.name() {
+        Ok(name) => name.into_owned(),
+        Err(_) => String::from_utf8_lossy(entry.name_raw()).into_owned(),
+    }
 }
 
 fn check_zip_entry_count<R: Read + std::io::Seek>(
@@ -227,17 +236,16 @@ fn push_xml_text<R: Read>(reader: R, out: &mut String) -> Result<(), ExtractErro
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Text(e)) => {
-                let bytes = e.into_inner();
-                let unescaped =
-                    quick_xml::escape::unescape(std::str::from_utf8(&bytes).unwrap_or(""))
-                        .unwrap_or_default()
-                        .into_owned();
+                let raw = e.into_inner();
+                let unescaped = quick_xml::escape::unescape(raw.as_ref())
+                    .unwrap_or_default()
+                    .into_owned();
                 push_limited(out, &unescaped)?;
                 push_limited(out, " ")?;
             }
             Ok(Event::CData(e)) => {
-                let bytes = e.into_inner();
-                push_limited(out, &String::from_utf8_lossy(&bytes))?;
+                let text = e.into_inner();
+                push_limited(out, text.as_ref())?;
                 push_limited(out, " ")?;
             }
             Ok(Event::Eof) => break,
