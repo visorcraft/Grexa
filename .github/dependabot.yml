@@ -7,6 +7,11 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 10
+    ignore:
+      # cxx-qt 0.9 codegen emits cxxbridge1$198$ symbols. A newer cxx patch
+      # exports cxxbridge1$<new>$ and the GUI fails to link.
+      - dependency-name: "cxx"
+        update-types: ["version-update:semver-patch"]
     labels:
       - dependencies
       - rust

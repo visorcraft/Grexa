@@ -232,7 +232,7 @@ fn completions_subcommand_emits_bash_script() {
         .args(["completions", "bash"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("_grexa-cli()"));
+        .stdout(predicate::str::contains("_grexa__cli()"));
 }
 
 #[test]
