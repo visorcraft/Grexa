@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 VisorCraft LLC
 // SPDX-License-Identifier: GPL-3.0-only
 
-// Import QResource/QResources from cxx_qt_build so they match the type
-// CxxQtBuilder::qrc_resources expects (same qt-build-utils version as
-// cxx-qt-build). Importing them directly from qt_build_utils can pull a
-// parallel version and break the Into conversion.
+// cxx-qt-build re-exports QResource, not QResourceFile. QResource::file
+// accepts only the QResourceFile from the qt-build-utils version it was
+// built with, so this import has to be that same crate. The workspace pins
+// both to 0.10. A 0.9/0.10 split fails the Into bound in build.rs.
 use cxx_qt_build::{CxxQtBuilder, QResource, QResources, QmlModule};
 use qt_build_utils::QResourceFile;
 
