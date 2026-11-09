@@ -16,7 +16,36 @@ feature-depth = 1
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "warn"
-ignore = []
+# Informational unmaintained advisories. cargo-deny reports "no safe upgrade
+# is available" for each: the affected crate has no patched release. These
+# entries name those advisory IDs only. They do not change yanked, bans,
+# licenses, or how any other advisory is treated. Delete an entry when the
+# parent noted below no longer depends on the crate (cargo-deny warns
+# `advisory-not-detected` for an ignore that nothing hits).
+#
+# RUSTSEC-2024-0449 — unsafe-libyaml 0.2.11. Repository archived 2024-03-25;
+# RustSec issued the advisory 2026-10-12. The only parent in this graph is
+# serde_yaml_ng 0.10.0, the latest serde_yaml_ng, required by grexa-core and
+# by pinned grexa-db v1.10.0. grexa-db master still depends on serde_yaml_ng,
+# so replacing Grexa's own YAML writer cannot remove the crate.
+#
+# RUSTSEC-2026-0370 / 0371 / 0372 — zvariant 5.15.1, zbus_names 4.3.5, and
+# zvariant_derive 5.15.1. Issued 2026-10-17 because those crates were merged
+# into zbus 6.0.0, not because an in-place fix exists. Parents today:
+# zvariant <- zbus 5.19.0, zbus_macros 5.19.0, zbus_names 4.3.5;
+# zbus_names <- zbus 5.19.0, zbus_macros 5.19.0;
+# zvariant_derive <- zvariant 5.15.1.
+# The chain is zbus-secret-service-keyring-store 1.0.1 -> secret-service 5.2.0
+# -> zbus 5.19.0. secret-service 6.0.0-rc.1 (2026-11-06) speaks zbus 6, but it
+# is a pre-release and the keyring store has no release on it. Delete these
+# three entries when a stable secret-service 6, or a keyring-store release
+# that depends on it, replaces zbus 5 in Cargo.lock.
+ignore = [
+    { id = "RUSTSEC-2024-0449", reason = "no patched unsafe-libyaml; serde_yaml_ng 0.10.0 is required by grexa-core and grexa-db v1.10.0" },
+    { id = "RUSTSEC-2026-0370", reason = "zvariant was merged into zbus 6; the stable keyring stack is still zbus 5.19.0" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names was merged into zbus 6; the stable keyring stack is still zbus 5.19.0" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive was merged into zbus 6; only zvariant 5.15.1 depends on it here" },
+]
 
 [licenses]
 allow = [
